@@ -10,10 +10,8 @@ namespace v8 {
 namespace internal {
 
 void StringComparator::State::Init(
-    Tagged<String> string,
-    const SharedStringAccessGuardIfNeeded& access_guard) {
-  Tagged<ConsString> cons_string =
-      String::VisitFlat(this, string, 0, access_guard);
+    String string, const SharedStringAccessGuardIfNeeded& access_guard) {
+  ConsString cons_string = String::VisitFlat(this, string, 0, access_guard);
   iter_.Reset(cons_string);
   if (!cons_string.is_null()) {
     int offset;
@@ -40,16 +38,16 @@ void StringComparator::State::Advance(
   }
   // Advance state.
   int offset;
-  Tagged<String> next = iter_.Next(&offset);
+  String next = iter_.Next(&offset);
   DCHECK_EQ(0, offset);
   DCHECK(!next.is_null());
   String::VisitFlat(this, next, 0, access_guard);
 }
 
 bool StringComparator::Equals(
-    Tagged<String> string_1, Tagged<String> string_2,
+    String string_1, String string_2,
     const SharedStringAccessGuardIfNeeded& access_guard) {
-  int length = string_1->length();
+  int length = string_1.length();
   state_1_.Init(string_1, access_guard);
   state_2_.Init(string_2, access_guard);
   while (true) {

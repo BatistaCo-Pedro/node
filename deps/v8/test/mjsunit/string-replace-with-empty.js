@@ -44,19 +44,17 @@ function test() {
   }
   assertEquals(expected, cons.replace(/[\u1234a-z]/g, ""));
 
-  var expected_two_byte = "0123🤓"
-  cons = "a0b1c2d3🤓";
+  cons = "a0b1c2d3";
   for (var i = 0; i < 5; i++) {
-    expected_two_byte += expected_two_byte;
     cons += cons;
   }
-  externalizeString(createExternalizableString(cons));
-  assertEquals(expected_two_byte, cons.replace(/[a-z]/g, ""));
+  externalizeString(cons, true/* force two-byte */);
+  assertEquals(expected, cons.replace(/[a-z]/g, ""));
   cons = "\u12340b1c2d3";
   for (var i = 0; i < 5; i++) {
     cons += cons;
   }
-  externalizeString(createExternalizableString(cons));
+  externalizeString(cons);
   assertEquals(expected, cons.replace(/[\u1234a-z]/g, ""));
 }
 

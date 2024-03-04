@@ -46,17 +46,16 @@ void WeakObjects::Clear() {
 
 // static
 void WeakObjects::UpdateTransitionArrays(
-    WeakObjectWorklist<Tagged<TransitionArray>>& transition_arrays) {
+    WeakObjectWorklist<TransitionArray>& transition_arrays) {
   DCHECK(!ContainsYoungObjects(transition_arrays));
 }
 
 // static
 void WeakObjects::UpdateEphemeronHashTables(
-    WeakObjectWorklist<Tagged<EphemeronHashTable>>& ephemeron_hash_tables) {
+    WeakObjectWorklist<EphemeronHashTable>& ephemeron_hash_tables) {
   ephemeron_hash_tables.Update(
-      [](Tagged<EphemeronHashTable> slot_in,
-         Tagged<EphemeronHashTable>* slot_out) -> bool {
-        Tagged<EphemeronHashTable> forwarded = ForwardingAddress(slot_in);
+      [](EphemeronHashTable slot_in, EphemeronHashTable* slot_out) -> bool {
+        EphemeronHashTable forwarded = ForwardingAddress(slot_in);
 
         if (!forwarded.is_null()) {
           *slot_out = forwarded;
@@ -69,10 +68,10 @@ void WeakObjects::UpdateEphemeronHashTables(
 
 namespace {
 bool EphemeronUpdater(Ephemeron slot_in, Ephemeron* slot_out) {
-  Tagged<HeapObject> key = slot_in.key;
-  Tagged<HeapObject> value = slot_in.value;
-  Tagged<HeapObject> forwarded_key = ForwardingAddress(key);
-  Tagged<HeapObject> forwarded_value = ForwardingAddress(value);
+  HeapObject key = slot_in.key;
+  HeapObject value = slot_in.value;
+  HeapObject forwarded_key = ForwardingAddress(key);
+  HeapObject forwarded_value = ForwardingAddress(value);
 
   if (!forwarded_key.is_null() && !forwarded_value.is_null()) {
     *slot_out = Ephemeron{forwarded_key, forwarded_value};
@@ -106,8 +105,8 @@ void WeakObjects::UpdateWeakReferences(
     WeakObjectWorklist<HeapObjectAndSlot>& weak_references) {
   weak_references.Update(
       [](HeapObjectAndSlot slot_in, HeapObjectAndSlot* slot_out) -> bool {
-        Tagged<HeapObject> heap_obj = slot_in.first;
-        Tagged<HeapObject> forwarded = ForwardingAddress(heap_obj);
+        HeapObject heap_obj = slot_in.first;
+        HeapObject forwarded = ForwardingAddress(heap_obj);
 
         if (!forwarded.is_null()) {
           ptrdiff_t distance_to_slot =
@@ -127,8 +126,8 @@ void WeakObjects::UpdateWeakObjectsInCode(
     WeakObjectWorklist<HeapObjectAndCode>& weak_objects_in_code) {
   weak_objects_in_code.Update(
       [](HeapObjectAndCode slot_in, HeapObjectAndCode* slot_out) -> bool {
-        Tagged<HeapObject> heap_obj = slot_in.first;
-        Tagged<HeapObject> forwarded = ForwardingAddress(heap_obj);
+        HeapObject heap_obj = slot_in.first;
+        HeapObject forwarded = ForwardingAddress(heap_obj);
 
         if (!forwarded.is_null()) {
           slot_out->first = forwarded;
@@ -142,39 +141,38 @@ void WeakObjects::UpdateWeakObjectsInCode(
 
 // static
 void WeakObjects::UpdateJSWeakRefs(
-    WeakObjectWorklist<Tagged<JSWeakRef>>& js_weak_refs) {
-  js_weak_refs.Update([](Tagged<JSWeakRef> js_weak_ref_in,
-                         Tagged<JSWeakRef>* js_weak_ref_out) -> bool {
-    Tagged<JSWeakRef> forwarded = ForwardingAddress(js_weak_ref_in);
+    WeakObjectWorklist<JSWeakRef>& js_weak_refs) {
+  js_weak_refs.Update(
+      [](JSWeakRef js_weak_ref_in, JSWeakRef* js_weak_ref_out) -> bool {
+        JSWeakRef forwarded = ForwardingAddress(js_weak_ref_in);
 
-    if (!forwarded.is_null()) {
-      *js_weak_ref_out = forwarded;
-      return true;
-    }
+        if (!forwarded.is_null()) {
+          *js_weak_ref_out = forwarded;
+          return true;
+        }
 
-    return false;
-  });
+        return false;
+      });
 }
 
 // static
-void WeakObjects::UpdateWeakCells(
-    WeakObjectWorklist<Tagged<WeakCell>>& weak_cells) {
+void WeakObjects::UpdateWeakCells(WeakObjectWorklist<WeakCell>& weak_cells) {
   // TODO(syg, marja): Support WeakCells in the young generation.
   DCHECK(!ContainsYoungObjects(weak_cells));
 }
 
 // static
 void WeakObjects::UpdateCodeFlushingCandidates(
-    WeakObjectWorklist<Tagged<SharedFunctionInfo>>& code_flushing_candidates) {
+    WeakObjectWorklist<SharedFunctionInfo>& code_flushing_candidates) {
   DCHECK(!ContainsYoungObjects(code_flushing_candidates));
 }
 
 // static
 void WeakObjects::UpdateFlushedJSFunctions(
-    WeakObjectWorklist<Tagged<JSFunction>>& flushed_js_functions) {
+    WeakObjectWorklist<JSFunction>& flushed_js_functions) {
   flushed_js_functions.Update(
-      [](Tagged<JSFunction> slot_in, Tagged<JSFunction>* slot_out) -> bool {
-        Tagged<JSFunction> forwarded = ForwardingAddress(slot_in);
+      [](JSFunction slot_in, JSFunction* slot_out) -> bool {
+        JSFunction forwarded = ForwardingAddress(slot_in);
 
         if (!forwarded.is_null()) {
           *slot_out = forwarded;
@@ -187,10 +185,10 @@ void WeakObjects::UpdateFlushedJSFunctions(
 
 // static
 void WeakObjects::UpdateBaselineFlushingCandidates(
-    WeakObjectWorklist<Tagged<JSFunction>>& baseline_flush_candidates) {
+    WeakObjectWorklist<JSFunction>& baseline_flush_candidates) {
   baseline_flush_candidates.Update(
-      [](Tagged<JSFunction> slot_in, Tagged<JSFunction>* slot_out) -> bool {
-        Tagged<JSFunction> forwarded = ForwardingAddress(slot_in);
+      [](JSFunction slot_in, JSFunction* slot_out) -> bool {
+        JSFunction forwarded = ForwardingAddress(slot_in);
 
         if (!forwarded.is_null()) {
           *slot_out = forwarded;
@@ -204,10 +202,9 @@ void WeakObjects::UpdateBaselineFlushingCandidates(
 #ifdef DEBUG
 // static
 template <typename Type>
-bool WeakObjects::ContainsYoungObjects(
-    WeakObjectWorklist<Tagged<Type>>& worklist) {
+bool WeakObjects::ContainsYoungObjects(WeakObjectWorklist<Type>& worklist) {
   bool result = false;
-  worklist.Iterate([&result](Tagged<Type> candidate) {
+  worklist.Iterate([&result](Type candidate) {
     if (Heap::InYoungGeneration(candidate)) {
       result = true;
     }

@@ -31,9 +31,8 @@
 
 #include "ngtcp2_macro.h"
 
-#if defined(_MSC_VER) && !defined(__clang__) &&                                \
-    (defined(_M_ARM) || defined(_M_ARM64))
-static unsigned int __popcnt(unsigned int x) {
+#if defined(_MSC_VER) && !defined(__clang__) && (defined(_M_ARM) || defined(_M_ARM64))
+unsigned int __popcnt(unsigned int x) {
   unsigned int c = 0;
   for (; x; ++c) {
     x &= x - 1;
@@ -64,7 +63,7 @@ void ngtcp2_ringbuf_buf_init(ngtcp2_ringbuf *rb, size_t nmemb, size_t size,
 
   rb->buf = buf;
   rb->mem = mem;
-  rb->mask = nmemb - 1;
+  rb->nmemb = nmemb;
   rb->size = size;
   rb->first = 0;
   rb->len = 0;
@@ -79,19 +78,17 @@ void ngtcp2_ringbuf_free(ngtcp2_ringbuf *rb) {
 }
 
 void *ngtcp2_ringbuf_push_front(ngtcp2_ringbuf *rb) {
-  rb->first = (rb->first - 1) & rb->mask;
-  if (rb->len < rb->mask + 1) {
-    ++rb->len;
-  }
+  rb->first = (rb->first - 1) & (rb->nmemb - 1);
+  rb->len = ngtcp2_min(rb->nmemb, rb->len + 1);
 
   return (void *)&rb->buf[rb->first * rb->size];
 }
 
 void *ngtcp2_ringbuf_push_back(ngtcp2_ringbuf *rb) {
-  size_t offset = (rb->first + rb->len) & rb->mask;
+  size_t offset = (rb->first + rb->len) & (rb->nmemb - 1);
 
-  if (rb->len == rb->mask + 1) {
-    rb->first = (rb->first + 1) & rb->mask;
+  if (rb->len == rb->nmemb) {
+    rb->first = (rb->first + 1) & (rb->nmemb - 1);
   } else {
     ++rb->len;
   }
@@ -100,7 +97,7 @@ void *ngtcp2_ringbuf_push_back(ngtcp2_ringbuf *rb) {
 }
 
 void ngtcp2_ringbuf_pop_front(ngtcp2_ringbuf *rb) {
-  rb->first = (rb->first + 1) & rb->mask;
+  rb->first = (rb->first + 1) & (rb->nmemb - 1);
   --rb->len;
 }
 
@@ -110,14 +107,14 @@ void ngtcp2_ringbuf_pop_back(ngtcp2_ringbuf *rb) {
 }
 
 void ngtcp2_ringbuf_resize(ngtcp2_ringbuf *rb, size_t len) {
-  assert(len <= rb->mask + 1);
+  assert(len <= rb->nmemb);
   rb->len = len;
 }
 
 void *ngtcp2_ringbuf_get(ngtcp2_ringbuf *rb, size_t offset) {
   assert(offset < rb->len);
-  offset = (rb->first + offset) & rb->mask;
+  offset = (rb->first + offset) & (rb->nmemb - 1);
   return &rb->buf[offset * rb->size];
 }
 
-int ngtcp2_ringbuf_full(ngtcp2_ringbuf *rb) { return rb->len == rb->mask + 1; }
+int ngtcp2_ringbuf_full(ngtcp2_ringbuf *rb) { return rb->len == rb->nmemb; }

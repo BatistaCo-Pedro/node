@@ -6,19 +6,23 @@
 
 #include "src/compiler/js-heap-broker.h"
 #include "src/compiler/turboshaft/graph-builder.h"
-#include "src/compiler/turboshaft/phase.h"
 
 namespace v8::internal::compiler::turboshaft {
 
-base::Optional<BailoutReason> BuildGraphPhase::Run(Zone* temp_zone,
+base::Optional<BailoutReason> BuildGraphPhase::Run(PipelineData* data,
+                                                   Zone* temp_zone,
                                                    Linkage* linkage) {
-  Schedule* schedule = PipelineData::Get().schedule();
-  PipelineData::Get().reset_schedule();
+  Schedule* schedule = data->schedule();
+  data->reset_schedule();
   DCHECK_NOT_NULL(schedule);
+  data->CreateTurboshaftGraph();
 
-  UnparkedScopeIfNeeded scope(PipelineData::Get().broker());
+  UnparkedScopeIfNeeded scope(data->broker());
 
-  if (auto bailout = turboshaft::BuildGraph(schedule, temp_zone, linkage)) {
+  if (auto bailout = turboshaft::BuildGraph(
+          data->broker(), schedule, data->isolate(), data->graph_zone(),
+          temp_zone, &data->graph(), linkage, data->source_positions(),
+          data->node_origins())) {
     return bailout;
   }
   return {};

@@ -6,9 +6,13 @@
 
 namespace v8::internal::compiler::turboshaft {
 
-RecreateScheduleResult RecreateSchedulePhase::Run(Zone* temp_zone,
+RecreateScheduleResult RecreateSchedulePhase::Run(PipelineData* data,
+                                                  Zone* temp_zone,
                                                   Linkage* linkage) {
-  return RecreateSchedule(linkage->GetIncomingDescriptor(), temp_zone);
+  return RecreateSchedule(data->graph(), data->broker(),
+                          linkage->GetIncomingDescriptor(), data->graph_zone(),
+                          temp_zone, data->source_positions(),
+                          data->node_origins());
 }
 
 }  // namespace v8::internal::compiler::turboshaft

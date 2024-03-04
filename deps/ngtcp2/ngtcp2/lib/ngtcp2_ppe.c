@@ -39,6 +39,7 @@ void ngtcp2_ppe_init(ngtcp2_ppe *ppe, uint8_t *out, size_t outlen,
   ppe->pkt_num_offset = 0;
   ppe->pkt_numlen = 0;
   ppe->pkt_num = 0;
+  ppe->sample_offset = 0;
   ppe->cc = cc;
 }
 
@@ -54,7 +55,7 @@ int ngtcp2_ppe_encode_hd(ngtcp2_ppe *ppe, const ngtcp2_pkt_hd *hd) {
   if (hd->flags & NGTCP2_PKT_FLAG_LONG_FORM) {
     ppe->len_offset = 1 + 4 + 1 + hd->dcid.datalen + 1 + hd->scid.datalen;
     if (hd->type == NGTCP2_PKT_INITIAL) {
-      ppe->len_offset += ngtcp2_put_uvarintlen(hd->tokenlen) + hd->tokenlen;
+      ppe->len_offset += ngtcp2_put_varint_len(hd->token.len) + hd->token.len;
     }
     ppe->pkt_num_offset = ppe->len_offset + NGTCP2_PKT_LENGTHLEN;
     rv = ngtcp2_pkt_encode_hd_long(
@@ -67,6 +68,8 @@ int ngtcp2_ppe_encode_hd(ngtcp2_ppe *ppe, const ngtcp2_pkt_hd *hd) {
   if (rv < 0) {
     return (int)rv;
   }
+
+  ppe->sample_offset = ppe->pkt_num_offset + 4;
 
   buf->last += rv;
 
@@ -98,14 +101,6 @@ int ngtcp2_ppe_encode_frame(ngtcp2_ppe *ppe, ngtcp2_frame *fr) {
   return 0;
 }
 
-/*
- * ppe_sample_offset returns the offset to sample for packet number
- * encryption.
- */
-static size_t ppe_sample_offset(ngtcp2_ppe *ppe) {
-  return ppe->pkt_num_offset + 4;
-}
-
 ngtcp2_ssize ngtcp2_ppe_final(ngtcp2_ppe *ppe, const uint8_t **ppkt) {
   ngtcp2_buf *buf = &ppe->buf;
   ngtcp2_crypto_cc *cc = ppe->cc;
@@ -120,7 +115,7 @@ ngtcp2_ssize ngtcp2_ppe_final(ngtcp2_ppe *ppe, const uint8_t **ppkt) {
   assert(cc->hp_mask);
 
   if (ppe->len_offset) {
-    ngtcp2_put_uvarint30(
+    ngtcp2_put_varint30(
         buf->begin + ppe->len_offset,
         (uint16_t)(payloadlen + ppe->pkt_numlen + cc->aead.max_overhead));
   }
@@ -137,10 +132,9 @@ ngtcp2_ssize ngtcp2_ppe_final(ngtcp2_ppe *ppe, const uint8_t **ppkt) {
   buf->last = payload + payloadlen + cc->aead.max_overhead;
 
   /* TODO Check that we have enough space to get sample */
-  assert(ppe_sample_offset(ppe) + NGTCP2_HP_SAMPLELEN <= ngtcp2_buf_len(buf));
+  assert(ppe->sample_offset + NGTCP2_HP_SAMPLELEN <= ngtcp2_buf_len(buf));
 
-  rv = cc->hp_mask(mask, &cc->hp, &cc->hp_ctx,
-                   buf->begin + ppe_sample_offset(ppe));
+  rv = cc->hp_mask(mask, &cc->hp, &cc->hp_ctx, buf->begin + ppe->sample_offset);
   if (rv != 0) {
     return NGTCP2_ERR_CALLBACK_FAILURE;
   }
@@ -203,7 +197,7 @@ size_t ngtcp2_ppe_padding_hp_sample(ngtcp2_ppe *ppe) {
   assert(cc->aead.max_overhead);
 
   max_samplelen =
-      ngtcp2_buf_len(buf) + cc->aead.max_overhead - ppe_sample_offset(ppe);
+      ngtcp2_buf_len(buf) + cc->aead.max_overhead - ppe->sample_offset;
   if (max_samplelen < NGTCP2_HP_SAMPLELEN) {
     len = NGTCP2_HP_SAMPLELEN - max_samplelen;
     assert(ngtcp2_ppe_left(ppe) >= len);

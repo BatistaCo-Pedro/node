@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// Flags: --experimental-value-unavailable
 
 Debug = debug.Debug
 var exception = null;
@@ -10,7 +9,7 @@ var break_count = 0;
 const expected_breaks = 9;
 
 var expected_values =
-  [ReferenceError, ReferenceError, 0, 0, 0, 0, 1,
+  [ReferenceError, undefined, 0, 0, 0, 0, 1,
    ReferenceError, ReferenceError];
 
 function listener(event, exec_state, event_data, data) {

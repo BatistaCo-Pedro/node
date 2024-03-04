@@ -10,9 +10,9 @@ namespace internal {
 
 template <class IsolateT>
 CallOptimization::CallOptimization(IsolateT* isolate, Handle<Object> function) {
-  if (IsJSFunction(*function)) {
+  if (function->IsJSFunction()) {
     Initialize(isolate, Handle<JSFunction>::cast(function));
-  } else if (IsFunctionTemplateInfo(*function)) {
+  } else if (function->IsFunctionTemplateInfo()) {
     Initialize(isolate, Handle<FunctionTemplateInfo>::cast(function));
   }
 }
@@ -23,35 +23,19 @@ template CallOptimization::CallOptimization(Isolate* isolate,
 template CallOptimization::CallOptimization(LocalIsolate* isolate,
                                             Handle<Object> function);
 
-base::Optional<Tagged<NativeContext>> CallOptimization::GetAccessorContext(
-    Tagged<Map> holder_map) const {
+Context CallOptimization::GetAccessorContext(Map holder_map) const {
   if (is_constant_call()) {
     return constant_function_->native_context();
   }
-  Tagged<Object> maybe_constructor = holder_map->GetConstructor();
-  if (IsJSFunction(maybe_constructor)) {
-    Tagged<JSFunction> constructor = JSFunction::cast(maybe_constructor);
-    return constructor->native_context();
-  }
-  // |maybe_constructor| might theoretically be |null| for some objects but
-  // they can't be holders for lazy accessor properties.
-  CHECK(IsFunctionTemplateInfo(maybe_constructor));
-
-  // The holder is a remote object which doesn't have a creation context.
-  return {};
+  JSFunction constructor = JSFunction::cast(holder_map.GetConstructor());
+  return constructor.native_context();
 }
 
-bool CallOptimization::IsCrossContextLazyAccessorPair(
-    Tagged<NativeContext> native_context, Tagged<Map> holder_map) const {
-  DCHECK(IsNativeContext(native_context));
+bool CallOptimization::IsCrossContextLazyAccessorPair(Context native_context,
+                                                      Map holder_map) const {
+  DCHECK(native_context.IsNativeContext());
   if (is_constant_call()) return false;
-  base::Optional<Tagged<NativeContext>> maybe_context =
-      GetAccessorContext(holder_map);
-  if (!maybe_context.has_value()) {
-    // The holder is a remote object which doesn't have a creation context.
-    return true;
-  }
-  return native_context != maybe_context.value();
+  return native_context != GetAccessorContext(holder_map);
 }
 
 template <class IsolateT>
@@ -59,7 +43,7 @@ Handle<JSObject> CallOptimization::LookupHolderOfExpectedType(
     IsolateT* isolate, Handle<Map> object_map,
     HolderLookup* holder_lookup) const {
   DCHECK(is_simple_api_call());
-  if (!IsJSObjectMap(*object_map)) {
+  if (!object_map->IsJSObjectMap()) {
     *holder_lookup = kHolderNotFound;
     return Handle<JSObject>::null();
   }
@@ -68,8 +52,8 @@ Handle<JSObject> CallOptimization::LookupHolderOfExpectedType(
     *holder_lookup = kHolderIsReceiver;
     return Handle<JSObject>::null();
   }
-  if (IsJSGlobalProxyMap(*object_map) && !IsNull(object_map->prototype())) {
-    Tagged<JSObject> raw_prototype = JSObject::cast(object_map->prototype());
+  if (object_map->IsJSGlobalProxyMap() && !object_map->prototype().IsNull()) {
+    JSObject raw_prototype = JSObject::cast(object_map->prototype());
     Handle<JSObject> prototype(raw_prototype, isolate);
     object_map = handle(prototype->map(), isolate);
     if (expected_receiver_type_->IsTemplateFor(*object_map)) {
@@ -102,10 +86,10 @@ bool CallOptimization::IsCompatibleReceiverMap(
       if (api_holder.is_identical_to(holder)) return true;
       // Check if holder is in prototype chain of api_holder.
       {
-        Tagged<JSObject> object = *api_holder;
+        JSObject object = *api_holder;
         while (true) {
-          Tagged<Object> prototype = object->map()->prototype();
-          if (!IsJSObject(prototype)) return false;
+          Object prototype = object.map().prototype();
+          if (!prototype.IsJSObject()) return false;
           if (prototype == *holder) return true;
           object = JSObject::cast(prototype);
         }
@@ -117,13 +101,12 @@ bool CallOptimization::IsCompatibleReceiverMap(
 template <class IsolateT>
 void CallOptimization::Initialize(
     IsolateT* isolate, Handle<FunctionTemplateInfo> function_template_info) {
-  Tagged<HeapObject> call_code =
-      function_template_info->call_code(kAcquireLoad);
-  if (IsUndefined(call_code, isolate)) return;
+  HeapObject call_code = function_template_info->call_code(kAcquireLoad);
+  if (call_code.IsUndefined(isolate)) return;
   api_call_info_ = handle(CallHandlerInfo::cast(call_code), isolate);
 
-  Tagged<HeapObject> signature = function_template_info->signature();
-  if (!IsUndefined(signature, isolate)) {
+  HeapObject signature = function_template_info->signature();
+  if (!signature.IsUndefined(isolate)) {
     expected_receiver_type_ =
         handle(FunctionTemplateInfo::cast(signature), isolate);
   }
@@ -143,16 +126,16 @@ void CallOptimization::Initialize(IsolateT* isolate,
 template <class IsolateT>
 void CallOptimization::AnalyzePossibleApiFunction(IsolateT* isolate,
                                                   Handle<JSFunction> function) {
-  if (!function->shared()->IsApiFunction()) return;
-  Handle<FunctionTemplateInfo> info(function->shared()->api_func_data(),
+  if (!function->shared().IsApiFunction()) return;
+  Handle<FunctionTemplateInfo> info(function->shared().get_api_func_data(),
                                     isolate);
 
   // Require a C++ callback.
-  Tagged<HeapObject> call_code = info->call_code(kAcquireLoad);
-  if (IsUndefined(call_code, isolate)) return;
+  HeapObject call_code = info->call_code(kAcquireLoad);
+  if (call_code.IsUndefined(isolate)) return;
   api_call_info_ = handle(CallHandlerInfo::cast(call_code), isolate);
 
-  if (!IsUndefined(info->signature(), isolate)) {
+  if (!info->signature().IsUndefined(isolate)) {
     expected_receiver_type_ =
         handle(FunctionTemplateInfo::cast(info->signature()), isolate);
   }

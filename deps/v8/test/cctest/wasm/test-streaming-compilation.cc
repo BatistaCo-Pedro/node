@@ -266,13 +266,9 @@ class StreamTester {
 
 #define STREAM_TEST(name)                                                  \
   void RunStream_##name(MockPlatform*, v8::Isolate*);                      \
-  TEST_WITH_PLATFORM(Async##name, MockPlatform) {                          \
-    if (i::v8_flags.memory_balancer) return;                               \
-    RUN_STREAM(name);                                                      \
-  }                                                                        \
+  TEST_WITH_PLATFORM(Async##name, MockPlatform) { RUN_STREAM(name); }      \
                                                                            \
   TEST_WITH_PLATFORM(SingleThreaded##name, MockPlatform) {                 \
-    if (i::v8_flags.memory_balancer) return;                               \
     i::FlagScope<bool> single_threaded_scope(&i::v8_flags.single_threaded, \
                                              true);                        \
     RUN_STREAM(name);                                                      \
@@ -341,7 +337,7 @@ ZoneBuffer GetValidCompiledModuleBytes(v8::Isolate* isolate, Zone* zone,
                           ReadOnlyRoots{i_isolate}.undefined_value_handle(), 0,
                           nullptr)
               .ToHandleChecked();
-      CHECK(IsSmi(*return_value));
+      CHECK(return_value->IsSmi());
       CHECK_EQ(0, Smi::cast(*return_value).value());
     }
     tester.RunCompilerTasks();
@@ -350,7 +346,7 @@ ZoneBuffer GetValidCompiledModuleBytes(v8::Isolate* isolate, Zone* zone,
   // Serialize the NativeModule.
   i::wasm::WasmSerializer serializer(native_module);
   size_t size = serializer.GetSerializedNativeModuleSize();
-  std::vector<uint8_t> buffer(size);
+  std::vector<byte> buffer(size);
   CHECK(serializer.SerializeNativeModule(base::VectorOf(buffer)));
   ZoneBuffer result(zone, size);
   result.write(buffer.data(), size);
@@ -1349,7 +1345,7 @@ STREAM_TEST(TestDeserializationFails) {
   ZoneBuffer module_bytes =
       GetValidCompiledModuleBytes(isolate, tester.zone(), wire_bytes);
   // corrupt header
-  uint8_t first_byte = *module_bytes.begin();
+  byte first_byte = *module_bytes.begin();
   module_bytes.patch_u8(0, first_byte + 1);
   tester.SetCompiledModuleBytes(base::VectorOf(module_bytes));
   tester.OnBytesReceived(wire_bytes.begin(), wire_bytes.size());

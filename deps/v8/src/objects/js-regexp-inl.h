@@ -25,12 +25,12 @@ TQ_OBJECT_CONSTRUCTORS_IMPL(JSRegExpResult)
 TQ_OBJECT_CONSTRUCTORS_IMPL(JSRegExpResultIndices)
 TQ_OBJECT_CONSTRUCTORS_IMPL(JSRegExpResultWithIndices)
 
-ACCESSORS(JSRegExp, last_index, Tagged<Object>, kLastIndexOffset)
+ACCESSORS(JSRegExp, last_index, Object, kLastIndexOffset)
 
 JSRegExp::Type JSRegExp::type_tag() const {
-  Tagged<Object> data = this->data();
-  if (IsUndefined(data)) return JSRegExp::NOT_COMPILED;
-  Tagged<Smi> smi = Smi::cast(FixedArray::cast(data)->get(kTagIndex));
+  Object data = this->data();
+  if (data.IsUndefined()) return JSRegExp::NOT_COMPILED;
+  Smi smi = Smi::cast(FixedArray::cast(data).get(kTagIndex));
   return static_cast<JSRegExp::Type>(smi.value());
 }
 
@@ -51,17 +51,17 @@ int JSRegExp::max_register_count() const {
   return Smi::ToInt(DataAt(kIrregexpMaxRegisterCountIndex));
 }
 
-Tagged<String> JSRegExp::atom_pattern() const {
+String JSRegExp::atom_pattern() const {
   DCHECK_EQ(type_tag(), ATOM);
   return String::cast(DataAt(JSRegExp::kAtomPatternIndex));
 }
 
-Tagged<String> JSRegExp::source() const {
+String JSRegExp::source() const {
   return String::cast(TorqueGeneratedClass::source());
 }
 
 JSRegExp::Flags JSRegExp::flags() const {
-  Tagged<Smi> smi = Smi::cast(TorqueGeneratedClass::flags());
+  Smi smi = Smi::cast(TorqueGeneratedClass::flags());
   return Flags(smi.value());
 }
 
@@ -77,14 +77,14 @@ const char* JSRegExp::FlagsToString(Flags flags, FlagsBuffer* out_buffer) {
   return buffer.begin();
 }
 
-Tagged<String> JSRegExp::EscapedPattern() {
-  DCHECK(IsString(source()));
+String JSRegExp::EscapedPattern() {
+  DCHECK(this->source().IsString());
   return String::cast(source());
 }
 
-Tagged<Object> JSRegExp::capture_name_map() {
+Object JSRegExp::capture_name_map() {
   DCHECK(TypeSupportsCaptures(type_tag()));
-  Tagged<Object> value = DataAt(kIrregexpCaptureNameMapIndex);
+  Object value = DataAt(kIrregexpCaptureNameMapIndex);
   DCHECK_NE(value, Smi::FromInt(JSRegExp::kUninitializedValue));
   return value;
 }
@@ -97,29 +97,29 @@ void JSRegExp::set_capture_name_map(Handle<FixedArray> capture_name_map) {
   }
 }
 
-Tagged<Object> JSRegExp::DataAt(int index) const {
+Object JSRegExp::DataAt(int index) const {
   DCHECK(type_tag() != NOT_COMPILED);
-  return FixedArray::cast(data())->get(index);
+  return FixedArray::cast(data()).get(index);
 }
 
-void JSRegExp::SetDataAt(int index, Tagged<Object> value) {
+void JSRegExp::SetDataAt(int index, Object value) {
   DCHECK(type_tag() != NOT_COMPILED);
   // Only implementation data can be set this way.
   DCHECK_GE(index, kFirstTypeSpecificIndex);
-  FixedArray::cast(data())->set(index, value);
+  FixedArray::cast(data()).set(index, value);
 }
 
 bool JSRegExp::HasCompiledCode() const {
   if (type_tag() != IRREGEXP) return false;
-  Tagged<Smi> uninitialized = Smi::FromInt(kUninitializedValue);
+  Smi uninitialized = Smi::FromInt(kUninitializedValue);
 #ifdef DEBUG
-  DCHECK(IsCode(DataAt(kIrregexpLatin1CodeIndex)) ||
+  DCHECK(DataAt(kIrregexpLatin1CodeIndex).IsCode() ||
          DataAt(kIrregexpLatin1CodeIndex) == uninitialized);
-  DCHECK(IsCode(DataAt(kIrregexpUC16CodeIndex)) ||
+  DCHECK(DataAt(kIrregexpUC16CodeIndex).IsCode() ||
          DataAt(kIrregexpUC16CodeIndex) == uninitialized);
-  DCHECK(IsByteArray(DataAt(kIrregexpLatin1BytecodeIndex)) ||
+  DCHECK(DataAt(kIrregexpLatin1BytecodeIndex).IsByteArray() ||
          DataAt(kIrregexpLatin1BytecodeIndex) == uninitialized);
-  DCHECK(IsByteArray(DataAt(kIrregexpUC16BytecodeIndex)) ||
+  DCHECK(DataAt(kIrregexpUC16BytecodeIndex).IsByteArray() ||
          DataAt(kIrregexpUC16BytecodeIndex) == uninitialized);
 #endif  // DEBUG
   return (DataAt(kIrregexpLatin1CodeIndex) != uninitialized ||
@@ -128,7 +128,7 @@ bool JSRegExp::HasCompiledCode() const {
 
 void JSRegExp::DiscardCompiledCodeForSerialization() {
   DCHECK(HasCompiledCode());
-  Tagged<Smi> uninitialized = Smi::FromInt(kUninitializedValue);
+  Smi uninitialized = Smi::FromInt(kUninitializedValue);
   SetDataAt(kIrregexpLatin1CodeIndex, uninitialized);
   SetDataAt(kIrregexpUC16CodeIndex, uninitialized);
   SetDataAt(kIrregexpLatin1BytecodeIndex, uninitialized);

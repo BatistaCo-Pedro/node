@@ -35,24 +35,24 @@ OrderedHashTableIterator<Derived, TableType>::OrderedHashTableIterator(
 
 JSMapIterator::JSMapIterator(Address ptr)
     : OrderedHashTableIterator<JSMapIterator, OrderedHashMap>(ptr) {
-  SLOW_DCHECK(IsJSMapIterator(*this));
+  SLOW_DCHECK(IsJSMapIterator());
 }
 
 JSSetIterator::JSSetIterator(Address ptr)
     : OrderedHashTableIterator<JSSetIterator, OrderedHashSet>(ptr) {
-  SLOW_DCHECK(IsJSSetIterator(*this));
+  SLOW_DCHECK(IsJSSetIterator());
 }
 
 CAST_ACCESSOR(JSSetIterator)
 CAST_ACCESSOR(JSMapIterator)
 
-Tagged<Object> JSMapIterator::CurrentValue() {
-  Tagged<OrderedHashMap> table = OrderedHashMap::cast(this->table());
+Object JSMapIterator::CurrentValue() {
+  OrderedHashMap table = OrderedHashMap::cast(this->table());
   int index = Smi::ToInt(this->index());
   DCHECK_GE(index, 0);
   InternalIndex entry(index);
-  Tagged<Object> value = table->ValueAt(entry);
-  DCHECK(!IsHashTableHole(value));
+  Object value = table.ValueAt(entry);
+  DCHECK(!value.IsTheHole());
   return value;
 }
 

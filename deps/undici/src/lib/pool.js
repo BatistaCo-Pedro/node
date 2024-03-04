@@ -34,7 +34,6 @@ class Pool extends PoolBase {
     socketPath,
     autoSelectFamily,
     autoSelectFamilyAttemptTimeout,
-    allowH2,
     ...options
   } = {}) {
     super()
@@ -55,20 +54,19 @@ class Pool extends PoolBase {
       connect = buildConnector({
         ...tls,
         maxCachedSessions,
-        allowH2,
         socketPath,
-        timeout: connectTimeout,
+        timeout: connectTimeout == null ? 10e3 : connectTimeout,
         ...(util.nodeHasAutoSelectFamily && autoSelectFamily ? { autoSelectFamily, autoSelectFamilyAttemptTimeout } : undefined),
         ...connect
       })
     }
 
-    this[kInterceptors] = options.interceptors?.Pool && Array.isArray(options.interceptors.Pool)
+    this[kInterceptors] = options.interceptors && options.interceptors.Pool && Array.isArray(options.interceptors.Pool)
       ? options.interceptors.Pool
       : []
     this[kConnections] = connections || null
     this[kUrl] = util.parseOrigin(origin)
-    this[kOptions] = { ...util.deepClone(options), connect, allowH2 }
+    this[kOptions] = { ...util.deepClone(options), connect }
     this[kOptions].interceptors = options.interceptors
       ? { ...options.interceptors }
       : undefined
@@ -76,17 +74,18 @@ class Pool extends PoolBase {
   }
 
   [kGetDispatcher] () {
-    for (const client of this[kClients]) {
-      if (!client[kNeedDrain]) {
-        return client
-      }
+    let dispatcher = this[kClients].find(dispatcher => !dispatcher[kNeedDrain])
+
+    if (dispatcher) {
+      return dispatcher
     }
 
     if (!this[kConnections] || this[kClients].length < this[kConnections]) {
-      const dispatcher = this[kFactory](this[kUrl], this[kOptions])
+      dispatcher = this[kFactory](this[kUrl], this[kOptions])
       this[kAddClient](dispatcher)
-      return dispatcher
     }
+
+    return dispatcher
   }
 }
 

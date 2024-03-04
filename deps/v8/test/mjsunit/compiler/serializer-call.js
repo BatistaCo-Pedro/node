@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 
 // Flags: --allow-natives-syntax --turbofan --no-always-turbofan
-// Flags: --turboshaft-enable-debug-features
 
 function call(cb) {
   return cb.call(this, 42);

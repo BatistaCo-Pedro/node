@@ -47,8 +47,3 @@ let testcases = [
     assertEquals(instance.exports["ex" + i].type(), expected.types);
   })
 })();
-
-(function TestJSTag() {
-  print(arguments.callee.name);
-  assertEquals(WebAssembly.JSTag.type(), {parameters:['externref']});
-})();

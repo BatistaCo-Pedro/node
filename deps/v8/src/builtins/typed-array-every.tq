@@ -8,8 +8,7 @@ namespace typed_array {
 const kBuiltinNameEvery: constexpr string = '%TypedArray%.prototype.every';
 
 // https://tc39.github.io/ecma262/#sec-%typedarray%.prototype.every
-transitioning macro EveryAllElements(
-    implicit context: Context)(
+transitioning macro EveryAllElements(implicit context: Context)(
     attachedArrayAndLength: typed_array::AttachedJSTypedArrayAndLength,
     callbackfn: Callable, thisArg: JSAny): Boolean {
   let witness =
@@ -50,7 +49,8 @@ transitioning macro EveryAllElements(
 }
 
 // https://tc39.github.io/ecma262/#sec-%typedarray%.prototype.every
-transitioning javascript builtin TypedArrayPrototypeEvery(
+transitioning javascript builtin
+TypedArrayPrototypeEvery(
     js-implicit context: NativeContext, receiver: JSAny)(...arguments): JSAny {
   // arguments[0] = callback
   // arguments[1] = thisArg
@@ -71,7 +71,7 @@ transitioning javascript builtin TypedArrayPrototypeEvery(
   } label IsDetachedOrOutOfBounds deferred {
     ThrowTypeError(MessageTemplate::kDetachedOperation, kBuiltinNameEvery);
   } label NotCallable deferred {
-    ThrowCalledNonCallable(arguments[0]);
+    ThrowTypeError(MessageTemplate::kCalledNonCallable, arguments[0]);
   }
 }
 }

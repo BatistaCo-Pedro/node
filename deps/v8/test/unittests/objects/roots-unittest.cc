@@ -18,8 +18,8 @@ namespace internal {
 using RootsTest = TestWithIsolate;
 
 namespace {
-AllocationSpace GetSpaceFromObject(Tagged<Object> object) {
-  DCHECK(IsHeapObject(object));
+AllocationSpace GetSpaceFromObject(Object object) {
+  DCHECK(object.IsHeapObject());
   BasicMemoryChunk* chunk =
       BasicMemoryChunk::FromHeapObject(HeapObject::cast(object));
   if (chunk->InReadOnlySpace()) return RO_SPACE;
@@ -28,7 +28,7 @@ AllocationSpace GetSpaceFromObject(Tagged<Object> object) {
 }  // namespace
 
 #define CHECK_IN_RO_SPACE(type, name, CamelName) \
-  Tagged<HeapObject> name = roots.name();        \
+  HeapObject name = roots.name();                \
   CHECK_EQ(RO_SPACE, GetSpaceFromObject(name));
 
 // The following tests check that all the roots accessible via ReadOnlyRoots are
@@ -42,11 +42,7 @@ TEST_F(RootsTest, TestReadOnlyRoots) {
 #undef CHECK_IN_RO_SPACE
 
 namespace {
-// Applies to objects in mutable root slots; specific slots may point into RO
-// space (e.g. because the slot value may change and only the initial value is
-// in RO space; or, because RO promotion dynamically decides whether to promote
-// the slot value to RO space).
-bool CanBeInReadOnlySpace(Factory* factory, Handle<Object> object) {
+bool IsInitiallyMutable(Factory* factory, Address object_address) {
 // Entries in this list are in STRONG_MUTABLE_MOVABLE_ROOT_LIST, but may
 // initially point to objects that are in RO_SPACE.
 #define INITIALLY_READ_ONLY_ROOT_LIST(V)  \
@@ -68,36 +64,28 @@ bool CanBeInReadOnlySpace(Factory* factory, Handle<Object> object) {
   V(weak_refs_keep_during_job)
 
 #define TEST_CAN_BE_READ_ONLY(name) \
-  if (factory->name().address() == object.address()) return true;
+  if (factory->name().address() == object_address) return false;
   INITIALLY_READ_ONLY_ROOT_LIST(TEST_CAN_BE_READ_ONLY)
 #undef TEST_CAN_BE_READ_ONLY
 #undef INITIALLY_READ_ONLY_ROOT_LIST
-
-  // May be promoted to RO space, see read-only-promotion.h.
-  if (IsAccessorInfo(*object)) return true;
-  if (IsCallHandlerInfo(*object)) return true;
-  if (IsFunctionTemplateInfo(*object)) return true;
-  if (IsFunctionTemplateRareData(*object)) return true;
-  if (IsSharedFunctionInfo(*object)) return true;
-
-  return false;
+  return true;
 }
 }  // namespace
 
 // The CHECK_EQ line is there just to ensure that the root is publicly
 // accessible from Heap, but ultimately the factory is used as it provides
 // handles that have the address in the root table.
-#define CHECK_NOT_IN_RO_SPACE(type, name, CamelName)                 \
-  Handle<Object> name = factory->name();                             \
-  CHECK_EQ(*name, heap->name());                                     \
-  if (IsHeapObject(*name) && !CanBeInReadOnlySpace(factory, name) && \
-      !IsUndefined(*name, i_isolate())) {                            \
-    CHECK_NE(RO_SPACE, GetSpaceFromObject(HeapObject::cast(*name))); \
+#define CHECK_NOT_IN_RO_SPACE(type, name, CamelName)                         \
+  Handle<Object> name = factory->name();                                     \
+  CHECK_EQ(*name, heap->name());                                             \
+  if (name->IsHeapObject() && IsInitiallyMutable(factory, name.address()) && \
+      !name->IsUndefined(i_isolate())) {                                     \
+    CHECK_NE(RO_SPACE, GetSpaceFromObject(HeapObject::cast(*name)));         \
   }
 
 // The following tests check that all the roots accessible via public Heap
-// accessors are not in RO_SPACE (with some exceptions, see
-// CanBeInReadOnlySpace).
+// accessors are not in RO_SPACE with the exception of the objects listed in
+// INITIALLY_READ_ONLY_ROOT_LIST.
 TEST_F(RootsTest, TestHeapRootsNotReadOnly) {
   Factory* factory = i_isolate()->factory();
   Heap* heap = i_isolate()->heap();
@@ -112,7 +100,7 @@ TEST_F(RootsTest, TestHeapNumberList) {
     auto obj = roots.object_at(pos);
     bool in_nr_range = pos >= RootIndex::kFirstHeapNumberRoot &&
                        pos <= RootIndex::kLastHeapNumberRoot;
-    CHECK_EQ(IsHeapNumber(obj), in_nr_range);
+    CHECK_EQ(obj.IsHeapNumber(), in_nr_range);
   }
 }
 

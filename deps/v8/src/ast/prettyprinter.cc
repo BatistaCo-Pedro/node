@@ -398,7 +398,7 @@ void CallPrinter::VisitProperty(Property* node) {
   Expression* key = node->key();
   Literal* literal = key->AsLiteral();
   if (literal != nullptr &&
-      IsInternalizedString(*literal->BuildValue(isolate_))) {
+      literal->BuildValue(isolate_)->IsInternalizedString()) {
     Find(node->obj(), true);
     if (node->is_optional_chain_link()) {
       Print("?");
@@ -599,21 +599,21 @@ void CallPrinter::FindArguments(const ZonePtrList<Expression>* arguments) {
 }
 
 void CallPrinter::PrintLiteral(Handle<Object> value, bool quote) {
-  if (IsString(*value)) {
+  if (value->IsString()) {
     if (quote) Print("\"");
     Print(Handle<String>::cast(value));
     if (quote) Print("\"");
-  } else if (IsNull(*value, isolate_)) {
+  } else if (value->IsNull(isolate_)) {
     Print("null");
-  } else if (IsTrue(*value, isolate_)) {
+  } else if (value->IsTrue(isolate_)) {
     Print("true");
-  } else if (IsFalse(*value, isolate_)) {
+  } else if (value->IsFalse(isolate_)) {
     Print("false");
-  } else if (IsUndefined(*value, isolate_)) {
+  } else if (value->IsUndefined(isolate_)) {
     Print("undefined");
-  } else if (IsNumber(*value)) {
+  } else if (value->IsNumber()) {
     Print(isolate_->factory()->NumberToString(value));
-  } else if (IsSymbol(*value)) {
+  } else if (value->IsSymbol()) {
     // Symbols can only occur as literals if they were inserted by the parser.
     PrintLiteral(handle(Handle<Symbol>::cast(value)->description(), isolate_),
                  false);
@@ -853,7 +853,7 @@ const char* AstPrinter::PrintProgram(FunctionLiteral* program) {
 
 
 void AstPrinter::PrintOut(Isolate* isolate, AstNode* node) {
-  AstPrinter printer(isolate ? isolate->stack_guard()->real_climit() : 0);
+  AstPrinter printer(isolate->stack_guard()->real_climit());
   printer.Init();
   printer.Visit(node);
   PrintF("%s", printer.output_);

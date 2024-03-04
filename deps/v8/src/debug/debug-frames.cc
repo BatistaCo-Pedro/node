@@ -97,12 +97,13 @@ bool FrameInspector::ParameterIsShadowedByContextLocal(
   return info->ContextSlotIndex(parameter_name) != -1;
 }
 
-RedirectActiveFunctions::RedirectActiveFunctions(
-    Isolate* isolate, Tagged<SharedFunctionInfo> shared, Mode mode)
+RedirectActiveFunctions::RedirectActiveFunctions(SharedFunctionInfo shared,
+                                                 Mode mode)
     : shared_(shared), mode_(mode) {
-  DCHECK(shared->HasBytecodeArray());
-  DCHECK_IMPLIES(mode == Mode::kUseDebugBytecode,
-                 shared->HasDebugInfo(isolate));
+  DCHECK(shared.HasBytecodeArray());
+  if (mode == Mode::kUseDebugBytecode) {
+    DCHECK(shared.HasDebugInfo());
+  }
 }
 
 void RedirectActiveFunctions::VisitThread(Isolate* isolate,
@@ -110,15 +111,14 @@ void RedirectActiveFunctions::VisitThread(Isolate* isolate,
   for (JavaScriptStackFrameIterator it(isolate, top); !it.done();
        it.Advance()) {
     JavaScriptFrame* frame = it.frame();
-    Tagged<JSFunction> function = frame->function();
+    JSFunction function = frame->function();
     if (!frame->is_interpreted()) continue;
-    if (function->shared() != shared_) continue;
+    if (function.shared() != shared_) continue;
     InterpretedFrame* interpreted_frame =
         reinterpret_cast<InterpretedFrame*>(frame);
-    Tagged<BytecodeArray> bytecode =
-        mode_ == Mode::kUseDebugBytecode
-            ? shared_->GetDebugInfo(isolate)->DebugBytecodeArray()
-            : shared_->GetBytecodeArray(isolate);
+    BytecodeArray bytecode = mode_ == Mode::kUseDebugBytecode
+                                 ? shared_.GetDebugInfo().DebugBytecodeArray()
+                                 : shared_.GetBytecodeArray(isolate);
     interpreted_frame->PatchBytecodeArray(bytecode);
   }
 }

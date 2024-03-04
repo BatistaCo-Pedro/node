@@ -17,17 +17,9 @@ class CallOptimization {
   template <class IsolateT>
   CallOptimization(IsolateT* isolate, Handle<Object> function);
 
-  // Gets accessor context by given holder map via holder's constructor.
-  // If the holder is a remote object returns empty optional.
-  // This method must not be called for holder maps with null constructor
-  // because they can't be holders for lazy accessor pairs anyway.
-  base::Optional<Tagged<NativeContext>> GetAccessorContext(
-      Tagged<Map> holder_map) const;
-
-  // Return true if the accessor context for given holder doesn't match
-  // given native context of if the holder is a remote object.
-  bool IsCrossContextLazyAccessorPair(Tagged<NativeContext> native_context,
-                                      Tagged<Map> holder_map) const;
+  Context GetAccessorContext(Map holder_map) const;
+  bool IsCrossContextLazyAccessorPair(Context native_context,
+                                      Map holder_map) const;
 
   bool is_constant_call() const { return !constant_function_.is_null(); }
   bool accept_any_receiver() const { return accept_any_receiver_; }

@@ -42,8 +42,8 @@ class V8NameConverter : public disasm::NameConverter {
  public:
   explicit V8NameConverter(Isolate* isolate, CodeReference code = {})
       : isolate_(isolate), code_(code) {}
-  const char* NameOfAddress(uint8_t* pc) const override;
-  const char* NameInCode(uint8_t* addr) const override;
+  const char* NameOfAddress(byte* pc) const override;
+  const char* NameInCode(byte* addr) const override;
   const char* RootRelativeName(int offset) const override;
 
   const CodeReference& code() const { return code_; }
@@ -82,7 +82,7 @@ void V8NameConverter::InitExternalRefsCache() const {
   }
 }
 
-const char* V8NameConverter::NameOfAddress(uint8_t* pc) const {
+const char* V8NameConverter::NameOfAddress(byte* pc) const {
   if (!code_.is_null()) {
     const char* name =
         isolate_ ? isolate_->builtins()->Lookup(reinterpret_cast<Address>(pc))
@@ -115,7 +115,7 @@ const char* V8NameConverter::NameOfAddress(uint8_t* pc) const {
   return disasm::NameConverter::NameOfAddress(pc);
 }
 
-const char* V8NameConverter::NameInCode(uint8_t* addr) const {
+const char* V8NameConverter::NameInCode(byte* addr) const {
   // The V8NameConverter is used for well known code, so we can "safely"
   // dereference pointers in generated code.
   return code_.is_null() ? "" : reinterpret_cast<const char*>(addr);
@@ -243,7 +243,7 @@ static void PrintRelocInfo(std::ostringstream& out, Isolate* isolate,
   } else if (RelocInfo::IsEmbeddedObjectMode(rmode)) {
     HeapStringAllocator allocator;
     StringStream accumulator(&allocator);
-    ShortPrint(relocinfo->target_object(isolate), &accumulator);
+    relocinfo->target_object(isolate).ShortPrint(&accumulator);
     std::unique_ptr<char[]> obj_name = accumulator.ToCString();
     const bool is_compressed = RelocInfo::IsCompressedEmbeddedObject(rmode);
     out << "    ;; " << (is_compressed ? "(compressed) " : "")
@@ -257,19 +257,19 @@ static void PrintRelocInfo(std::ostringstream& out, Isolate* isolate,
     out << "    ;; external reference (" << reference_name << ")";
   } else if (RelocInfo::IsCodeTargetMode(rmode)) {
     out << "    ;; code:";
-    Tagged<Code> code =
+    Code code =
         isolate->heap()->FindCodeForInnerPointer(relocinfo->target_address());
-    CodeKind kind = code->kind();
-    if (code->is_builtin()) {
-      out << " Builtin::" << Builtins::name(code->builtin_id());
+    CodeKind kind = code.kind();
+    if (code.is_builtin()) {
+      out << " Builtin::" << Builtins::name(code.builtin_id());
     } else {
       out << " " << CodeKindToString(kind);
     }
 #if V8_ENABLE_WEBASSEMBLY
   } else if (RelocInfo::IsWasmStubCall(rmode) && host.is_wasm_code()) {
     // Host is isolate-independent, try wasm native module instead.
-    const char* runtime_stub_name = Builtins::name(
-        host.as_wasm_code()->native_module()->GetBuiltinInJumptableSlot(
+    const char* runtime_stub_name = GetRuntimeStubName(
+        host.as_wasm_code()->native_module()->GetRuntimeStubId(
             relocinfo->wasm_stub_call_address()));
     out << "    ;; wasm stub: " << runtime_stub_name;
 #endif  // V8_ENABLE_WEBASSEMBLY
@@ -280,12 +280,12 @@ static void PrintRelocInfo(std::ostringstream& out, Isolate* isolate,
 
 static int DecodeIt(Isolate* isolate, ExternalReferenceEncoder* ref_encoder,
                     std::ostream& os, CodeReference code,
-                    const V8NameConverter& converter, uint8_t* begin,
-                    uint8_t* end, Address current_pc, size_t range_limit) {
+                    const V8NameConverter& converter, byte* begin, byte* end,
+                    Address current_pc) {
   CHECK(!code.is_null());
   v8::base::EmbeddedVector<char, 128> decode_buffer;
   std::ostringstream out;
-  uint8_t* pc = begin;
+  byte* pc = begin;
   disasm::Disassembler d(converter,
                          disasm::Disassembler::kContinueOnUnimplementedOpcode);
   RelocIterator rit(code);
@@ -294,7 +294,7 @@ static int DecodeIt(Isolate* isolate, ExternalReferenceEncoder* ref_encoder,
 
   while (pc < end) {
     // First decode instruction so that we know its length.
-    uint8_t* prev_pc = pc;
+    byte* prev_pc = pc;
     bool decoding_constant_pool = constants > 0;
     if (decoding_constant_pool) {
       SNPrintF(
@@ -313,37 +313,29 @@ static int DecodeIt(Isolate* isolate, ExternalReferenceEncoder* ref_encoder,
         pc += 4;
       } else if (!rit.done() &&
                  rit.rinfo()->pc() == reinterpret_cast<Address>(pc) &&
-                 rit.rinfo()->rmode() == RelocInfo::INTERNAL_REFERENCE) {
-        // A raw pointer embedded in code stream.
-        uint8_t* ptr =
-            base::ReadUnalignedValue<uint8_t*>(reinterpret_cast<Address>(pc));
-        SNPrintF(decode_buffer, "%08" V8PRIxPTR "       jump table entry %4zu",
-                 reinterpret_cast<intptr_t>(ptr),
-                 static_cast<size_t>(ptr - begin));
+                 (rit.rinfo()->rmode() == RelocInfo::INTERNAL_REFERENCE ||
+                  rit.rinfo()->rmode() == RelocInfo::LITERAL_CONSTANT)) {
+        // raw pointer embedded in code stream, e.g., jump table
+        byte* ptr =
+            base::ReadUnalignedValue<byte*>(reinterpret_cast<Address>(pc));
+        if (RelocInfo::IsInternalReference(rit.rinfo()->rmode())) {
+          SNPrintF(decode_buffer,
+                   "%08" V8PRIxPTR "       jump table entry %4zu",
+                   reinterpret_cast<intptr_t>(ptr),
+                   static_cast<size_t>(ptr - begin));
+        } else {
+          const char* kType = RelocInfo::IsLiteralConstant(rit.rinfo()->rmode())
+                                  ? "    literal constant"
+                                  : "embedded data object";
+          SNPrintF(decode_buffer, "%08" V8PRIxPTR "       %s 0x%08" V8PRIxPTR,
+                   reinterpret_cast<intptr_t>(ptr), kType,
+                   reinterpret_cast<intptr_t>(ptr));
+        }
         pc += sizeof(ptr);
-#ifdef V8_TARGET_ARCH_X64
-      } else if (!rit.done() &&
-                 rit.rinfo()->pc() == reinterpret_cast<Address>(pc) &&
-                 rit.rinfo()->rmode() ==
-                     RelocInfo::RELATIVE_SWITCH_TABLE_ENTRY) {
-        int target_pc_offset = static_cast<int>(rit.rinfo()->data());
-        uint8_t* ptr = begin + target_pc_offset;
-        SNPrintF(decode_buffer, "%08" V8PRIxPTR "       jump table entry %4zx",
-                 reinterpret_cast<intptr_t>(ptr),
-                 static_cast<size_t>(target_pc_offset));
-        // We use emitl (4 bytes) for the value in the table.
-        pc += 4;
-#endif  // V8_TARGET_ARCH_X64
       } else {
         decode_buffer[0] = '\0';
         pc += d.InstructionDecode(decode_buffer, pc);
       }
-    }
-
-    Address pc_address = reinterpret_cast<Address>(pc);
-    if (range_limit != 0) {
-      if (pc_address > current_pc + range_limit) break;
-      if (pc_address <= current_pc - range_limit) continue;
     }
 
     // Collect RelocInfo for this instruction (prev_pc .. pc-1)
@@ -358,13 +350,9 @@ static int DecodeIt(Isolate* isolate, ExternalReferenceEncoder* ref_encoder,
       datas.push_back(rit.rinfo()->data());
       rit.next();
     }
-    while (cit.HasCurrent()) {
-      Address cur = cit.GetPCOffset();
-      if (cur >= static_cast<Address>(pc - begin)) break;
-      if (range_limit == 0 ||
-          cur + range_limit > current_pc - reinterpret_cast<Address>(begin)) {
-        comments.push_back(cit.GetComment());
-      }
+    while (cit.HasCurrent() &&
+           cit.GetPCOffset() < static_cast<Address>(pc - begin)) {
+      comments.push_back(cit.GetComment());
       cit.Next();
     }
 
@@ -396,7 +384,9 @@ static int DecodeIt(Isolate* isolate, ExternalReferenceEncoder* ref_encoder,
       if (host.is_code()) {
         code_handle = host.as_code();
 
-        RelocInfo relocinfo(pcs[i], rmodes[i], datas[i], constant_pool);
+        RelocInfo relocinfo(pcs[i], rmodes[i], datas[i], *code_handle,
+                            code_handle->instruction_stream(), constant_pool);
+
         bool first_reloc_info = (i == 0);
         PrintRelocInfo(out, isolate, ref_encoder, os, code, &relocinfo,
                        first_reloc_info);
@@ -412,7 +402,7 @@ static int DecodeIt(Isolate* isolate, ExternalReferenceEncoder* ref_encoder,
     // by IsInConstantPool() below.
     if (pcs.empty() && !code.is_null() && !decoding_constant_pool) {
       RelocInfo dummy_rinfo(reinterpret_cast<Address>(prev_pc),
-                            RelocInfo::NO_INFO);
+                            RelocInfo::NO_INFO, 0, Code(), InstructionStream());
       if (dummy_rinfo.IsInConstantPool()) {
         Address constant_pool_entry_address =
             dummy_rinfo.constant_pool_entry_address();
@@ -440,21 +430,16 @@ static int DecodeIt(Isolate* isolate, ExternalReferenceEncoder* ref_encoder,
 
   // Emit comments following the last instruction (if any).
   while (cit.HasCurrent()) {
-    Address cur = cit.GetPCOffset();
-    if (range_limit == 0 ||
-        cur + range_limit == current_pc - reinterpret_cast<Address>(begin)) {
-      out << "                  " << cit.GetComment();
-      DumpBuffer(os, out);
-    }
+    out << "                  " << cit.GetComment();
+    DumpBuffer(os, out);
     cit.Next();
   }
 
   return static_cast<int>(pc - begin);
 }
 
-int Disassembler::Decode(Isolate* isolate, std::ostream& os, uint8_t* begin,
-                         uint8_t* end, CodeReference code, Address current_pc,
-                         size_t range_limit) {
+int Disassembler::Decode(Isolate* isolate, std::ostream& os, byte* begin,
+                         byte* end, CodeReference code, Address current_pc) {
   DCHECK_WITH_MSG(v8_flags.text_is_readable,
                   "Builtins disassembly requires a readable .text section");
   V8NameConverter v8NameConverter(isolate, code);
@@ -465,20 +450,19 @@ int Disassembler::Decode(Isolate* isolate, std::ostream& os, uint8_t* begin,
     DisallowGarbageCollection no_alloc;
     ExternalReferenceEncoder ref_encoder(isolate);
     return DecodeIt(isolate, &ref_encoder, os, code, v8NameConverter, begin,
-                    end, current_pc, range_limit);
+                    end, current_pc);
   } else {
     // No isolate => isolate-independent code. Only V8 External references
     // available.
     return DecodeIt(nullptr, nullptr, os, code, v8NameConverter, begin, end,
-                    current_pc, range_limit);
+                    current_pc);
   }
 }
 
 #else  // ENABLE_DISASSEMBLER
 
-int Disassembler::Decode(Isolate* isolate, std::ostream& os, uint8_t* begin,
-                         uint8_t* end, CodeReference code, Address current_pc,
-                         size_t range_limit) {
+int Disassembler::Decode(Isolate* isolate, std::ostream& os, byte* begin,
+                         byte* end, CodeReference code, Address current_pc) {
   return 0;
 }
 

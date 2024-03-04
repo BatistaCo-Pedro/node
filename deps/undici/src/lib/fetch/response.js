@@ -14,19 +14,20 @@ const {
   isomorphicEncode
 } = require('./util')
 const {
-  redirectStatusSet,
-  nullBodyStatus
+  redirectStatus,
+  nullBodyStatus,
+  DOMException
 } = require('./constants')
 const { kState, kHeaders, kGuard, kRealm } = require('./symbols')
 const { webidl } = require('./webidl')
 const { FormData } = require('./formdata')
 const { getGlobalOrigin } = require('./global')
 const { URLSerializer } = require('./dataURL')
-const { kHeadersList, kConstruct } = require('../core/symbols')
-const assert = require('node:assert')
-const { types } = require('node:util')
+const { kHeadersList } = require('../core/symbols')
+const assert = require('assert')
+const { types } = require('util')
 
-const textEncoder = new TextEncoder('utf-8')
+const ReadableStream = globalThis.ReadableStream || require('stream/web').ReadableStream
 
 // https://fetch.spec.whatwg.org/#response-class
 class Response {
@@ -38,13 +39,17 @@ class Response {
     // The static error() method steps are to return the result of creating a
     // Response object, given a new network error, "immutable", and this’s
     // relevant Realm.
-    const responseObject = fromInnerResponse(makeNetworkError(), 'immutable', relevantRealm)
-
+    const responseObject = new Response()
+    responseObject[kState] = makeNetworkError()
+    responseObject[kRealm] = relevantRealm
+    responseObject[kHeaders][kHeadersList] = responseObject[kState].headersList
+    responseObject[kHeaders][kGuard] = 'immutable'
+    responseObject[kHeaders][kRealm] = relevantRealm
     return responseObject
   }
 
   // https://fetch.spec.whatwg.org/#dom-response-json
-  static json (data, init = {}) {
+  static json (data = undefined, init = {}) {
     webidl.argumentLengthCheck(arguments, 1, { header: 'Response.json' })
 
     if (init !== null) {
@@ -52,7 +57,7 @@ class Response {
     }
 
     // 1. Let bytes the result of running serialize a JavaScript value to JSON bytes on data.
-    const bytes = textEncoder.encode(
+    const bytes = new TextEncoder('utf-8').encode(
       serializeJavascriptValueToJSONString(data)
     )
 
@@ -62,7 +67,10 @@ class Response {
     // 3. Let responseObject be the result of creating a Response object, given a new response,
     //    "response", and this’s relevant Realm.
     const relevantRealm = { settingsObject: {} }
-    const responseObject = fromInnerResponse(makeResponse({}), 'response', relevantRealm)
+    const responseObject = new Response()
+    responseObject[kRealm] = relevantRealm
+    responseObject[kHeaders][kGuard] = 'response'
+    responseObject[kHeaders][kRealm] = relevantRealm
 
     // 4. Perform initialize a response given responseObject, init, and (body, "application/json").
     initializeResponse(responseObject, init, { body: body[0], type: 'application/json' })
@@ -88,17 +96,22 @@ class Response {
     try {
       parsedURL = new URL(url, getGlobalOrigin())
     } catch (err) {
-      throw new TypeError(`Failed to parse URL from ${url}`, { cause: err })
+      throw Object.assign(new TypeError('Failed to parse URL from ' + url), {
+        cause: err
+      })
     }
 
     // 3. If status is not a redirect status, then throw a RangeError.
-    if (!redirectStatusSet.has(status)) {
-      throw new RangeError(`Invalid status code ${status}`)
+    if (!redirectStatus.includes(status)) {
+      throw new RangeError('Invalid status code ' + status)
     }
 
     // 4. Let responseObject be the result of creating a Response object,
     // given a new response, "immutable", and this’s relevant Realm.
-    const responseObject = fromInnerResponse(makeResponse({}), 'immutable', relevantRealm)
+    const responseObject = new Response()
+    responseObject[kRealm] = relevantRealm
+    responseObject[kHeaders][kGuard] = 'immutable'
+    responseObject[kHeaders][kRealm] = relevantRealm
 
     // 5. Set responseObject’s response’s status to status.
     responseObject[kState].status = status
@@ -107,7 +120,7 @@ class Response {
     const value = isomorphicEncode(URLSerializer(parsedURL))
 
     // 7. Append `Location`/value to responseObject’s response’s header list.
-    responseObject[kState].headersList.append('location', value, true)
+    responseObject[kState].headersList.append('location', value)
 
     // 8. Return responseObject.
     return responseObject
@@ -115,10 +128,6 @@ class Response {
 
   // https://fetch.spec.whatwg.org/#dom-response
   constructor (body = null, init = {}) {
-    if (body === kConstruct) {
-      return
-    }
-
     if (body !== null) {
       body = webidl.converters.BodyInit(body)
     }
@@ -134,7 +143,7 @@ class Response {
     // 2. Set this’s headers to a new Headers object with this’s relevant
     // Realm, whose header list is this’s response’s header list and guard
     // is "response".
-    this[kHeaders] = new Headers(kConstruct)
+    this[kHeaders] = new Headers()
     this[kHeaders][kGuard] = 'response'
     this[kHeaders][kHeadersList] = this[kState].headersList
     this[kHeaders][kRealm] = this[kRealm]
@@ -238,7 +247,7 @@ class Response {
     webidl.brandCheck(this, Response)
 
     // 1. If this is unusable, then throw a TypeError.
-    if (this.bodyUsed || this.body?.locked) {
+    if (this.bodyUsed || (this.body && this.body.locked)) {
       throw webidl.errors.exception({
         header: 'Response.clone',
         message: 'Body has already been consumed.'
@@ -250,7 +259,14 @@ class Response {
 
     // 3. Return the result of creating a Response object, given
     // clonedResponse, this’s headers’s guard, and this’s relevant Realm.
-    return fromInnerResponse(clonedResponse, this[kHeaders][kGuard], this[kRealm])
+    const clonedResponseObject = new Response()
+    clonedResponseObject[kState] = clonedResponse
+    clonedResponseObject[kRealm] = this[kRealm]
+    clonedResponseObject[kHeaders][kHeadersList] = clonedResponse.headersList
+    clonedResponseObject[kHeaders][kGuard] = this[kHeaders][kGuard]
+    clonedResponseObject[kHeaders][kRealm] = this[kHeaders][kRealm]
+
+    return clonedResponseObject
   }
 }
 
@@ -318,10 +334,10 @@ function makeResponse (init) {
     cacheState: '',
     statusText: '',
     ...init,
-    headersList: init?.headersList
-      ? new HeadersList(init?.headersList)
+    headersList: init.headersList
+      ? new HeadersList(init.headersList)
       : new HeadersList(),
-    urlList: init?.urlList ? [...init.urlList] : []
+    urlList: init.urlList ? [...init.urlList] : []
   }
 }
 
@@ -335,16 +351,6 @@ function makeNetworkError (reason) {
       : new Error(reason ? String(reason) : reason),
     aborted: reason && reason.name === 'AbortError'
   })
-}
-
-// @see https://fetch.spec.whatwg.org/#concept-network-error
-function isNetworkError (response) {
-  return (
-    // A network error is a response whose type is "error",
-    response.type === 'error' &&
-    // status is 0
-    response.status === 0
-  )
 }
 
 function makeFilteredResponse (response, state) {
@@ -420,15 +426,15 @@ function filterResponse (response, type) {
 }
 
 // https://fetch.spec.whatwg.org/#appropriate-network-error
-function makeAppropriateNetworkError (fetchParams, err = null) {
+function makeAppropriateNetworkError (fetchParams) {
   // 1. Assert: fetchParams is canceled.
   assert(isCancelled(fetchParams))
 
   // 2. Return an aborted network error if fetchParams is aborted;
   // otherwise return a network error.
   return isAborted(fetchParams)
-    ? makeNetworkError(Object.assign(new DOMException('The operation was aborted.', 'AbortError'), { cause: err }))
-    : makeNetworkError(Object.assign(new DOMException('Request was cancelled.'), { cause: err }))
+    ? makeNetworkError(new DOMException('The operation was aborted.', 'AbortError'))
+    : makeNetworkError('Request was cancelled.')
 }
 
 // https://whatpr.org/fetch/1392.html#initialize-a-response
@@ -470,7 +476,7 @@ function initializeResponse (response, init, body) {
     if (nullBodyStatus.includes(response.status)) {
       throw webidl.errors.exception({
         header: 'Response constructor',
-        message: `Invalid response status code ${response.status}`
+        message: 'Invalid response status code ' + response.status
       })
     }
 
@@ -479,28 +485,10 @@ function initializeResponse (response, init, body) {
 
     // 3. If body's type is non-null and response's header list does not contain
     //    `Content-Type`, then append (`Content-Type`, body's type) to response's header list.
-    if (body.type != null && !response[kState].headersList.contains('content-type', true)) {
-      response[kState].headersList.append('content-type', body.type, true)
+    if (body.type != null && !response[kState].headersList.contains('Content-Type')) {
+      response[kState].headersList.append('content-type', body.type)
     }
   }
-}
-
-/**
- * @see https://fetch.spec.whatwg.org/#response-create
- * @param {any} innerResponse
- * @param {'request' | 'immutable' | 'request-no-cors' | 'response' | 'none'} guard
- * @param {any} [realm]
- * @returns {Response}
- */
-function fromInnerResponse (innerResponse, guard, realm) {
-  const response = new Response(kConstruct)
-  response[kState] = innerResponse
-  response[kRealm] = realm
-  response[kHeaders] = new Headers(kConstruct)
-  response[kHeaders][kHeadersList] = innerResponse.headersList
-  response[kHeaders][kGuard] = guard
-  response[kHeaders][kRealm] = realm
-  return response
 }
 
 webidl.converters.ReadableStream = webidl.interfaceConverter(
@@ -525,7 +513,11 @@ webidl.converters.XMLHttpRequestBodyInit = function (V) {
     return webidl.converters.Blob(V, { strict: false })
   }
 
-  if (ArrayBuffer.isView(V) || types.isArrayBuffer(V)) {
+  if (
+    types.isAnyArrayBuffer(V) ||
+    types.isTypedArray(V) ||
+    types.isDataView(V)
+  ) {
     return webidl.converters.BufferSource(V)
   }
 
@@ -573,12 +565,10 @@ webidl.converters.ResponseInit = webidl.dictionaryConverter([
 ])
 
 module.exports = {
-  isNetworkError,
   makeNetworkError,
   makeResponse,
   makeAppropriateNetworkError,
   filterResponse,
   Response,
-  cloneResponse,
-  fromInnerResponse
+  cloneResponse
 }

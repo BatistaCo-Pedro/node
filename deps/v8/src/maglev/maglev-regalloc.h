@@ -149,14 +149,10 @@ class StraightForwardRegisterAllocator {
   RegisterFrameState<DoubleRegister> double_registers_;
 
   struct SpillSlotInfo {
-    SpillSlotInfo(uint32_t slot_index, NodeIdT freed_at_position,
-                  bool double_slot)
-        : slot_index(slot_index),
-          freed_at_position(freed_at_position),
-          double_slot(double_slot) {}
+    SpillSlotInfo(uint32_t slot_index, NodeIdT freed_at_position)
+        : slot_index(slot_index), freed_at_position(freed_at_position) {}
     uint32_t slot_index;
     NodeIdT freed_at_position;
-    bool double_slot;
   };
   struct SpillSlots {
     int top = 0;
@@ -233,7 +229,7 @@ class StraightForwardRegisterAllocator {
   }
 
   template <typename RegisterT>
-  void DropRegisterValueAtEnd(RegisterT reg, bool force_spill = false);
+  void DropRegisterValueAtEnd(RegisterT reg);
   bool IsCurrentNodeLastUseOf(ValueNode* node);
   template <typename RegisterT>
   void EnsureFreeRegisterAtEnd(const compiler::InstructionOperand& hint =
@@ -242,7 +238,7 @@ class StraightForwardRegisterAllocator {
 
   template <typename RegisterT>
   void DropRegisterValue(RegisterFrameState<RegisterT>& registers,
-                         RegisterT reg, bool force_spill = false);
+                         RegisterT reg);
   void DropRegisterValue(Register reg);
   void DropRegisterValue(DoubleRegister reg);
 
@@ -269,10 +265,6 @@ class StraightForwardRegisterAllocator {
                           NodeIdT last_id);
 #endif
 
-  template <typename RegisterT>
-  void HoistLoopReloads(BasicBlock* target,
-                        RegisterFrameState<RegisterT>& registers);
-  void HoistLoopSpills(BasicBlock* target);
   void InitializeBranchTargetRegisterValues(ControlNode* source,
                                             BasicBlock* target);
   void InitializeEmptyBlockRegisterValues(ControlNode* source,

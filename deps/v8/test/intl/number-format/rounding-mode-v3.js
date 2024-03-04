@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// Flags: --harmony-intl-number-format-v3
+
 let validRoundingMode = [
     "ceil",
     "floor",
@@ -55,4 +57,4 @@ let options = {
 };
 
 assertDoesNotThrow(() => new Intl.NumberFormat(undefined, options));
-assertEquals("roundingMode,signDisplay", read.join(","));
+assertEquals("signDisplay,roundingMode", read.join(","));

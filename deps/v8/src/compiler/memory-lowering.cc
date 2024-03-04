@@ -158,9 +158,9 @@ Node* MemoryLowering::AlignToAllocationAlignment(Node* value) {
   return already_aligned.PhiAt(0);
 }
 
-Reduction MemoryLowering::ReduceAllocateRaw(Node* node,
-                                            AllocationType allocation_type,
-                                            AllocationState const** state_ptr) {
+Reduction MemoryLowering::ReduceAllocateRaw(
+    Node* node, AllocationType allocation_type,
+    AllowLargeObjects allow_large_objects, AllocationState const** state_ptr) {
   DCHECK_EQ(IrOpcode::kAllocateRaw, node->opcode());
   DCHECK_IMPLIES(allocation_folding_ == AllocationFolding::kDoAllocationFolding,
                  state_ptr != nullptr);
@@ -182,9 +182,17 @@ Reduction MemoryLowering::ReduceAllocateRaw(Node* node,
   Node* allocate_builtin;
   if (isolate_ != nullptr) {
     if (allocation_type == AllocationType::kYoung) {
-      allocate_builtin = __ AllocateInYoungGenerationStubConstant();
+      if (allow_large_objects == AllowLargeObjects::kTrue) {
+        allocate_builtin = __ AllocateInYoungGenerationStubConstant();
+      } else {
+        allocate_builtin = __ AllocateRegularInYoungGenerationStubConstant();
+      }
     } else {
-      allocate_builtin = __ AllocateInOldGenerationStubConstant();
+      if (allow_large_objects == AllowLargeObjects::kTrue) {
+        allocate_builtin = __ AllocateInOldGenerationStubConstant();
+      } else {
+        allocate_builtin = __ AllocateRegularInOldGenerationStubConstant();
+      }
     }
   } else {
     // This lowering is used by Wasm, where we compile isolate-independent
@@ -193,9 +201,17 @@ Reduction MemoryLowering::ReduceAllocateRaw(Node* node,
 #if V8_ENABLE_WEBASSEMBLY
     Builtin builtin;
     if (allocation_type == AllocationType::kYoung) {
-      builtin = Builtin::kAllocateInYoungGeneration;
+      if (allow_large_objects == AllowLargeObjects::kTrue) {
+        builtin = Builtin::kAllocateInYoungGeneration;
+      } else {
+        builtin = Builtin::kAllocateRegularInYoungGeneration;
+      }
     } else {
-      builtin = Builtin::kAllocateInOldGeneration;
+      if (allow_large_objects == AllowLargeObjects::kTrue) {
+        builtin = Builtin::kAllocateInOldGeneration;
+      } else {
+        builtin = Builtin::kAllocateRegularInOldGeneration;
+      }
     }
     static_assert(std::is_same<Smi, BuiltinPtr>(), "BuiltinPtr must be Smi");
     allocate_builtin =
@@ -356,9 +372,11 @@ Reduction MemoryLowering::ReduceAllocateRaw(Node* node,
     // Check if we can do bump pointer allocation here.
     Node* check = __ UintLessThan(new_top, limit);
     __ GotoIfNot(check, &call_runtime);
-    __ GotoIfNot(
-        __ UintLessThan(size, __ IntPtrConstant(kMaxRegularHeapObjectSize)),
-        &call_runtime);
+    if (allow_large_objects == AllowLargeObjects::kTrue) {
+      __ GotoIfNot(
+          __ UintLessThan(size, __ IntPtrConstant(kMaxRegularHeapObjectSize)),
+          &call_runtime);
+    }
     __ Store(StoreRepresentation(MachineType::PointerRepresentation(),
                                  kNoWriteBarrier),
              top_address, __ IntPtrConstant(0), new_top);
@@ -465,7 +483,7 @@ Reduction MemoryLowering::ReduceLoadExternalPointerField(Node* node) {
           : __ ExternalConstant(
                 ExternalReference::external_pointer_table_address(isolate()));
   Node* table = __ Load(MachineType::Pointer(), table_address,
-                        Internals::kExternalPointerTableBasePointerOffset);
+                        Internals::kExternalPointerTableBufferOffset);
   Node* pointer =
       __ Load(MachineType::Pointer(), table, __ ChangeUint32ToUint64(offset));
   pointer = __ WordAnd(pointer, __ IntPtrConstant(~tag));
@@ -606,21 +624,9 @@ Reduction MemoryLowering::ReduceStoreField(Node* node,
     node->ReplaceInput(2, mapword);
 #endif
   }
-  if (machine_type.representation() ==
-      MachineRepresentation::kIndirectPointer) {
-    // Indirect pointer stores require knowledge of the indirect pointer tag of
-    // the field. This is technically only required for stores that need a
-    // write barrier, but currently we track the tag for all such stores.
-    DCHECK_NE(access.indirect_pointer_tag, kIndirectPointerNullTag);
-    Node* tag = __ IntPtrConstant(access.indirect_pointer_tag);
-    node->InsertInput(graph_zone(), 3, tag);
-    NodeProperties::ChangeOp(
-        node, machine()->StoreIndirectPointer(write_barrier_kind));
-  } else {
-    NodeProperties::ChangeOp(
-        node, machine()->Store(StoreRepresentation(
-                  machine_type.representation(), write_barrier_kind)));
-  }
+  NodeProperties::ChangeOp(
+      node, machine()->Store(StoreRepresentation(machine_type.representation(),
+                                                 write_barrier_kind)));
   return Changed(node);
 }
 
@@ -684,7 +690,8 @@ bool ValueNeedsWriteBarrier(Node* value, Isolate* isolate) {
 Reduction MemoryLowering::ReduceAllocateRaw(Node* node) {
   DCHECK_EQ(IrOpcode::kAllocateRaw, node->opcode());
   const AllocateParameters& allocation = AllocateParametersOf(node->op());
-  return ReduceAllocateRaw(node, allocation.allocation_type(), nullptr);
+  return ReduceAllocateRaw(node, allocation.allocation_type(),
+                           allocation.allow_large_objects(), nullptr);
 }
 
 WriteBarrierKind MemoryLowering::ComputeWriteBarrierKind(

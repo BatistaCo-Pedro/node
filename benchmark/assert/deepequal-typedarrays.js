@@ -9,7 +9,7 @@ const bench = common.createBenchmark(main, {
     'Float32Array',
     'Uint32Array',
   ],
-  n: [25000],
+  n: [5e2],
   strict: [0, 1],
   method: [
     'deepEqual',

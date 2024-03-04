@@ -14,11 +14,10 @@ namespace wasm {
 // This struct is just a type tag for Zone::NewArray<T>(size_t) call.
 struct LocalDeclEncoderBuffer {};
 
-void LocalDeclEncoder::Prepend(Zone* zone, const uint8_t** start,
-                               const uint8_t** end) const {
+void LocalDeclEncoder::Prepend(Zone* zone, const byte** start,
+                               const byte** end) const {
   size_t size = (*end - *start);
-  uint8_t* buffer =
-      zone->AllocateArray<uint8_t, LocalDeclEncoderBuffer>(Size() + size);
+  byte* buffer = zone->NewArray<byte, LocalDeclEncoderBuffer>(Size() + size);
   size_t pos = Emit(buffer);
   if (size > 0) {
     memcpy(buffer + pos, *start, size);
@@ -28,8 +27,8 @@ void LocalDeclEncoder::Prepend(Zone* zone, const uint8_t** start,
   *end = buffer + pos;
 }
 
-size_t LocalDeclEncoder::Emit(uint8_t* buffer) const {
-  uint8_t* pos = buffer;
+size_t LocalDeclEncoder::Emit(byte* buffer) const {
+  byte* pos = buffer;
   LEBHelper::write_u32v(&pos, static_cast<uint32_t>(local_decls.size()));
   for (auto& local_decl : local_decls) {
     uint32_t locals_count = local_decl.first;

@@ -228,7 +228,7 @@ TEST(jump_tables4) {
   Handle<Code> code =
       Factory::CodeBuilder(isolate, desc, CodeKind::FOR_TESTING).Build();
 #ifdef OBJECT_PRINT
-  Print(*code, std::cout);
+  code->Print(std::cout);
 #endif
   auto f = GeneratedCode<F1>::FromCode(isolate, *code);
   for (int i = 0; i < kNumCases; ++i) {
@@ -315,7 +315,7 @@ TEST(jump_tables6) {
   Handle<Code> code =
       Factory::CodeBuilder(isolate, desc, CodeKind::FOR_TESTING).Build();
 #ifdef OBJECT_PRINT
-  Print(*code, std::cout);
+  code->Print(std::cout);
 #endif
   auto f = GeneratedCode<F1>::FromCode(isolate, *code);
   for (int i = 0; i < kSwitchTableCases; ++i) {
@@ -659,7 +659,6 @@ TEST(min_max_nan) {
 
   auto fn = [](MacroAssembler& masm) {
     __ push(s6);
-    __ push(s11);
     __ InitializeRootRegister();
     __ LoadDouble(fa3, MemOperand(a0, offsetof(TestFloat, a)));
     __ LoadDouble(fa4, MemOperand(a0, offsetof(TestFloat, b)));
@@ -673,7 +672,6 @@ TEST(min_max_nan) {
     __ StoreDouble(fa6, MemOperand(a0, offsetof(TestFloat, d)));
     __ StoreFloat(fa7, MemOperand(a0, offsetof(TestFloat, g)));
     __ StoreFloat(fa0, MemOperand(a0, offsetof(TestFloat, h)));
-    __ pop(s11);
     __ pop(s6);
   };
   auto f = AssembleCode<F3>(isolate, fn);

@@ -2,6 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// Flags: --harmony-sharedarraybuffer
+//
+
 function toRangeWrapper(is_big) {
   return function _toRangeWrapped(raw_value) {
     var raw_range = this.max - this.min + (is_big ? 1n : 1);

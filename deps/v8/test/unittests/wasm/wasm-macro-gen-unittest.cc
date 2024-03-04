@@ -14,7 +14,7 @@ class WasmMacroGenTest : public TestWithZone {};
 
 #define EXPECT_SIZE(size, ...)                          \
   do {                                                  \
-    uint8_t code[] = {__VA_ARGS__};                     \
+    byte code[] = {__VA_ARGS__};                        \
     USE(code);                                          \
     EXPECT_EQ(static_cast<size_t>(size), sizeof(code)); \
   } while (false)

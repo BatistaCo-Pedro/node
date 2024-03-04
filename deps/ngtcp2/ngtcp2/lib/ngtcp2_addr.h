@@ -38,10 +38,8 @@
  */
 void ngtcp2_addr_copy(ngtcp2_addr *dest, const ngtcp2_addr *src);
 
-/**
- * @function
- *
- * `ngtcp2_addr_eq` returns nonzero if |a| equals |b|.
+/*
+ * ngtcp2_addr_eq returns nonzero if |a| equals |b|.
  */
 int ngtcp2_addr_eq(const ngtcp2_addr *a, const ngtcp2_addr *b);
 

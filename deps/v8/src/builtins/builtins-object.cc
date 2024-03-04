@@ -59,15 +59,14 @@ BUILTIN(ObjectDefineProperty) {
 namespace {
 
 template <AccessorComponent which_accessor>
-Tagged<Object> ObjectDefineAccessor(Isolate* isolate, Handle<Object> object,
-                                    Handle<Object> name,
-                                    Handle<Object> accessor) {
+Object ObjectDefineAccessor(Isolate* isolate, Handle<Object> object,
+                            Handle<Object> name, Handle<Object> accessor) {
   // 1. Let O be ? ToObject(this value).
   Handle<JSReceiver> receiver;
   ASSIGN_RETURN_FAILURE_ON_EXCEPTION(isolate, receiver,
                                      Object::ToObject(isolate, object));
   // 2. If IsCallable(getter) is false, throw a TypeError exception.
-  if (!IsCallable(*accessor)) {
+  if (!accessor->IsCallable()) {
     MessageTemplate message =
         which_accessor == ACCESSOR_GETTER
             ? MessageTemplate::kObjectGetterExpectingFunction
@@ -101,9 +100,8 @@ Tagged<Object> ObjectDefineAccessor(Isolate* isolate, Handle<Object> object,
   return ReadOnlyRoots(isolate).undefined_value();
 }
 
-Tagged<Object> ObjectLookupAccessor(Isolate* isolate, Handle<Object> object,
-                                    Handle<Object> key,
-                                    AccessorComponent component) {
+Object ObjectLookupAccessor(Isolate* isolate, Handle<Object> object,
+                            Handle<Object> key, AccessorComponent component) {
   ASSIGN_RETURN_FAILURE_ON_EXCEPTION(isolate, object,
                                      Object::ToObject(isolate, object));
   // TODO(jkummerow/verwaest): PropertyKey(..., bool*) performs a
@@ -124,9 +122,9 @@ Tagged<Object> ObjectLookupAccessor(Isolate* isolate, Handle<Object> object,
 
       case LookupIterator::ACCESS_CHECK:
         if (it.HasAccess()) continue;
-        RETURN_FAILURE_ON_EXCEPTION(isolate, isolate->ReportFailedAccessCheck(
-                                                 it.GetHolder<JSObject>()));
-        UNREACHABLE();
+        isolate->ReportFailedAccessCheck(it.GetHolder<JSObject>());
+        RETURN_FAILURE_IF_SCHEDULED_EXCEPTION(isolate);
+        return ReadOnlyRoots(isolate).undefined_value();
 
       case LookupIterator::JSPROXY: {
         PropertyDescriptor desc;
@@ -145,7 +143,7 @@ Tagged<Object> ObjectLookupAccessor(Isolate* isolate, Handle<Object> object,
         Handle<Object> prototype;
         ASSIGN_RETURN_FAILURE_ON_EXCEPTION(
             isolate, prototype, JSProxy::GetPrototype(it.GetHolder<JSProxy>()));
-        if (IsNull(*prototype, isolate)) {
+        if (prototype->IsNull(isolate)) {
           return ReadOnlyRoots(isolate).undefined_value();
         }
         return ObjectLookupAccessor(isolate, prototype, key, component);
@@ -157,7 +155,7 @@ Tagged<Object> ObjectLookupAccessor(Isolate* isolate, Handle<Object> object,
 
       case LookupIterator::ACCESSOR: {
         Handle<Object> maybe_pair = it.GetAccessors();
-        if (IsAccessorPair(*maybe_pair)) {
+        if (maybe_pair->IsAccessorPair()) {
           Handle<NativeContext> native_context = it.GetHolder<JSReceiver>()
                                                      ->GetCreationContext()
                                                      .ToHandleChecked();
@@ -216,7 +214,7 @@ BUILTIN(ObjectLookupSetter) {
 BUILTIN(ObjectFreeze) {
   HandleScope scope(isolate);
   Handle<Object> object = args.atOrUndefined(isolate, 1);
-  if (IsJSReceiver(*object)) {
+  if (object->IsJSReceiver()) {
     MAYBE_RETURN(
         JSReceiver::SetIntegrityLevel(isolate, Handle<JSReceiver>::cast(object),
                                       FROZEN, kThrowOnError),
@@ -243,7 +241,7 @@ BUILTIN(ObjectPrototypeSetProto) {
   HandleScope scope(isolate);
   // 1. Let O be ? RequireObjectCoercible(this value).
   Handle<Object> object = args.receiver();
-  if (IsNullOrUndefined(*object, isolate)) {
+  if (object->IsNullOrUndefined(isolate)) {
     THROW_NEW_ERROR_RETURN_FAILURE(
         isolate, NewTypeError(MessageTemplate::kCalledOnNullOrUndefined,
                               isolate->factory()->NewStringFromAsciiChecked(
@@ -252,12 +250,12 @@ BUILTIN(ObjectPrototypeSetProto) {
 
   // 2. If Type(proto) is neither Object nor Null, return undefined.
   Handle<Object> proto = args.at(1);
-  if (!IsNull(*proto, isolate) && !IsJSReceiver(*proto)) {
+  if (!proto->IsNull(isolate) && !proto->IsJSReceiver()) {
     return ReadOnlyRoots(isolate).undefined_value();
   }
 
   // 3. If Type(O) is not Object, return undefined.
-  if (!IsJSReceiver(*object)) return ReadOnlyRoots(isolate).undefined_value();
+  if (!object->IsJSReceiver()) return ReadOnlyRoots(isolate).undefined_value();
   Handle<JSReceiver> receiver = Handle<JSReceiver>::cast(object);
 
   // 4. Let status be ? O.[[SetPrototypeOf]](proto).
@@ -272,8 +270,8 @@ BUILTIN(ObjectPrototypeSetProto) {
 
 namespace {
 
-Tagged<Object> GetOwnPropertyKeys(Isolate* isolate, BuiltinArguments args,
-                                  PropertyFilter filter) {
+Object GetOwnPropertyKeys(Isolate* isolate, BuiltinArguments args,
+                          PropertyFilter filter) {
   HandleScope scope(isolate);
   Handle<Object> object = args.atOrUndefined(isolate, 1);
   Handle<JSReceiver> receiver;
@@ -299,7 +297,7 @@ BUILTIN(ObjectIsFrozen) {
   HandleScope scope(isolate);
   Handle<Object> object = args.atOrUndefined(isolate, 1);
   Maybe<bool> result =
-      IsJSReceiver(*object)
+      object->IsJSReceiver()
           ? JSReceiver::TestIntegrityLevel(
                 isolate, Handle<JSReceiver>::cast(object), FROZEN)
           : Just(true);
@@ -312,7 +310,7 @@ BUILTIN(ObjectIsSealed) {
   HandleScope scope(isolate);
   Handle<Object> object = args.atOrUndefined(isolate, 1);
   Maybe<bool> result =
-      IsJSReceiver(*object)
+      object->IsJSReceiver()
           ? JSReceiver::TestIntegrityLevel(
                 isolate, Handle<JSReceiver>::cast(object), SEALED)
           : Just(true);
@@ -360,7 +358,7 @@ BUILTIN(ObjectGetOwnPropertyDescriptors) {
 BUILTIN(ObjectSeal) {
   HandleScope scope(isolate);
   Handle<Object> object = args.atOrUndefined(isolate, 1);
-  if (IsJSReceiver(*object)) {
+  if (object->IsJSReceiver()) {
     MAYBE_RETURN(
         JSReceiver::SetIntegrityLevel(isolate, Handle<JSReceiver>::cast(object),
                                       SEALED, kThrowOnError),

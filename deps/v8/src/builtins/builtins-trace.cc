@@ -107,7 +107,7 @@ const uint8_t* GetCategoryGroupEnabled(Isolate* isolate,
 BUILTIN(IsTraceCategoryEnabled) {
   HandleScope scope(isolate);
   Handle<Object> category = args.atOrUndefined(isolate, 1);
-  if (!IsString(*category)) {
+  if (!category->IsString()) {
     THROW_NEW_ERROR_RETURN_FAILURE(
         isolate, NewTypeError(MessageTemplate::kTraceEventCategoryError));
   }
@@ -144,29 +144,29 @@ BUILTIN(Trace) {
   if (!*category_group_enabled) return ReadOnlyRoots(isolate).false_value();
 #endif
 
-  if (!IsNumber(*phase_arg)) {
+  if (!phase_arg->IsNumber()) {
     THROW_NEW_ERROR_RETURN_FAILURE(
         isolate, NewTypeError(MessageTemplate::kTraceEventPhaseError));
   }
-  char phase = static_cast<char>(DoubleToInt32(Object::Number(*phase_arg)));
-  if (!IsString(*category)) {
+  char phase = static_cast<char>(DoubleToInt32(phase_arg->Number()));
+  if (!category->IsString()) {
     THROW_NEW_ERROR_RETURN_FAILURE(
         isolate, NewTypeError(MessageTemplate::kTraceEventCategoryError));
   }
-  if (!IsString(*name_arg)) {
+  if (!name_arg->IsString()) {
     THROW_NEW_ERROR_RETURN_FAILURE(
         isolate, NewTypeError(MessageTemplate::kTraceEventNameError));
   }
 
   uint32_t flags = TRACE_EVENT_FLAG_COPY;
   int32_t id = 0;
-  if (!IsNullOrUndefined(*id_arg, isolate)) {
-    if (!IsNumber(*id_arg)) {
+  if (!id_arg->IsNullOrUndefined(isolate)) {
+    if (!id_arg->IsNumber()) {
       THROW_NEW_ERROR_RETURN_FAILURE(
           isolate, NewTypeError(MessageTemplate::kTraceEventIDError));
     }
     flags |= TRACE_EVENT_FLAG_HAS_ID;
-    id = DoubleToInt32(Object::Number(*id_arg));
+    id = DoubleToInt32(id_arg->Number());
   }
 
   Handle<String> name_str = Handle<String>::cast(name_arg);
@@ -181,7 +181,7 @@ BUILTIN(Trace) {
   static const char* arg_name = "data";
   Handle<Object> arg_json;
   int32_t num_args = 0;
-  if (!IsUndefined(*data_arg, isolate)) {
+  if (!data_arg->IsUndefined(isolate)) {
     // Serializes the data argument as a JSON string, which is then
     // copied into an object. This eliminates duplicated code but
     // could have perf costs. It is also subject to all the same

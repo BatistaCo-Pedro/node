@@ -2,6 +2,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import os
+
 from testrunner.local import testsuite
 from testrunner.objects import testcase
 
@@ -30,7 +32,7 @@ class TestLoader(testsuite.GenericTestLoader):
     return SUB_TESTS
 
   def _to_relpath(self, abspath, _):
-    return abspath.relative_to(self.suite.root)
+    return os.path.relpath(abspath, self.suite.root)
 
   def _should_filter_by_name(self, _):
     return False
@@ -48,7 +50,8 @@ class TestSuite(testsuite.TestSuite):
 
 class TestCase(testcase.TestCase):
   def _get_files_params(self):
-    return [self.suite.root / self.path]
+    suite, name = self.path.split(os.path.sep)
+    return [os.path.join(self.suite.root, suite, name)]
 
   def _get_variant_flags(self):
     return []
@@ -60,4 +63,5 @@ class TestCase(testcase.TestCase):
     return []
 
   def get_shell(self):
-    return f'v8_simple_{self.path.parts[0]}_fuzzer'
+    group, _ = self.path.split(os.path.sep, 1)
+    return 'v8_simple_%s_fuzzer' % group

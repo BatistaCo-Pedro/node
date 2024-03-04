@@ -7,12 +7,12 @@
 namespace v8 {
 namespace internal {
 
-Tagged<Object> RegisteredSymbolTable::SlowReverseLookup(Tagged<Object> value) {
+Object RegisteredSymbolTable::SlowReverseLookup(Object value) {
   ReadOnlyRoots roots = this->GetReadOnlyRoots();
   for (InternalIndex i : this->IterateEntries()) {
-    Tagged<Object> k;
+    Object k;
     if (!this->ToKey(roots, i, &k)) continue;
-    Tagged<Object> e = this->ValueAt(i);
+    Object e = this->ValueAt(i);
     if (e == value) return k;
   }
   return roots.undefined_value();

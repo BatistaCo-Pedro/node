@@ -88,13 +88,10 @@ class V8_EXPORT SnapshotCreator {
    * \param existing_blob existing snapshot from which to create this one.
    * \param external_references a null-terminated array of external references
    *        that must be equivalent to CreateParams::external_references.
-   * \param owns_isolate whether this SnapshotCreator should call
-   *        v8::Isolate::Dispose() during its destructor.
    */
   SnapshotCreator(Isolate* isolate,
                   const intptr_t* external_references = nullptr,
-                  const StartupData* existing_blob = nullptr,
-                  bool owns_isolate = true);
+                  const StartupData* existing_blob = nullptr);
 
   /**
    * Create and enter an isolate, and set it up for serialization.

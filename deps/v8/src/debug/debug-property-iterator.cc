@@ -20,7 +20,7 @@ std::unique_ptr<DebugPropertyIterator> DebugPropertyIterator::Create(
   auto iterator = std::unique_ptr<DebugPropertyIterator>(
       new DebugPropertyIterator(isolate, receiver, skip_indices));
 
-  if (IsJSProxy(*receiver)) {
+  if (receiver->IsJSProxy()) {
     iterator->AdvanceToPrototype();
   }
 
@@ -186,17 +186,18 @@ bool DebugPropertyIterator::FillKeysForCurrentPrototypeAndStage() {
   Handle<JSReceiver> receiver =
       PrototypeIterator::GetCurrent<JSReceiver>(prototype_iterator_);
   if (stage_ == kExoticIndices) {
-    if (skip_indices_ || !IsJSTypedArray(*receiver)) return true;
+    if (skip_indices_ || !receiver->IsJSTypedArray()) return true;
     Handle<JSTypedArray> typed_array = Handle<JSTypedArray>::cast(receiver);
     current_keys_length_ =
-        typed_array->WasDetached() ? 0 : typed_array->GetLength();
+        typed_array->WasDetached() ? 0 : typed_array->length();
     return true;
   }
   PropertyFilter filter =
       stage_ == kEnumerableStrings ? ENUMERABLE_STRINGS : ALL_PROPERTIES;
   if (KeyAccumulator::GetKeys(isolate_, receiver, KeyCollectionMode::kOwnOnly,
                               filter, GetKeysConversion::kConvertToString,
-                              false, skip_indices_ || IsJSTypedArray(*receiver))
+                              false,
+                              skip_indices_ || receiver->IsJSTypedArray())
           .ToHandle(&current_keys_)) {
     current_keys_length_ = current_keys_->length();
     return true;
@@ -220,7 +221,7 @@ base::Flags<debug::NativeAccessorType, int> GetNativeAccessorDescriptorInternal(
     return debug::NativeAccessorType::None;
   }
   Handle<Object> structure = it.GetAccessors();
-  if (!IsAccessorInfo(*structure)) return debug::NativeAccessorType::None;
+  if (!structure->IsAccessorInfo()) return debug::NativeAccessorType::None;
   base::Flags<debug::NativeAccessorType, int> result;
   if (*structure == *isolate->factory()->value_unavailable_accessor()) {
     return debug::NativeAccessorType::IsValueUnavailable;
@@ -231,10 +232,10 @@ base::Flags<debug::NativeAccessorType, int> GetNativeAccessorDescriptorInternal(
   ACCESSOR_INFO_LIST_GENERATOR(IS_BUILTIN_ACCESSOR, /* not used */)
 #undef IS_BUILTIN_ACCESSOR
   Handle<AccessorInfo> accessor_info = Handle<AccessorInfo>::cast(structure);
-  if (accessor_info->has_getter(isolate)) {
+  if (accessor_info->has_getter()) {
     result |= debug::NativeAccessorType::HasGetter;
   }
-  if (accessor_info->has_setter(isolate)) {
+  if (accessor_info->has_setter()) {
     result |= debug::NativeAccessorType::HasSetter;
   }
   return result;

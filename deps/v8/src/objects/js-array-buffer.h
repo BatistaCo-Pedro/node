@@ -72,6 +72,9 @@ class JSArrayBuffer
   // [was_detached]: true => the buffer was previously detached.
   DECL_BOOLEAN_ACCESSORS(was_detached)
 
+  // [is_asmjs_memory]: true => this buffer was once used as asm.js memory.
+  DECL_BOOLEAN_ACCESSORS(is_asmjs_memory)
+
   // [is_shared]: true if this is a SharedArrayBuffer or a
   // GrowableSharedArrayBuffer.
   DECL_BOOLEAN_ACCESSORS(is_shared)
@@ -87,7 +90,7 @@ class JSArrayBuffer
   // An ArrayBuffer with a size greater than zero is never empty.
   DECL_GETTER(IsEmpty, bool)
 
-  DECL_ACCESSORS(detach_key, Tagged<Object>)
+  DECL_ACCESSORS(detach_key, Object)
 
   // Initializes the fields of the ArrayBuffer. The provided backing_store can
   // be nullptr. If it is not nullptr, then the function registers it with
@@ -279,14 +282,16 @@ class JSArrayBufferView
 class JSTypedArray
     : public TorqueGeneratedJSTypedArray<JSTypedArray, JSArrayBufferView> {
  public:
-  static constexpr size_t kMaxByteLength = JSArrayBuffer::kMaxByteLength;
-  static_assert(kMaxByteLength == v8::TypedArray::kMaxByteLength);
+  // TODO(v8:4153): This should be equal to JSArrayBuffer::kMaxByteLength
+  // eventually.
+  static constexpr size_t kMaxLength = v8::TypedArray::kMaxLength;
+  static_assert(kMaxLength <= JSArrayBuffer::kMaxByteLength);
 
   // [length]: length of typed array in elements.
   DECL_PRIMITIVE_GETTER(length, size_t)
 
-  DECL_GETTER(base_pointer, Tagged<Object>)
-  DECL_ACQUIRE_GETTER(base_pointer, Tagged<Object>)
+  DECL_GETTER(base_pointer, Object)
+  DECL_ACQUIRE_GETTER(base_pointer, Object)
 
   // ES6 9.4.5.3
   V8_WARN_UNUSED_RESULT static Maybe<bool> DefineOwnProperty(
@@ -394,8 +399,8 @@ class JSTypedArray
 
   DECL_GETTER(external_pointer, Address)
 
-  DECL_SETTER(base_pointer, Tagged<Object>)
-  DECL_RELEASE_SETTER(base_pointer, Tagged<Object>)
+  DECL_SETTER(base_pointer, Object)
+  DECL_RELEASE_SETTER(base_pointer, Object)
 
   inline void set_external_pointer(Isolate* isolate, Address value);
 

@@ -41,7 +41,7 @@ std::ostream& operator<<(std::ostream& os,
                          ConstFieldInfo const& const_field_info) {
   if (const_field_info.IsConst()) {
     return os << "const (field owner: "
-              << Brief(*const_field_info.owner_map->object()) << ")";
+              << Brief(*const_field_info.owner_map.ToHandleChecked()) << ")";
   } else {
     return os << "mutable";
   }
@@ -49,11 +49,11 @@ std::ostream& operator<<(std::ostream& os,
 }
 
 bool operator==(ConstFieldInfo const& lhs, ConstFieldInfo const& rhs) {
-  return lhs.owner_map == rhs.owner_map;
+  return lhs.owner_map.address() == rhs.owner_map.address();
 }
 
 size_t hash_value(ConstFieldInfo const& const_field_info) {
-  return hash_value(const_field_info.owner_map);
+  return static_cast<size_t>(const_field_info.owner_map.address());
 }
 
 bool operator==(FieldAccess const& lhs, FieldAccess const& rhs) {
@@ -61,7 +61,8 @@ bool operator==(FieldAccess const& lhs, FieldAccess const& rhs) {
   // really only relevant for eliminating loads and they don't care about the
   // write barrier mode.
   return lhs.base_is_tagged == rhs.base_is_tagged && lhs.offset == rhs.offset &&
-         lhs.map == rhs.map && lhs.machine_type == rhs.machine_type &&
+         lhs.map.address() == rhs.map.address() &&
+         lhs.machine_type == rhs.machine_type &&
          lhs.const_field_info == rhs.const_field_info &&
          lhs.is_store_in_literal == rhs.is_store_in_literal;
 }
@@ -87,8 +88,9 @@ std::ostream& operator<<(std::ostream& os, FieldAccess const& access) {
     name->NamePrint(os);
     os << ", ";
   }
-  if (access.map.has_value()) {
-    os << Brief(*access.map->object()) << ", ";
+  Handle<Map> map;
+  if (access.map.ToHandle(&map)) {
+    os << Brief(*map) << ", ";
   }
 #endif
   os << access.type << ", " << access.machine_type << ", "
@@ -298,14 +300,14 @@ CheckMapsParameters const& CheckMapsParametersOf(Operator const* op) {
   return OpParameter<CheckMapsParameters>(op);
 }
 
-ZoneRefSet<Map> const& CompareMapsParametersOf(Operator const* op) {
+ZoneHandleSet<Map> const& CompareMapsParametersOf(Operator const* op) {
   DCHECK_EQ(IrOpcode::kCompareMaps, op->opcode());
-  return OpParameter<ZoneRefSet<Map>>(op);
+  return OpParameter<ZoneHandleSet<Map>>(op);
 }
 
-ZoneRefSet<Map> const& MapGuardMapsOf(Operator const* op) {
+ZoneHandleSet<Map> const& MapGuardMapsOf(Operator const* op) {
   DCHECK_EQ(IrOpcode::kMapGuard, op->opcode());
-  return OpParameter<ZoneRefSet<Map>>(op);
+  return OpParameter<ZoneHandleSet<Map>>(op);
 }
 
 size_t hash_value(CheckTaggedInputMode mode) {
@@ -356,25 +358,25 @@ const GrowFastElementsParameters& GrowFastElementsParametersOf(
 }
 
 bool operator==(ElementsTransition const& lhs, ElementsTransition const& rhs) {
-  return lhs.mode() == rhs.mode() && lhs.source() == rhs.source() &&
-         lhs.target() == rhs.target();
+  return lhs.mode() == rhs.mode() &&
+         lhs.source().address() == rhs.source().address() &&
+         lhs.target().address() == rhs.target().address();
 }
 
 size_t hash_value(ElementsTransition transition) {
   return base::hash_combine(static_cast<uint8_t>(transition.mode()),
-                            transition.source(), transition.target());
+                            transition.source().address(),
+                            transition.target().address());
 }
 
 std::ostream& operator<<(std::ostream& os, ElementsTransition transition) {
   switch (transition.mode()) {
     case ElementsTransition::kFastTransition:
-      return os << "fast-transition from "
-                << Brief(*transition.source().object()) << " to "
-                << Brief(*transition.target().object());
+      return os << "fast-transition from " << Brief(*transition.source())
+                << " to " << Brief(*transition.target());
     case ElementsTransition::kSlowTransition:
-      return os << "slow-transition from "
-                << Brief(*transition.source().object()) << " to "
-                << Brief(*transition.target().object());
+      return os << "slow-transition from " << Brief(*transition.source())
+                << " to " << Brief(*transition.target());
   }
   UNREACHABLE();
 }
@@ -389,34 +391,36 @@ namespace {
 // Parameters for the TransitionAndStoreElement opcode.
 class TransitionAndStoreElementParameters final {
  public:
-  TransitionAndStoreElementParameters(MapRef double_map, MapRef fast_map);
+  TransitionAndStoreElementParameters(Handle<Map> double_map,
+                                      Handle<Map> fast_map);
 
-  MapRef double_map() const { return double_map_; }
-  MapRef fast_map() const { return fast_map_; }
+  Handle<Map> double_map() const { return double_map_; }
+  Handle<Map> fast_map() const { return fast_map_; }
 
  private:
-  MapRef const double_map_;
-  MapRef const fast_map_;
+  Handle<Map> const double_map_;
+  Handle<Map> const fast_map_;
 };
 
 TransitionAndStoreElementParameters::TransitionAndStoreElementParameters(
-    MapRef double_map, MapRef fast_map)
+    Handle<Map> double_map, Handle<Map> fast_map)
     : double_map_(double_map), fast_map_(fast_map) {}
 
 bool operator==(TransitionAndStoreElementParameters const& lhs,
                 TransitionAndStoreElementParameters const& rhs) {
-  return lhs.fast_map() == rhs.fast_map() &&
-         lhs.double_map() == rhs.double_map();
+  return lhs.fast_map().address() == rhs.fast_map().address() &&
+         lhs.double_map().address() == rhs.double_map().address();
 }
 
 size_t hash_value(TransitionAndStoreElementParameters parameters) {
-  return base::hash_combine(parameters.fast_map(), parameters.double_map());
+  return base::hash_combine(parameters.fast_map().address(),
+                            parameters.double_map().address());
 }
 
 std::ostream& operator<<(std::ostream& os,
                          TransitionAndStoreElementParameters parameters) {
-  return os << "fast-map" << Brief(*parameters.fast_map().object())
-            << " double-map" << Brief(*parameters.double_map().object());
+  return os << "fast-map" << Brief(*parameters.fast_map()) << " double-map"
+            << Brief(*parameters.double_map());
 }
 
 }  // namespace
@@ -426,36 +430,37 @@ namespace {
 // Parameters for the TransitionAndStoreNonNumberElement opcode.
 class TransitionAndStoreNonNumberElementParameters final {
  public:
-  TransitionAndStoreNonNumberElementParameters(MapRef fast_map,
+  TransitionAndStoreNonNumberElementParameters(Handle<Map> fast_map,
                                                Type value_type);
 
-  MapRef fast_map() const { return fast_map_; }
+  Handle<Map> fast_map() const { return fast_map_; }
   Type value_type() const { return value_type_; }
 
  private:
-  MapRef const fast_map_;
+  Handle<Map> const fast_map_;
   Type value_type_;
 };
 
 TransitionAndStoreNonNumberElementParameters::
-    TransitionAndStoreNonNumberElementParameters(MapRef fast_map,
+    TransitionAndStoreNonNumberElementParameters(Handle<Map> fast_map,
                                                  Type value_type)
     : fast_map_(fast_map), value_type_(value_type) {}
 
 bool operator==(TransitionAndStoreNonNumberElementParameters const& lhs,
                 TransitionAndStoreNonNumberElementParameters const& rhs) {
-  return lhs.fast_map() == rhs.fast_map() &&
+  return lhs.fast_map().address() == rhs.fast_map().address() &&
          lhs.value_type() == rhs.value_type();
 }
 
 size_t hash_value(TransitionAndStoreNonNumberElementParameters parameters) {
-  return base::hash_combine(parameters.fast_map(), parameters.value_type());
+  return base::hash_combine(parameters.fast_map().address(),
+                            parameters.value_type());
 }
 
 std::ostream& operator<<(
     std::ostream& os, TransitionAndStoreNonNumberElementParameters parameters) {
   return os << parameters.value_type() << ", fast-map"
-            << Brief(*parameters.fast_map().object());
+            << Brief(*parameters.fast_map());
 }
 
 }  // namespace
@@ -465,35 +470,35 @@ namespace {
 // Parameters for the TransitionAndStoreNumberElement opcode.
 class TransitionAndStoreNumberElementParameters final {
  public:
-  explicit TransitionAndStoreNumberElementParameters(MapRef double_map);
+  explicit TransitionAndStoreNumberElementParameters(Handle<Map> double_map);
 
-  MapRef double_map() const { return double_map_; }
+  Handle<Map> double_map() const { return double_map_; }
 
  private:
-  MapRef const double_map_;
+  Handle<Map> const double_map_;
 };
 
 TransitionAndStoreNumberElementParameters::
-    TransitionAndStoreNumberElementParameters(MapRef double_map)
+    TransitionAndStoreNumberElementParameters(Handle<Map> double_map)
     : double_map_(double_map) {}
 
 bool operator==(TransitionAndStoreNumberElementParameters const& lhs,
                 TransitionAndStoreNumberElementParameters const& rhs) {
-  return lhs.double_map() == rhs.double_map();
+  return lhs.double_map().address() == rhs.double_map().address();
 }
 
 size_t hash_value(TransitionAndStoreNumberElementParameters parameters) {
-  return base::hash_combine(parameters.double_map());
+  return base::hash_combine(parameters.double_map().address());
 }
 
 std::ostream& operator<<(std::ostream& os,
                          TransitionAndStoreNumberElementParameters parameters) {
-  return os << "double-map" << Brief(*parameters.double_map().object());
+  return os << "double-map" << Brief(*parameters.double_map());
 }
 
 }  // namespace
 
-MapRef DoubleMapParameterOf(const Operator* op) {
+Handle<Map> DoubleMapParameterOf(const Operator* op) {
   if (op->opcode() == IrOpcode::kTransitionAndStoreElement) {
     return OpParameter<TransitionAndStoreElementParameters>(op).double_map();
   } else if (op->opcode() == IrOpcode::kTransitionAndStoreNumberElement) {
@@ -509,7 +514,7 @@ Type ValueTypeParameterOf(const Operator* op) {
       .value_type();
 }
 
-MapRef FastMapParameterOf(const Operator* op) {
+Handle<Map> FastMapParameterOf(const Operator* op) {
   if (op->opcode() == IrOpcode::kTransitionAndStoreElement) {
     return OpParameter<TransitionAndStoreElementParameters>(op).fast_map();
   } else if (op->opcode() == IrOpcode::kTransitionAndStoreNonNumberElement) {
@@ -1270,8 +1275,7 @@ struct SimplifiedOperatorGlobalCache final {
 
   struct StringAsWtf16Operator final : public Operator {
     StringAsWtf16Operator()
-        : Operator(IrOpcode::kStringAsWtf16,
-                   Operator::kEliminatable | Operator::kIdempotent,
+        : Operator(IrOpcode::kStringAsWtf16, Operator::kEliminatable,
                    "StringAsWtf16", 1, 1, 1, 1, 1, 1) {}
   };
   StringAsWtf16Operator kStringAsWtf16;
@@ -1462,14 +1466,14 @@ const Operator* SimplifiedOperatorBuilder::SpeculativeBigIntAsUintN(
 const Operator* SimplifiedOperatorBuilder::AssertType(Type type) {
   DCHECK(type.CanBeAsserted());
   return zone()->New<Operator1<Type>>(IrOpcode::kAssertType,
-                                      Operator::kEliminatable, "AssertType", 1,
-                                      1, 0, 0, 1, 0, type);
+                                      Operator::kNoThrow | Operator::kNoDeopt,
+                                      "AssertType", 1, 0, 0, 1, 0, 0, type);
 }
 
 const Operator* SimplifiedOperatorBuilder::VerifyType() {
   return zone()->New<Operator>(IrOpcode::kVerifyType,
                                Operator::kNoThrow | Operator::kNoDeopt,
-                               "VerifyType", 1, 1, 0, 0, 1, 0);
+                               "VerifyType", 1, 0, 0, 1, 0, 0);
 }
 
 const Operator* SimplifiedOperatorBuilder::CheckTurboshaftTypeOf() {
@@ -1486,28 +1490,12 @@ const Operator* SimplifiedOperatorBuilder::WasmTypeCheck(
       "WasmTypeCheck", 2, 1, 1, 1, 1, 1, config);
 }
 
-const Operator* SimplifiedOperatorBuilder::WasmTypeCheckAbstract(
-    WasmTypeCheckConfig config) {
-  return zone_->New<Operator1<WasmTypeCheckConfig>>(
-      IrOpcode::kWasmTypeCheckAbstract,
-      Operator::kEliminatable | Operator::kIdempotent, "WasmTypeCheckAbstract",
-      1, 1, 1, 1, 1, 1, config);
-}
-
 const Operator* SimplifiedOperatorBuilder::WasmTypeCast(
     WasmTypeCheckConfig config) {
   return zone_->New<Operator1<WasmTypeCheckConfig>>(
       IrOpcode::kWasmTypeCast,
       Operator::kNoWrite | Operator::kNoThrow | Operator::kIdempotent,
       "WasmTypeCast", 2, 1, 1, 1, 1, 1, config);
-}
-
-const Operator* SimplifiedOperatorBuilder::WasmTypeCastAbstract(
-    WasmTypeCheckConfig config) {
-  return zone_->New<Operator1<WasmTypeCheckConfig>>(
-      IrOpcode::kWasmTypeCastAbstract,
-      Operator::kNoWrite | Operator::kNoThrow | Operator::kIdempotent,
-      "WasmTypeCastAbstract", 1, 1, 1, 1, 1, 1, config);
 }
 
 const Operator* SimplifiedOperatorBuilder::RttCanon(int index) {
@@ -1763,7 +1751,7 @@ const Operator* SimplifiedOperatorBuilder::CheckedTruncateTaggedToWord32(
 }
 
 const Operator* SimplifiedOperatorBuilder::CheckMaps(
-    CheckMapsFlags flags, ZoneRefSet<Map> maps,
+    CheckMapsFlags flags, ZoneHandleSet<Map> maps,
     const FeedbackSource& feedback) {
   CheckMapsParameters const parameters(flags, maps, feedback);
   Operator::Properties operator_props = Operator::kNoThrow;
@@ -1778,23 +1766,24 @@ const Operator* SimplifiedOperatorBuilder::CheckMaps(
       parameters);                                     // parameter
 }
 
-const Operator* SimplifiedOperatorBuilder::MapGuard(ZoneRefSet<Map> maps) {
+const Operator* SimplifiedOperatorBuilder::MapGuard(ZoneHandleSet<Map> maps) {
   DCHECK_LT(0, maps.size());
-  return zone()->New<Operator1<ZoneRefSet<Map>>>(    // --
-      IrOpcode::kMapGuard, Operator::kEliminatable,  // opcode
-      "MapGuard",                                    // name
-      1, 1, 1, 0, 1, 0,                              // counts
-      maps);                                         // parameter
+  return zone()->New<Operator1<ZoneHandleSet<Map>>>(  // --
+      IrOpcode::kMapGuard, Operator::kEliminatable,   // opcode
+      "MapGuard",                                     // name
+      1, 1, 1, 0, 1, 0,                               // counts
+      maps);                                          // parameter
 }
 
-const Operator* SimplifiedOperatorBuilder::CompareMaps(ZoneRefSet<Map> maps) {
+const Operator* SimplifiedOperatorBuilder::CompareMaps(
+    ZoneHandleSet<Map> maps) {
   DCHECK_LT(0, maps.size());
-  return zone()->New<Operator1<ZoneRefSet<Map>>>(  // --
-      IrOpcode::kCompareMaps,                      // opcode
-      Operator::kNoThrow | Operator::kNoWrite,     // flags
-      "CompareMaps",                               // name
-      1, 1, 1, 1, 1, 0,                            // counts
-      maps);                                       // parameter
+  return zone()->New<Operator1<ZoneHandleSet<Map>>>(  // --
+      IrOpcode::kCompareMaps,                         // opcode
+      Operator::kNoThrow | Operator::kNoWrite,        // flags
+      "CompareMaps",                                  // name
+      1, 1, 1, 1, 1, 0,                               // counts
+      maps);                                          // parameter
 }
 
 const Operator* SimplifiedOperatorBuilder::ConvertReceiver(
@@ -2115,10 +2104,11 @@ const Operator* SimplifiedOperatorBuilder::Allocate(Type type,
 }
 
 const Operator* SimplifiedOperatorBuilder::AllocateRaw(
-    Type type, AllocationType allocation) {
+    Type type, AllocationType allocation,
+    AllowLargeObjects allow_large_objects) {
   return zone()->New<Operator1<AllocateParameters>>(
       IrOpcode::kAllocateRaw, Operator::kEliminatable, "AllocateRaw", 1, 1, 1,
-      1, 1, 1, AllocateParameters(type, allocation));
+      1, 1, 1, AllocateParameters(type, allocation, allow_large_objects));
 }
 
 #define SPECULATIVE_NUMBER_BINOP(Name)                                        \
@@ -2213,7 +2203,7 @@ const Operator* SimplifiedOperatorBuilder::LoadStackArgument() {
 }
 
 const Operator* SimplifiedOperatorBuilder::TransitionAndStoreElement(
-    MapRef double_map, MapRef fast_map) {
+    Handle<Map> double_map, Handle<Map> fast_map) {
   TransitionAndStoreElementParameters parameters(double_map, fast_map);
   return zone()->New<Operator1<TransitionAndStoreElementParameters>>(
       IrOpcode::kTransitionAndStoreElement,
@@ -2228,7 +2218,7 @@ const Operator* SimplifiedOperatorBuilder::StoreSignedSmallElement() {
 }
 
 const Operator* SimplifiedOperatorBuilder::TransitionAndStoreNumberElement(
-    MapRef double_map) {
+    Handle<Map> double_map) {
   TransitionAndStoreNumberElementParameters parameters(double_map);
   return zone()->New<Operator1<TransitionAndStoreNumberElementParameters>>(
       IrOpcode::kTransitionAndStoreNumberElement,
@@ -2237,7 +2227,7 @@ const Operator* SimplifiedOperatorBuilder::TransitionAndStoreNumberElement(
 }
 
 const Operator* SimplifiedOperatorBuilder::TransitionAndStoreNonNumberElement(
-    MapRef fast_map, Type value_type) {
+    Handle<Map> fast_map, Type value_type) {
   TransitionAndStoreNonNumberElementParameters parameters(fast_map, value_type);
   return zone()->New<Operator1<TransitionAndStoreNonNumberElementParameters>>(
       IrOpcode::kTransitionAndStoreNonNumberElement,

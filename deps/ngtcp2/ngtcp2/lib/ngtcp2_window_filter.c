@@ -39,16 +39,12 @@
 void ngtcp2_window_filter_init(ngtcp2_window_filter *wf,
                                uint64_t window_length) {
   wf->window_length = window_length;
-  memset(wf->estimates, 0xff, sizeof(wf->estimates));
+  memset(wf->estimates, 0, sizeof(wf->estimates));
 }
 
 void ngtcp2_window_filter_update(ngtcp2_window_filter *wf, uint64_t new_sample,
                                  uint64_t new_time) {
-  /* Reset all estimates if they have not yet been initialized, if new
-     sample is a new best, or if the newest recorded estimate is too
-     old. */
-  if (wf->estimates[0].sample == UINT64_MAX ||
-      new_sample > wf->estimates[0].sample ||
+  if (wf->estimates[0].sample == 0 || new_sample > wf->estimates[0].sample ||
       new_time - wf->estimates[2].time > wf->window_length) {
     ngtcp2_window_filter_reset(wf, new_sample, new_time);
     return;
@@ -63,19 +59,12 @@ void ngtcp2_window_filter_update(ngtcp2_window_filter *wf, uint64_t new_sample,
     wf->estimates[2].time = new_time;
   }
 
-  /* Expire and update estimates as necessary. */
   if (new_time - wf->estimates[0].time > wf->window_length) {
-    /* The best estimate hasn't been updated for an entire window, so
-       promote second and third best estimates. */
     wf->estimates[0] = wf->estimates[1];
     wf->estimates[1] = wf->estimates[2];
     wf->estimates[2].sample = new_sample;
     wf->estimates[2].time = new_time;
 
-    /* Need to iterate one more time.  Check if the new best estimate
-       is outside the window as well, since it may also have been
-       recorded a long time ago.  Don't need to iterate once more
-       since we cover that case at the beginning of the method. */
     if (new_time - wf->estimates[0].time > wf->window_length) {
       wf->estimates[0] = wf->estimates[1];
       wf->estimates[1] = wf->estimates[2];
@@ -85,9 +74,6 @@ void ngtcp2_window_filter_update(ngtcp2_window_filter *wf, uint64_t new_sample,
 
   if (wf->estimates[1].sample == wf->estimates[0].sample &&
       new_time - wf->estimates[1].time > wf->window_length >> 2) {
-    /* A quarter of the window has passed without a better sample, so
-       the second-best estimate is taken from the second quarter of
-       the window. */
     wf->estimates[2].sample = new_sample;
     wf->estimates[2].time = new_time;
     wf->estimates[1] = wf->estimates[2];
@@ -96,9 +82,6 @@ void ngtcp2_window_filter_update(ngtcp2_window_filter *wf, uint64_t new_sample,
 
   if (wf->estimates[2].sample == wf->estimates[1].sample &&
       new_time - wf->estimates[2].time > wf->window_length >> 1) {
-    /* We've passed a half of the window without a better estimate, so
-       take a third-best estimate from the second half of the
-       window. */
     wf->estimates[2].sample = new_sample;
     wf->estimates[2].time = new_time;
   }

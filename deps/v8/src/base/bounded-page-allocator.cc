@@ -116,8 +116,9 @@ bool BoundedPageAllocator::ReserveForSharedMemoryMapping(void* ptr,
     }
   }
 
-  return page_allocator_->SetPermissions(ptr, size,
-                                         PageAllocator::Permission::kNoAccess);
+  CHECK(page_allocator_->SetPermissions(ptr, size,
+                                        PageAllocator::Permission::kNoAccess));
+  return true;
 }
 
 bool BoundedPageAllocator::FreePages(void* raw_address, size_t size) {
@@ -130,16 +131,19 @@ bool BoundedPageAllocator::FreePages(void* raw_address, size_t size) {
     DCHECK_NE(page_freeing_mode_, PageFreeingMode::kDiscard);
     // When we are required to return zero-initialized pages, we decommit the
     // pages here, which will cause any wired pages to be removed by the OS.
-    return page_allocator_->DecommitPages(raw_address, size);
+    CHECK(page_allocator_->DecommitPages(raw_address, size));
+  } else {
+    DCHECK_EQ(page_initialization_mode_,
+              PageInitializationMode::kAllocatedPagesCanBeUninitialized);
+    if (page_freeing_mode_ == PageFreeingMode::kMakeInaccessible) {
+      CHECK(page_allocator_->SetPermissions(raw_address, size,
+                                            PageAllocator::kNoAccess));
+    } else {
+      CHECK_EQ(page_freeing_mode_, PageFreeingMode::kDiscard);
+      CHECK(page_allocator_->DiscardSystemPages(raw_address, size));
+    }
   }
-  DCHECK_EQ(page_initialization_mode_,
-            PageInitializationMode::kAllocatedPagesCanBeUninitialized);
-  if (page_freeing_mode_ == PageFreeingMode::kMakeInaccessible) {
-    return page_allocator_->SetPermissions(raw_address, size,
-                                           PageAllocator::kNoAccess);
-  }
-  CHECK_EQ(page_freeing_mode_, PageFreeingMode::kDiscard);
-  return page_allocator_->DiscardSystemPages(raw_address, size);
+  return true;
 }
 
 bool BoundedPageAllocator::ReleasePages(void* raw_address, size_t size,
@@ -176,16 +180,19 @@ bool BoundedPageAllocator::ReleasePages(void* raw_address, size_t size,
       PageInitializationMode::kAllocatedPagesMustBeZeroInitialized) {
     DCHECK_NE(page_freeing_mode_, PageFreeingMode::kDiscard);
     // See comment in FreePages().
-    return (page_allocator_->DecommitPages(free_address, free_size));
+    CHECK(page_allocator_->DecommitPages(free_address, free_size));
+  } else {
+    DCHECK_EQ(page_initialization_mode_,
+              PageInitializationMode::kAllocatedPagesCanBeUninitialized);
+    if (page_freeing_mode_ == PageFreeingMode::kMakeInaccessible) {
+      CHECK(page_allocator_->SetPermissions(free_address, free_size,
+                                            PageAllocator::kNoAccess));
+    } else {
+      CHECK_EQ(page_freeing_mode_, PageFreeingMode::kDiscard);
+      CHECK(page_allocator_->DiscardSystemPages(free_address, free_size));
+    }
   }
-  DCHECK_EQ(page_initialization_mode_,
-            PageInitializationMode::kAllocatedPagesCanBeUninitialized);
-  if (page_freeing_mode_ == PageFreeingMode::kMakeInaccessible) {
-    return page_allocator_->SetPermissions(free_address, free_size,
-                                           PageAllocator::kNoAccess);
-  }
-  CHECK_EQ(page_freeing_mode_, PageFreeingMode::kDiscard);
-  return page_allocator_->DiscardSystemPages(free_address, free_size);
+  return true;
 }
 
 bool BoundedPageAllocator::SetPermissions(void* address, size_t size,

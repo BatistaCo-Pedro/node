@@ -5,9 +5,7 @@
 #ifndef V8_COMPILER_TURBOSHAFT_RUNTIME_CALL_DESCRIPTORS_H_
 #define V8_COMPILER_TURBOSHAFT_RUNTIME_CALL_DESCRIPTORS_H_
 
-#include "src/compiler/operator.h"
 #include "src/compiler/turboshaft/operations.h"
-#include "src/runtime/runtime.h"
 
 namespace v8::internal::compiler::turboshaft {
 
@@ -17,18 +15,14 @@ struct RuntimeCallDescriptor {
   struct Descriptor {
     static const TSCallDescriptor* Create(Zone* zone) {
       auto descriptor = Linkage::GetRuntimeCallDescriptor(
-          zone, Derived::kFunction,
-          std::tuple_size_v<typename Derived::arguments_t>,
-          Derived::kProperties,
-          Derived::kNeedsFrameState ? CallDescriptor::kNeedsFrameState
-                                    : CallDescriptor::kNoFlags);
+          zone, Derived::Function,
+          std::tuple_size_v<typename Derived::arguments_t>, Derived::Properties,
+          Derived::NeedsFrameState ? CallDescriptor::kNeedsFrameState
+                                   : CallDescriptor::kNoFlags);
 #ifdef DEBUG
       Derived::Verify(descriptor);
 #endif  // DEBUG
-      CanThrow can_throw = (Derived::kProperties & Operator::kNoThrow)
-                               ? CanThrow::kNo
-                               : CanThrow::kYes;
-      return TSCallDescriptor::Create(descriptor, can_throw, zone);
+      return TSCallDescriptor::Create(descriptor, zone);
     }
 
 #ifdef DEBUG
@@ -43,8 +37,8 @@ struct RuntimeCallDescriptor {
             RegisterRepresentation::FromMachineRepresentation(
                 desc->GetReturnType(0).representation())));
       }
-      DCHECK_EQ(desc->NeedsFrameState(), Derived::kNeedsFrameState);
-      DCHECK_EQ(desc->properties(), Derived::kProperties);
+      DCHECK_EQ(desc->NeedsFrameState(), Derived::NeedsFrameState);
+      DCHECK_EQ(desc->properties(), Derived::Properties);
       constexpr int additional_stub_arguments =
           3;  // function id, argument count, context (or NoContextConstant)
       DCHECK_EQ(desc->ParameterCount(),
@@ -70,76 +64,38 @@ struct RuntimeCallDescriptor {
 #endif  // DEBUG
   };
 
+  using Boolean = Oddball;
+
  public:
-  struct Abort : public Descriptor<Abort> {
-    static constexpr auto kFunction = Runtime::kAbort;
-    using arguments_t = std::tuple<V<Smi>>;
-    using result_t = V<Object>;
-
-    static constexpr bool kNeedsFrameState = false;
-    static constexpr Operator::Properties kProperties =
-        Operator::kNoDeopt | Operator::kNoThrow;
-  };
-
-  struct DateCurrentTime : public Descriptor<DateCurrentTime> {
-    static constexpr auto kFunction = Runtime::kDateCurrentTime;
-    using arguments_t = std::tuple<>;
-    using result_t = V<Number>;
-
-    static constexpr bool kNeedsFrameState = false;
-    static constexpr Operator::Properties kProperties =
-        Operator::kNoDeopt | Operator::kNoThrow;
-  };
-
   struct StringCharCodeAt : public Descriptor<StringCharCodeAt> {
-    static constexpr auto kFunction = Runtime::kStringCharCodeAt;
+    static constexpr auto Function = Runtime::kStringCharCodeAt;
     using arguments_t = std::tuple<V<String>, V<Number>>;
     using result_t = V<Smi>;
 
-    static constexpr bool kNeedsFrameState = false;
-    static constexpr Operator::Properties kProperties =
+    static constexpr bool NeedsFrameState = false;
+    static constexpr Operator::Properties Properties =
         Operator::kNoDeopt | Operator::kNoThrow;
   };
 
 #ifdef V8_INTL_SUPPORT
   struct StringToUpperCaseIntl : public Descriptor<StringToUpperCaseIntl> {
-    static constexpr auto kFunction = Runtime::kStringToUpperCaseIntl;
+    static constexpr auto Function = Runtime::kStringToUpperCaseIntl;
     using arguments_t = std::tuple<V<String>>;
     using result_t = V<String>;
 
-    static constexpr bool kNeedsFrameState = false;
-    static constexpr Operator::Properties kProperties =
+    static constexpr bool NeedsFrameState = false;
+    static constexpr Operator::Properties Properties =
         Operator::kNoDeopt | Operator::kNoThrow;
   };
 #endif  // V8_INTL_SUPPORT
 
   struct TerminateExecution : public Descriptor<TerminateExecution> {
-    static constexpr auto kFunction = Runtime::kTerminateExecution;
+    static constexpr auto Function = Runtime::kTerminateExecution;
     using arguments_t = std::tuple<>;
     using result_t = V<Object>;
 
-    static constexpr bool kNeedsFrameState = true;
-    static constexpr Operator::Properties kProperties = Operator::kNoDeopt;
-  };
-
-  struct TransitionElementsKind : public Descriptor<TransitionElementsKind> {
-    static constexpr auto kFunction = Runtime::kTransitionElementsKind;
-    using arguments_t = std::tuple<V<HeapObject>, V<Map>>;
-    using result_t = V<Object>;
-
-    static constexpr bool kNeedsFrameState = false;
-    static constexpr Operator::Properties kProperties =
-        Operator::kNoDeopt | Operator::kNoThrow;
-  };
-
-  struct TryMigrateInstance : public Descriptor<TryMigrateInstance> {
-    static constexpr auto kFunction = Runtime::kTryMigrateInstance;
-    using arguments_t = std::tuple<V<HeapObject>>;
-    using result_t = V<Object>;
-
-    static constexpr bool kNeedsFrameState = false;
-    static constexpr Operator::Properties kProperties =
-        Operator::kNoDeopt | Operator::kNoThrow;
+    static constexpr bool NeedsFrameState = true;
+    static constexpr Operator::Properties Properties = Operator::kNoDeopt;
   };
 };
 

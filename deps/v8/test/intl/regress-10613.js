@@ -26,10 +26,10 @@ testTimeStyle.timeStyle = 'long';
 for (key of keys) {
   assertThrows(
       () => new Intl.DateTimeFormat('en', testDateStyle),
-      TypeError, "Invalid option : option");
+      TypeError, "Can't set option " +  key + " when dateStyle is used");
   assertThrows(
       () => new Intl.DateTimeFormat('en', testTimeStyle),
-      TypeError, "Invalid option : option");
+      TypeError, "Can't set option " +  key + " when timeStyle is used");
   testDateStyle[key] = undefined;
   testTimeStyle[key] = undefined;
 }
@@ -61,5 +61,5 @@ try {
 }
 
 assertEquals(
-    "get timeZoneName,get timeStyle,TypeError",
+    "get timeStyle,get timeZoneName,get timeStyle,TypeError",
     logs.join(','));

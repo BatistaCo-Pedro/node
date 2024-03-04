@@ -5,8 +5,6 @@
 #ifndef V8_MAGLEV_MAGLEV_IR_INL_H_
 #define V8_MAGLEV_MAGLEV_IR_INL_H_
 
-#include <type_traits>
-
 #include "src/maglev/maglev-interpreter-frame-state.h"
 #include "src/maglev/maglev-ir.h"
 
@@ -16,56 +14,29 @@ namespace maglev {
 
 namespace detail {
 
-// A little bit of template magic to allow DeepForEachInput to either take a
-// `const DeoptInfo*` or a `DeoptInfo*`, depending on whether the Function
-// processes read-only `ValueNode*` or read-write `ValueNode*&`.
-template <typename F, typename Ret, typename A, typename... Rest>
-A first_argument_helper(Ret (F::*)(A, Rest...));
-
-template <typename F, typename Ret, typename A, typename... Rest>
-A first_argument_helper(Ret (F::*)(A, Rest...) const);
-
 template <typename Function>
-using first_argument = decltype(first_argument_helper(
-    &std::remove_reference_t<Function>::operator()));
-
-template <typename T, typename Function>
-using const_if_function_first_arg_not_reference =
-    std::conditional_t<std::is_reference_v<first_argument<Function>>, T,
-                       const T>;
-
-template <typename Function>
-void DeepForEachInputImpl(
-    const_if_function_first_arg_not_reference<DeoptFrame, Function>& frame,
-    InputLocation* input_locations, int& index, Function&& f) {
+void DeepForEachInputImpl(const DeoptFrame& frame,
+                          InputLocation* input_locations, int& index,
+                          Function&& f) {
   if (frame.parent()) {
     DeepForEachInputImpl(*frame.parent(), input_locations, index, f);
   }
   switch (frame.type()) {
     case DeoptFrame::FrameType::kInterpretedFrame:
-      f(frame.as_interpreted().closure(), &input_locations[index++]);
       frame.as_interpreted().frame_state()->ForEachValue(
           frame.as_interpreted().unit(),
-          [&](first_argument<Function> node, interpreter::Register reg) {
+          [&](ValueNode*& node, interpreter::Register reg) {
             f(node, &input_locations[index++]);
           });
       break;
     case DeoptFrame::FrameType::kInlinedArgumentsFrame: {
-      f(frame.as_inlined_arguments().closure(), &input_locations[index++]);
-      for (first_argument<Function> node :
-           frame.as_inlined_arguments().arguments()) {
+      for (ValueNode*& node : frame.as_inlined_arguments().arguments()) {
         f(node, &input_locations[index++]);
       }
       break;
     }
-    case DeoptFrame::FrameType::kConstructInvokeStubFrame: {
-      f(frame.as_construct_stub().receiver(), &input_locations[index++]);
-      f(frame.as_construct_stub().context(), &input_locations[index++]);
-      break;
-    }
     case DeoptFrame::FrameType::kBuiltinContinuationFrame:
-      for (first_argument<Function> node :
-           frame.as_builtin_continuation().parameters()) {
+      for (ValueNode*& node : frame.as_builtin_continuation().parameters()) {
         f(node, &input_locations[index++]);
       }
       f(frame.as_builtin_continuation().context(), &input_locations[index++]);
@@ -74,21 +45,17 @@ void DeepForEachInputImpl(
 }
 
 template <typename Function>
-void DeepForEachInput(const_if_function_first_arg_not_reference<
-                          EagerDeoptInfo, Function>* deopt_info,
-                      Function&& f) {
+void DeepForEachInput(const EagerDeoptInfo* deopt_info, Function&& f) {
   int index = 0;
   DeepForEachInputImpl(deopt_info->top_frame(), deopt_info->input_locations(),
-                       index, std::forward<Function>(f));
+                       index, f);
 }
 
 template <typename Function>
-void DeepForEachInput(const_if_function_first_arg_not_reference<
-                          LazyDeoptInfo, Function>* deopt_info,
-                      Function&& f) {
+void DeepForEachInput(const LazyDeoptInfo* deopt_info, Function&& f) {
   int index = 0;
   InputLocation* input_locations = deopt_info->input_locations();
-  auto& top_frame = deopt_info->top_frame();
+  const DeoptFrame& top_frame = deopt_info->top_frame();
   if (top_frame.parent()) {
     DeepForEachInputImpl(*top_frame.parent(), input_locations, index, f);
   }
@@ -96,26 +63,20 @@ void DeepForEachInput(const_if_function_first_arg_not_reference<
   // location.
   switch (top_frame.type()) {
     case DeoptFrame::FrameType::kInterpretedFrame:
-      f(top_frame.as_interpreted().closure(), &input_locations[index++]);
       top_frame.as_interpreted().frame_state()->ForEachValue(
           top_frame.as_interpreted().unit(),
-          [&](first_argument<Function> node, interpreter::Register reg) {
+          [&](ValueNode*& node, interpreter::Register reg) {
             // Skip over the result location since it is irrelevant for lazy
             // deopts (unoptimized code will recreate the result).
             if (deopt_info->IsResultRegister(reg)) return;
             f(node, &input_locations[index++]);
           });
       break;
-    case DeoptFrame::FrameType::kConstructInvokeStubFrame: {
-      f(top_frame.as_construct_stub().receiver(), &input_locations[index++]);
-      f(top_frame.as_construct_stub().context(), &input_locations[index++]);
-      break;
-    }
     case DeoptFrame::FrameType::kInlinedArgumentsFrame:
       // The inlined arguments frame can never be the top frame.
       UNREACHABLE();
     case DeoptFrame::FrameType::kBuiltinContinuationFrame:
-      for (first_argument<Function> node :
+      for (ValueNode*& node :
            top_frame.as_builtin_continuation().parameters()) {
         f(node, &input_locations[index++]);
       }

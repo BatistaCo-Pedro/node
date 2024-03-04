@@ -35,23 +35,23 @@ OrderedHashTable<Derived, entrysize>::OrderedHashTable(Address ptr)
 
 template <class Derived, int entrysize>
 bool OrderedHashTable<Derived, entrysize>::IsKey(ReadOnlyRoots roots,
-                                                 Tagged<Object> k) {
+                                                 Object k) {
   return k != roots.the_hole_value();
 }
 
 OrderedHashSet::OrderedHashSet(Address ptr)
     : OrderedHashTable<OrderedHashSet, 1>(ptr) {
-  SLOW_DCHECK(IsOrderedHashSet(*this));
+  SLOW_DCHECK(IsOrderedHashSet());
 }
 
 OrderedHashMap::OrderedHashMap(Address ptr)
     : OrderedHashTable<OrderedHashMap, 2>(ptr) {
-  SLOW_DCHECK(IsOrderedHashMap(*this));
+  SLOW_DCHECK(IsOrderedHashMap());
 }
 
 OrderedNameDictionary::OrderedNameDictionary(Address ptr)
     : OrderedHashTable<OrderedNameDictionary, 3>(ptr) {
-  SLOW_DCHECK(IsOrderedNameDictionary(*this));
+  SLOW_DCHECK(IsOrderedNameDictionary());
 }
 
 template <class Derived>
@@ -59,16 +59,15 @@ SmallOrderedHashTable<Derived>::SmallOrderedHashTable(Address ptr)
     : HeapObject(ptr) {}
 
 template <class Derived>
-Tagged<Object> SmallOrderedHashTable<Derived>::KeyAt(
-    InternalIndex entry) const {
+Object SmallOrderedHashTable<Derived>::KeyAt(InternalIndex entry) const {
   DCHECK_LT(entry.as_int(), Capacity());
   Offset entry_offset = GetDataEntryOffset(entry.as_int(), Derived::kKeyIndex);
   return TaggedField<Object>::load(*this, entry_offset);
 }
 
 template <class Derived>
-Tagged<Object> SmallOrderedHashTable<Derived>::GetDataEntry(
-    int entry, int relative_index) {
+Object SmallOrderedHashTable<Derived>::GetDataEntry(int entry,
+                                                    int relative_index) {
   DCHECK_LT(entry, Capacity());
   DCHECK_LE(static_cast<unsigned>(relative_index), Derived::kEntrySize);
   Offset entry_offset = GetDataEntryOffset(entry, relative_index);
@@ -106,17 +105,17 @@ Handle<Map> SmallOrderedHashSet::GetMap(ReadOnlyRoots roots) {
   return roots.small_ordered_hash_set_map_handle();
 }
 
-inline Tagged<Object> OrderedHashMap::ValueAt(InternalIndex entry) {
+inline Object OrderedHashMap::ValueAt(InternalIndex entry) {
   DCHECK_LT(entry.as_int(), UsedCapacity());
   return get(EntryToIndex(entry) + kValueOffset);
 }
 
-inline Tagged<Object> OrderedNameDictionary::ValueAt(InternalIndex entry) {
+inline Object OrderedNameDictionary::ValueAt(InternalIndex entry) {
   DCHECK_LT(entry.as_int(), UsedCapacity());
   return get(EntryToIndex(entry) + kValueOffset);
 }
 
-Tagged<Name> OrderedNameDictionary::NameAt(InternalIndex entry) {
+Name OrderedNameDictionary::NameAt(InternalIndex entry) {
   return Name::cast(KeyAt(entry));
 }
 
@@ -124,8 +123,8 @@ Tagged<Name> OrderedNameDictionary::NameAt(InternalIndex entry) {
 template <class Derived, int entrysize>
 bool OrderedHashTable<Derived, entrysize>::ToKey(ReadOnlyRoots roots,
                                                  InternalIndex entry,
-                                                 Tagged<Object>* out_key) {
-  Tagged<Object> k = KeyAt(entry);
+                                                 Object* out_key) {
+  Object k = KeyAt(entry);
   if (!IsKey(roots, k)) return false;
   *out_key = k;
   return true;
@@ -133,7 +132,7 @@ bool OrderedHashTable<Derived, entrysize>::ToKey(ReadOnlyRoots roots,
 
 // Set the value for entry.
 inline void OrderedNameDictionary::ValueAtPut(InternalIndex entry,
-                                              Tagged<Object> value) {
+                                              Object value) {
   DCHECK_LT(entry.as_int(), UsedCapacity());
   this->set(EntryToIndex(entry) + kValueOffset, value);
 }
@@ -153,13 +152,13 @@ inline void OrderedNameDictionary::DetailsAtPut(InternalIndex entry,
   this->set(EntryToIndex(entry) + kPropertyDetailsOffset, value.AsSmi());
 }
 
-inline Tagged<Object> SmallOrderedNameDictionary::ValueAt(InternalIndex entry) {
+inline Object SmallOrderedNameDictionary::ValueAt(InternalIndex entry) {
   return this->GetDataEntry(entry.as_int(), kValueIndex);
 }
 
 // Set the value for entry.
 inline void SmallOrderedNameDictionary::ValueAtPut(InternalIndex entry,
-                                                   Tagged<Object> value) {
+                                                   Object value) {
   this->SetDataEntry(entry.as_int(), kValueIndex, value);
 }
 
@@ -179,32 +178,32 @@ inline void SmallOrderedNameDictionary::DetailsAtPut(InternalIndex entry,
 }
 
 inline bool OrderedHashSet::Is(Handle<HeapObject> table) {
-  return IsOrderedHashSet(*table);
+  return table->IsOrderedHashSet();
 }
 
 inline bool OrderedHashMap::Is(Handle<HeapObject> table) {
-  return IsOrderedHashMap(*table);
+  return table->IsOrderedHashMap();
 }
 
 inline bool OrderedNameDictionary::Is(Handle<HeapObject> table) {
-  return IsOrderedNameDictionary(*table);
+  return table->IsOrderedNameDictionary();
 }
 
 inline bool SmallOrderedHashSet::Is(Handle<HeapObject> table) {
-  return IsSmallOrderedHashSet(*table);
+  return table->IsSmallOrderedHashSet();
 }
 
 inline bool SmallOrderedNameDictionary::Is(Handle<HeapObject> table) {
-  return IsSmallOrderedNameDictionary(*table);
+  return table->IsSmallOrderedNameDictionary();
 }
 
 inline bool SmallOrderedHashMap::Is(Handle<HeapObject> table) {
-  return IsSmallOrderedHashMap(*table);
+  return table->IsSmallOrderedHashMap();
 }
 
 template <class Derived>
 void SmallOrderedHashTable<Derived>::SetDataEntry(int entry, int relative_index,
-                                                  Tagged<Object> value) {
+                                                  Object value) {
   DCHECK_NE(kNotFound, entry);
   int entry_offset = GetDataEntryOffset(entry, relative_index);
   RELAXED_WRITE_FIELD(*this, entry_offset, value);
@@ -212,13 +211,13 @@ void SmallOrderedHashTable<Derived>::SetDataEntry(int entry, int relative_index,
 }
 
 template <class Derived, class TableType>
-Tagged<Object> OrderedHashTableIterator<Derived, TableType>::CurrentKey() {
-  Tagged<TableType> table = TableType::cast(this->table());
+Object OrderedHashTableIterator<Derived, TableType>::CurrentKey() {
+  TableType table = TableType::cast(this->table());
   int index = Smi::ToInt(this->index());
   DCHECK_LE(0, index);
   InternalIndex entry(index);
-  Tagged<Object> key = table->KeyAt(entry);
-  DCHECK(!IsHashTableHole(key));
+  Object key = table.KeyAt(entry);
+  DCHECK(!key.IsTheHole());
   return key;
 }
 
@@ -239,7 +238,7 @@ inline void OrderedNameDictionary::SetHash(int hash) {
 }
 
 inline int OrderedNameDictionary::Hash() {
-  Tagged<Object> hash_obj = this->get(HashIndex());
+  Object hash_obj = this->get(HashIndex());
   int hash = Smi::ToInt(hash_obj);
   DCHECK(PropertyArray::HashField::is_valid(hash));
   return hash;

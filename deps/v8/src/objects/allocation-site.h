@@ -22,6 +22,8 @@ class AllocationSite : public Struct {
  public:
   NEVER_READ_ONLY_SPACE
   static const uint32_t kMaximumArrayBytesToPretransition = 8 * 1024;
+  static const double kPretenureRatio;
+  static const int kPretenureMinimumCreated = 100;
 
   // Values for pretenure decision field.
   enum PretenureDecision {
@@ -37,27 +39,27 @@ class AllocationSite : public Struct {
 
   // Contains either a Smi-encoded bitfield or a boilerplate. If it's a Smi the
   // AllocationSite is for a constructed Array.
-  DECL_ACCESSORS(transition_info_or_boilerplate, Tagged<Object>)
-  DECL_RELEASE_ACQUIRE_ACCESSORS(transition_info_or_boilerplate, Tagged<Object>)
-  DECL_GETTER(boilerplate, Tagged<JSObject>)
-  DECL_RELEASE_ACQUIRE_ACCESSORS(boilerplate, Tagged<JSObject>)
+  DECL_ACCESSORS(transition_info_or_boilerplate, Object)
+  DECL_RELEASE_ACQUIRE_ACCESSORS(transition_info_or_boilerplate, Object)
+  DECL_GETTER(boilerplate, JSObject)
+  DECL_RELEASE_ACQUIRE_ACCESSORS(boilerplate, JSObject)
   DECL_INT_ACCESSORS(transition_info)
 
   // nested_site threads a list of sites that represent nested literals
   // walked in a particular order. So [[1, 2], 1, 2] will have one
   // nested_site, but [[1, 2], 3, [4]] will have a list of two.
-  DECL_ACCESSORS(nested_site, Tagged<Object>)
+  DECL_ACCESSORS(nested_site, Object)
 
   // Bitfield containing pretenuring information.
   DECL_RELAXED_INT32_ACCESSORS(pretenure_data)
 
   DECL_INT32_ACCESSORS(pretenure_create_count)
-  DECL_ACCESSORS(dependent_code, Tagged<DependentCode>)
+  DECL_ACCESSORS(dependent_code, DependentCode)
 
   // heap->allocation_site_list() points to the last AllocationSite which form
   // a linked list through the weak_next property. The GC might remove elements
   // from the list by updateing weak_next.
-  DECL_ACCESSORS(weak_next, Tagged<Object>)
+  DECL_ACCESSORS(weak_next, Object)
 
   inline void Initialize();
 
@@ -78,8 +80,9 @@ class AllocationSite : public Struct {
   using DeoptDependentCodeBit = base::BitField<bool, 29, 1>;
   static_assert(PretenureDecisionBits::kMax >= kLastPretenureDecisionValue);
 
-  // Increments the mementos found counter and returns the new count.
-  inline int IncrementMementoFoundCount(int increment = 1);
+  // Increments the mementos found counter and returns true when the first
+  // memento was found for a given allocation site.
+  inline bool IncrementMementoFoundCount(int increment = 1);
 
   inline void IncrementMementoCreateCount();
 
@@ -172,10 +175,10 @@ class AllocationSite : public Struct {
 class AllocationMemento
     : public TorqueGeneratedAllocationMemento<AllocationMemento, Struct> {
  public:
-  DECL_ACCESSORS(allocation_site, Tagged<Object>)
+  DECL_ACCESSORS(allocation_site, Object)
 
   inline bool IsValid() const;
-  inline Tagged<AllocationSite> GetAllocationSite() const;
+  inline AllocationSite GetAllocationSite() const;
   inline Address GetAllocationSiteUnchecked() const;
 
   DECL_PRINTER(AllocationMemento)

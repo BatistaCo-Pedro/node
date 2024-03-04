@@ -86,7 +86,7 @@ inline constexpr bool CodeKindCanDeoptimize(CodeKind kind) {
 }
 
 inline constexpr bool CodeKindCanOSR(CodeKind kind) {
-  return kind == CodeKind::TURBOFAN || kind == CodeKind::MAGLEV;
+  return kind == CodeKind::TURBOFAN;
 }
 
 inline constexpr bool CodeKindCanTierUp(CodeKind kind) {

@@ -459,7 +459,7 @@ V8_INLINE Token::Value Scanner::ScanSingleToken() {
             if (c == '#' || c == '@') {
               Advance();
               Advance();
-              token = SkipMagicComment();
+              token = SkipSourceURLComment();
               continue;
             }
             token = SkipSingleLineComment();

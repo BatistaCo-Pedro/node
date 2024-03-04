@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// Flags: --no-always-turbofan --experimental-value-unavailable
+// Flags: --no-always-turbofan
 
 let {session, contextGroup, Protocol} =
     InspectorTest.start('Test module scope with variables in TDZ.');
@@ -43,11 +43,7 @@ for (let i =0; i < 8; i++) {
     InspectorTest.log(`  Scope type: ${scope.type}`);
     let { result: { result: locals }} = await Protocol.Runtime.getProperties({ "objectId" : scope.object.objectId });
     for (let local of locals) {
-      if ('value' in local) {
-        InspectorTest.log(`    ${local.name} : ${local.value.value}`);
-      } else {
-        InspectorTest.log(`    ${local.name} : <value_unavailable>`);
-      }
+      InspectorTest.log(`    ${local.name} : ${local.value.value}`);
     }
   }
   await Protocol.Debugger.resume();

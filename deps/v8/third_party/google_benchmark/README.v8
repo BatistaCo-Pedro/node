@@ -3,9 +3,8 @@ Short Name: benchmark
 URL: https://github.com/google/benchmark
 Version: unknown
 License: Apache 2.0
-License File: src/LICENSE
+License File: NOT_SHIPPED
 Security Critical: no
-Shipped: no
 
 Description:
 A microbenchmark support library.

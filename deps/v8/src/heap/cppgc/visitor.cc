@@ -65,20 +65,20 @@ void ConservativeTracingVisitor::TraceConservatively(
 }
 
 void ConservativeTracingVisitor::TryTracePointerConservatively(
-    Address address) {
+    Address pointer) {
 #if defined(CPPGC_CAGED_HEAP)
   // TODO(chromium:1056170): Add support for SIMD in stack scanning.
-  if (V8_LIKELY(!CagedHeapBase::IsWithinCage(address))) return;
+  if (V8_LIKELY(!CagedHeapBase::IsWithinCage(pointer))) return;
 #endif  // defined(CPPGC_CAGED_HEAP)
 
   const BasePage* page = reinterpret_cast<const BasePage*>(
-      page_backend_.Lookup(const_cast<ConstAddress>(address)));
+      page_backend_.Lookup(const_cast<ConstAddress>(pointer)));
 
   if (!page) return;
 
   DCHECK_EQ(&heap_, &page->heap());
 
-  auto* header = page->TryObjectHeaderFromInnerAddress(address);
+  auto* header = page->TryObjectHeaderFromInnerAddress(pointer);
 
   if (!header) return;
 

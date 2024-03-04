@@ -207,9 +207,23 @@ class RunScript extends BaseCommand {
         log.error(err)
         log.error(`  in workspace: ${pkg._id || pkg.name}`)
         log.error(`  at location: ${workspacePath}`)
-        process.exitCode = 1
+
+        const scriptMissing = err.message.startsWith('Missing script')
+
+        // avoids exiting with error code in case there's scripts missing
+        // in some workspaces since other scripts might have succeeded
+        if (!scriptMissing) {
+          process.exitCode = 1
+        }
+
+        return scriptMissing
       })
       res.push(runResult)
+    }
+
+    // in case **all** tests are missing, then it should exit with error code
+    if (res.every(Boolean)) {
+      throw new Error(`Missing script: ${args[0]}`)
     }
   }
 

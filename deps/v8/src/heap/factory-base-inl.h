@@ -11,7 +11,6 @@
 #include "src/objects/map.h"
 #include "src/objects/slots-inl.h"
 #include "src/objects/smi.h"
-#include "src/objects/struct-inl.h"
 #include "src/roots/roots.h"
 
 namespace v8 {
@@ -26,9 +25,8 @@ READ_ONLY_ROOT_LIST(ROOT_ACCESSOR)
 #undef ROOT_ACCESSOR
 
 template <typename Impl>
-Handle<Boolean> FactoryBase<Impl>::ToBoolean(bool value) {
-  return value ? Handle<Boolean>::cast(impl()->true_value())
-               : Handle<Boolean>::cast(impl()->false_value());
+Handle<Oddball> FactoryBase<Impl>::ToBoolean(bool value) {
+  return value ? impl()->true_value() : impl()->false_value();
 }
 
 template <typename Impl>
@@ -106,24 +104,24 @@ Handle<HeapNumber> FactoryBase<Impl>::NewHeapNumberWithHoleNaN() {
 
 template <typename Impl>
 template <typename StructType>
-Tagged<StructType> FactoryBase<Impl>::NewStructInternal(
-    InstanceType type, AllocationType allocation) {
+StructType FactoryBase<Impl>::NewStructInternal(InstanceType type,
+                                                AllocationType allocation) {
   ReadOnlyRoots roots = read_only_roots();
-  Tagged<Map> map = Map::GetMapFor(roots, type);
+  Map map = Map::GetMapFor(roots, type);
   int size = StructType::kSize;
   return StructType::cast(NewStructInternal(roots, map, size, allocation));
 }
 
 template <typename Impl>
-Tagged<Struct> FactoryBase<Impl>::NewStructInternal(ReadOnlyRoots roots,
-                                                    Tagged<Map> map, int size,
-                                                    AllocationType allocation) {
-  DCHECK_EQ(size, map->instance_size());
-  Tagged<HeapObject> result = AllocateRawWithImmortalMap(size, allocation, map);
-  Tagged<Struct> str = Tagged<Struct>::cast(result);
-  Tagged<Undefined> undefined = roots.undefined_value();
+Struct FactoryBase<Impl>::NewStructInternal(ReadOnlyRoots roots, Map map,
+                                            int size,
+                                            AllocationType allocation) {
+  DCHECK_EQ(size, map.instance_size());
+  HeapObject result = AllocateRawWithImmortalMap(size, allocation, map);
+  Struct str = Struct::cast(result);
+  Object value = roots.undefined_value();
   int length = (size >> kTaggedSizeLog2) - 1;
-  MemsetTagged(str->RawField(Struct::kHeaderSize), undefined, length);
+  MemsetTagged(str.RawField(Struct::kHeaderSize), value, length);
   return str;
 }
 

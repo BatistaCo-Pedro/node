@@ -341,11 +341,7 @@ bool EnableInProcessStackDumping() {
 
   struct sigaction action;
   memset(&action, 0, sizeof(action));
-  // Use SA_ONSTACK so that iff an alternate stack has been registered, the
-  // handler will run on that stack instead of the default stack. This can be
-  // useful for example if the stack pointer gets corrupted or in case of stack
-  // overflows, since that might prevent the handler from running properly.
-  action.sa_flags = SA_RESETHAND | SA_SIGINFO | SA_ONSTACK;
+  action.sa_flags = SA_RESETHAND | SA_SIGINFO;
   action.sa_sigaction = &StackDumpSignalHandler;
   sigemptyset(&action.sa_mask);
 

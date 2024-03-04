@@ -379,7 +379,8 @@
   new D();
   assertEquals(2, fooCallCount);
   assertEquals(1, ctorCallCount);
-  assertFalse(isMaglevved(D));
+  // No deopt (Maglev doesn't depend on the prototype chain not being mutated).
+  assertTrue(isMaglevved(D));
 })();
 
 // The same test as the previous one, but with a ctor with a non-final spread.
@@ -417,7 +418,8 @@
   new D();
   assertEquals(2, fooCallCount);
   assertEquals(1, ctorCallCount);
-  assertFalse(isMaglevved(D));
+  // No deopt (Maglev doesn't depend on the prototype chain not being mutated).
+  assertTrue(isMaglevved(D));
 })();
 
 (function BasePrivateField() {

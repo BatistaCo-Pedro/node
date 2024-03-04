@@ -9,6 +9,14 @@
 
 namespace v8 {
 namespace internal {
+
+// Forward declarations.
+class ExternalReference;
+class HeapObject;
+template <typename>
+class Handle;
+
+
 namespace compiler {
 
 // Bundles various caches for common nodes.

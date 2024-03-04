@@ -71,7 +71,7 @@ let kSig_w_zi = makeSig([kWasmStringViewIter, kWasmI32],
 (function TestInstructions() {
   let builder = new WasmModuleBuilder();
 
-  builder.addMemory(0, undefined);
+  builder.addMemory(0, undefined, false, false);
 
   builder.addFunction("string.new_utf8", kSig_w_ii)
     .addBody([
@@ -353,18 +353,18 @@ assertInvalid(
         ...GCInstr(kExprStringNewWtf8), 0
       ]);
   },
-  /memory index 0 exceeds number of declared memories \(0\)/);
+  /memory instruction with no memory/);
 
 assertInvalid(
   builder => {
-    builder.addMemory(0, undefined);
+    builder.addMemory(0, undefined, false, false);
     builder.addFunction("string.new_wtf8/bad-mem", kSig_w_ii)
       .addBody([
         kExprLocalGet, 0, kExprLocalGet, 1,
         ...GCInstr(kExprStringNewWtf8), 1
       ]);
   },
-  /expected a single 0 byte for the memory index, found 1 encoded in 1 bytes/);
+  /expected memory index 0, found 1/);
 
 assertInvalid(
   builder => {
@@ -374,18 +374,18 @@ assertInvalid(
         ...GCInstr(kExprStringEncodeWtf8), 0
       ]);
   },
-  /memory index 0 exceeds number of declared memories \(0\)/);
+  /memory instruction with no memory/);
 
 assertInvalid(
   builder => {
-    builder.addMemory(0, undefined);
+    builder.addMemory(0, undefined, false, false);
     builder.addFunction("string.encode_wtf8/bad-mem", kSig_i_wi)
       .addBody([
         kExprLocalGet, 0, kExprLocalGet, 1,
         ...GCInstr(kExprStringEncodeWtf8), 1
       ]);
   },
-  /expected a single 0 byte for the memory index, found 1 encoded in 1 bytes/);
+  /expected memory index 0, found 1/);
 
 assertInvalid(
   builder => {

@@ -24,7 +24,7 @@ TQ_OBJECT_CONSTRUCTORS_IMPL(JSRelativeTimeFormat)
 
 // Base relative time format accessors.
 ACCESSORS(JSRelativeTimeFormat, icu_formatter,
-          Tagged<Managed<icu::RelativeDateTimeFormatter>>, kIcuFormatterOffset)
+          Managed<icu::RelativeDateTimeFormatter>, kIcuFormatterOffset)
 
 inline void JSRelativeTimeFormat::set_numeric(Numeric numeric) {
   DCHECK_GE(NumericBit::kMax, numeric);

@@ -208,7 +208,9 @@ wasm::AsmJsParser::VarInfo* AsmJsParser::GetVarInfo(
   if (is_global && index + 1 > num_globals_) num_globals_ = index + 1;
   if (index + 1 > old_capacity) {
     size_t new_size = std::max(2 * old_capacity, index + 1);
-    base::Vector<VarInfo> new_info = zone_->NewVector<VarInfo>(new_size);
+    base::Vector<VarInfo> new_info{zone_->NewArray<VarInfo>(new_size),
+                                   new_size};
+    std::uninitialized_fill(new_info.begin(), new_info.end(), VarInfo{});
     std::copy(var_info.begin(), var_info.end(), new_info.begin());
     var_info = new_info;
   }
@@ -226,8 +228,7 @@ void AsmJsParser::AddGlobalImport(base::Vector<const char> name, AsmType* type,
   // Allocate a separate variable for the import.
   // TODO(asmjs): Consider using the imported global directly instead of
   // allocating a separate global variable for immutable (i.e. const) imports.
-  DeclareGlobal(info, mutable_variable, type, vtype,
-                WasmInitExpr::DefaultValue(vtype));
+  DeclareGlobal(info, mutable_variable, type, vtype);
 
   // Record the need to initialize the global from the import.
   global_imports_.push_back({name, vtype, info});
@@ -258,7 +259,10 @@ uint32_t AsmJsParser::TempVariable(int index) {
 }
 
 base::Vector<const char> AsmJsParser::CopyCurrentIdentifierString() {
-  return zone()->CloneVector(base::VectorOf(scanner_.GetIdentifierString()));
+  const std::string& str = scanner_.GetIdentifierString();
+  char* buffer = zone()->NewArray<char>(str.size());
+  str.copy(buffer, str.size());
+  return base::Vector<const char>(buffer, static_cast<int>(str.size()));
 }
 
 void AsmJsParser::SkipSemicolon() {
@@ -438,12 +442,7 @@ void AsmJsParser::ValidateModuleVar(bool mutable_variable) {
   if (!scanner_.IsGlobal()) {
     FAIL("Expected identifier");
   }
-  AsmJsScanner::token_t identifier = Consume();
-  if (identifier == stdlib_name_ || identifier == foreign_name_ ||
-      identifier == heap_name_) {
-    FAIL("Cannot shadow parameters");
-  }
-  VarInfo* info = GetVarInfo(identifier);
+  VarInfo* info = GetVarInfo(Consume());
   if (info->kind != VarKind::kUnused) {
     FAIL("Redefinition of variable");
   }

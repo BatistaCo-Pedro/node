@@ -47,7 +47,7 @@ DECLARED_PROTECTORS_ON_ISOLATE(V)
 
 #define INVALIDATE_PROTECTOR_ON_ISOLATE_DEFINITION(name, unused_index, cell) \
   void Protectors::Invalidate##name(Isolate* isolate) {                      \
-    DCHECK(IsSmi(isolate->factory()->cell()->value()));                      \
+    DCHECK(isolate->factory()->cell()->value().IsSmi());                     \
     DCHECK(Is##name##Intact(isolate));                                       \
     if (v8_flags.trace_protector_invalidation) {                             \
       TraceProtectorInvalidation(#name);                                     \

@@ -12,6 +12,10 @@
 #include "src/heap/heap.h"
 #include "src/heap/read-only-heap.h"
 #include "src/heap/spaces.h"
+#include "src/objects/heap-object.h"
+#include "src/objects/map.h"
+#include "src/objects/objects.h"
+#include "src/objects/shared-function-info.h"
 #include "src/roots/roots.h"
 
 namespace v8 {
@@ -47,20 +51,19 @@ class V8_EXPORT_PRIVATE LocalFactory : public FactoryBase<LocalFactory> {
   // it's a mutable root), but it still needs to define some cache-related
   // method that are used by FactoryBase. Those method do basically nothing in
   // the case of the LocalFactory.
-  int NumberToStringCacheHash(Tagged<Smi> number);
+  int NumberToStringCacheHash(Smi number);
   int NumberToStringCacheHash(double number);
   void NumberToStringCacheSet(Handle<Object> number, int hash,
                               Handle<String> js_string);
-  Handle<Object> NumberToStringCacheGet(Tagged<Object> number, int hash);
+  Handle<Object> NumberToStringCacheGet(Object number, int hash);
 
  private:
   friend class FactoryBase<LocalFactory>;
 
   // ------
   // Customization points for FactoryBase.
-  Tagged<HeapObject> AllocateRaw(
-      int size, AllocationType allocation,
-      AllocationAlignment alignment = kTaggedAligned);
+  HeapObject AllocateRaw(int size, AllocationType allocation,
+                         AllocationAlignment alignment = kTaggedAligned);
 
   LocalIsolate* isolate() {
     // Downcast to the privately inherited sub-class using c-style casts to
@@ -85,8 +88,7 @@ class V8_EXPORT_PRIVATE LocalFactory : public FactoryBase<LocalFactory> {
   inline AllocationType AllocationTypeForInPlaceInternalizableString();
   // ------
 
-  void ProcessNewScript(Handle<Script> script,
-                        ScriptEventType script_event_type);
+  void AddToScriptList(Handle<Script> shared);
   // ------
 
   ReadOnlyRoots roots_;

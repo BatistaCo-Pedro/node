@@ -81,6 +81,10 @@
 
 namespace v8 {
 namespace internal {
+
+template <typename T>
+class Handle;
+
 namespace heap {
 
 class HeapTester {

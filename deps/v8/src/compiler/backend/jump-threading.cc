@@ -312,7 +312,6 @@ void JumpThreading::ApplyForwarding(Zone* local_zone,
           }
           // If this block was marked as a handler, it can be unmarked now.
           code->InstructionBlockAt(block_rpo)->UnmarkHandler();
-          code->InstructionBlockAt(block_rpo)->set_omitted_by_jump_threading();
         }
         fallthru = false;  // jumps don't fall through to the next block.
       }

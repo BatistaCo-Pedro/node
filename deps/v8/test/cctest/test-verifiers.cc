@@ -45,7 +45,7 @@ TEST_PAIR(TestWrongTypeInNormalField) {
   Handle<JSObject> o = Handle<JSObject>::cast(v8::Utils::OpenHandle(*v));
   Handle<Object> original_elements(
       TaggedField<Object>::load(*o, JSObject::kElementsOffset), i_isolate);
-  CHECK(IsFixedArrayBase(*original_elements));
+  CHECK(original_elements->IsFixedArrayBase());
 
   // There must be no GC (and therefore no verifiers running) until we can
   // restore the modified data.
@@ -76,7 +76,7 @@ TEST_PAIR(TestWrongStrongTypeInIndexedStructField) {
                DescriptorArray::kEntryKeyOffset;
   Handle<Object> original_key(TaggedField<Object>::load(*descriptors, offset),
                               i_isolate);
-  CHECK(IsString(*original_key));
+  CHECK(original_key->IsString());
 
   // There must be no GC (and therefore no verifiers running) until we can
   // restore the modified data.

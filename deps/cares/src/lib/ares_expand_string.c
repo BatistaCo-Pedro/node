@@ -1,28 +1,17 @@
-/* MIT License
+
+/* Copyright 1998 by the Massachusetts Institute of Technology.
  *
- * Copyright (c) 1998 Massachusetts Institute of Technology
- * Copyright (c) The c-ares project and its contributors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- * SPDX-License-Identifier: MIT
+ * Permission to use, copy, modify, and distribute this
+ * software and its documentation for any purpose and without
+ * fee is hereby granted, provided that the above copyright
+ * notice appear in all copies and that both that copyright
+ * notice and this permission notice appear in supporting
+ * documentation, and that the name of M.I.T. not be used in
+ * advertising or publicity pertaining to distribution of the
+ * software without specific, written prior permission.
+ * M.I.T. makes no representations about the suitability of
+ * this software for any purpose.  It is provided "as is"
+ * without express or implied warranty.
  */
 
 #include "ares_setup.h"
@@ -41,71 +30,38 @@
  * are the characters of the string. The returned result will be NULL
  * terminated.
  */
-ares_status_t ares_expand_string_ex(const unsigned char *encoded,
-                                    const unsigned char *abuf, size_t alen,
-                                    unsigned char **s, size_t *enclen)
+int ares_expand_string(const unsigned char *encoded,
+                       const unsigned char *abuf,
+                       int alen,
+                       unsigned char **s,
+                       long *enclen)
 {
-  ares_status_t status;
-  ares__buf_t  *buf = NULL;
-  size_t        start_len;
-  size_t        len = 0;
+  unsigned char *q;
+  union {
+    ares_ssize_t sig;
+     size_t uns;
+  } elen;
 
-  if (encoded == NULL || abuf == NULL || alen == 0 || enclen == NULL) {
-    return ARES_EBADSTR; /* EFORMERR would be better */
-  }
+  if (encoded == abuf+alen)
+    return ARES_EBADSTR;
 
-  if (encoded < abuf || encoded >= abuf + alen) {
-    return ARES_EBADSTR; /* EFORMERR would be better */
-  }
+  elen.uns = *encoded;
+  if (encoded+elen.sig+1 > abuf+alen)
+    return ARES_EBADSTR;
 
-  *enclen = 0;
+  encoded++;
 
-  /* NOTE: we allow 's' to be NULL to skip it */
-  if (s) {
-    *s = NULL;
-  }
-
-  buf = ares__buf_create_const(abuf, alen);
-
-  if (buf == NULL) {
+  *s = ares_malloc(elen.uns+1);
+  if (*s == NULL)
     return ARES_ENOMEM;
-  }
+  q = *s;
+  strncpy((char *)q, (char *)encoded, elen.uns);
+  q[elen.uns] = '\0';
 
-  status = ares__buf_set_position(buf, (size_t)(encoded - abuf));
-  if (status != ARES_SUCCESS) {
-    goto done;
-  }
+  *s = q;
 
-  start_len = ares__buf_len(buf);
-  status =
-    ares__buf_parse_dns_binstr(buf, ares__buf_len(buf), s, &len, ARES_FALSE);
-  /* hrm, no way to pass back 'len' with the prototype */
-  if (status != ARES_SUCCESS) {
-    goto done;
-  }
+  *enclen = (long)(elen.sig+1);
 
-  *enclen = start_len - ares__buf_len(buf);
-
-done:
-  ares__buf_destroy(buf);
-  if (status == ARES_EBADNAME || status == ARES_EBADRESP) {
-    status = ARES_EBADSTR;
-  }
-  return status;
+  return ARES_SUCCESS;
 }
 
-int ares_expand_string(const unsigned char *encoded, const unsigned char *abuf,
-                       int alen, unsigned char **s, long *enclen)
-{
-  ares_status_t status;
-  size_t        temp_enclen = 0;
-
-  if (alen < 0) {
-    return ARES_EBADRESP;
-  }
-
-  status = ares_expand_string_ex(encoded, abuf, (size_t)alen, s, &temp_enclen);
-
-  *enclen = (long)temp_enclen;
-  return (int)status;
-}

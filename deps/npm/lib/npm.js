@@ -216,13 +216,11 @@ class Npm {
       fs.mkdir(this.cache, { recursive: true })
         .catch((e) => log.verbose('cache', `could not create cache: ${e}`)))
 
-    // it's ok if this fails. user might have specified an invalid dir
+    // its ok if this fails. user might have specified an invalid dir
     // which we will tell them about at the end
-    if (this.config.get('logs-max') > 0) {
-      await this.time('npm:load:mkdirplogs', () =>
-        fs.mkdir(this.logsDir, { recursive: true })
-          .catch((e) => log.verbose('logfile', `could not create logs-dir: ${e}`)))
-    }
+    await this.time('npm:load:mkdirplogs', () =>
+      fs.mkdir(this.logsDir, { recursive: true })
+        .catch((e) => log.verbose('logfile', `could not create logs-dir: ${e}`)))
 
     // note: this MUST be shorter than the actual argv length, because it
     // uses the same memory, so node will truncate it if it's too long.
@@ -440,7 +438,7 @@ class Npm {
   output (...msg) {
     log.clearProgress()
     // eslint-disable-next-line no-console
-    console.log(...msg.map(Display.clean))
+    console.log(...msg)
     log.showProgress()
   }
 
@@ -478,7 +476,7 @@ class Npm {
   outputError (...msg) {
     log.clearProgress()
     // eslint-disable-next-line no-console
-    console.error(...msg.map(Display.clean))
+    console.error(...msg)
     log.showProgress()
   }
 }

@@ -22,6 +22,10 @@ namespace v8::internal::compiler::turboshaft {
 //   TURBOSHAFT_REDUCER_BOILERPLATE()
 //   using Adapter = UniformReducerAdapter<MyReducer, Next>;
 //
+//   template <typename... Args>
+//   explicit MyReducer(const std::tuple<Args...>& args)
+//       : Adapter(args) { /* ... */ }
+//
 //   OpIndex ReduceInputGraphConstant(OpIndex ig_index, const ConstantOp& op) {
 //     /* Handle ConstantOps separately */
 //     /* ... */
@@ -62,7 +66,7 @@ namespace v8::internal::compiler::turboshaft {
 //   /* ... */
 // };
 //
-// NOTICE: Inside the ReduceXyz and ReduceInputGraphXyz callbacks of MyReducer,
+// NOTICE: Inside the ReduceOperation and ReduceInputGraphOperation callbacks,
 // you need to make a choice:
 //
 //   A) Call Next::ReduceXyz (or Next::ReduceInputGraphXyz) to forward to the
@@ -109,6 +113,10 @@ namespace v8::internal::compiler::turboshaft {
 template <template <typename> typename Reducer, typename Next>
 class UniformReducerAdapter : public Next {
  public:
+  template <typename... Args>
+  explicit UniformReducerAdapter(const std::tuple<Args...>& args)
+      : Next(args) {}
+
   template <Opcode opcode, typename Continuation, typename... Args>
   OpIndex ReduceOperation(Args... args) {
     return Continuation{this}.Reduce(args...);
@@ -122,7 +130,6 @@ class UniformReducerAdapter : public Next {
 #define REDUCE(op)                                                           \
   struct Reduce##op##Continuation final {                                    \
     explicit Reduce##op##Continuation(Next* _this) : this_(_this) {}         \
-    using Op = op##Op;                                                       \
     OpIndex ReduceInputGraph(OpIndex ig_index, const op##Op& operation) {    \
       return this_->ReduceInputGraph##op(ig_index, operation);               \
     }                                                                        \

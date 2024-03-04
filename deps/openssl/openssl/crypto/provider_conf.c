@@ -70,22 +70,13 @@ static const char *skip_dot(const char *name)
     return name;
 }
 
-/*
- * Parse the provider params section
- * Returns:
- * 1 for success
- * 0 for non-fatal errors
- * < 0 for fatal errors
- */
-static int provider_conf_params_internal(OSSL_PROVIDER *prov,
-                                         OSSL_PROVIDER_INFO *provinfo,
-                                         const char *name, const char *value,
-                                         const CONF *cnf,
-                                         STACK_OF(OPENSSL_CSTRING) *visited)
+static int provider_conf_params(OSSL_PROVIDER *prov,
+                                OSSL_PROVIDER_INFO *provinfo,
+                                const char *name, const char *value,
+                                const CONF *cnf)
 {
     STACK_OF(CONF_VALUE) *sect;
     int ok = 1;
-    int rc = 0;
 
     sect = NCONF_get_section(cnf, value);
     if (sect != NULL) {
@@ -94,25 +85,6 @@ static int provider_conf_params_internal(OSSL_PROVIDER *prov,
         size_t buffer_len = 0;
 
         OSSL_TRACE1(CONF, "Provider params: start section %s\n", value);
-
-        /*
-         * Check to see if the provided section value has already
-         * been visited.  If it has, then we have a recursive lookup
-         * in the configuration which isn't valid.  As such we should error
-         * out
-         */
-        for (i = 0; i < sk_OPENSSL_CSTRING_num(visited); i++) {
-            if (sk_OPENSSL_CSTRING_value(visited, i) == value) {
-                ERR_raise(ERR_LIB_CONF, CONF_R_RECURSIVE_SECTION_REFERENCE);
-                return -1;
-            }
-        }
-
-        /*
-         * We've not visited this node yet, so record it on the stack
-         */
-        if (!sk_OPENSSL_CSTRING_push(visited, value))
-            return -1;
 
         if (name != NULL) {
             OPENSSL_strlcpy(buffer, name, sizeof(buffer));
@@ -123,20 +95,14 @@ static int provider_conf_params_internal(OSSL_PROVIDER *prov,
         for (i = 0; i < sk_CONF_VALUE_num(sect); i++) {
             CONF_VALUE *sectconf = sk_CONF_VALUE_value(sect, i);
 
-            if (buffer_len + strlen(sectconf->name) >= sizeof(buffer)) {
-                sk_OPENSSL_CSTRING_pop(visited);
-                return -1;
-            }
+            if (buffer_len + strlen(sectconf->name) >= sizeof(buffer))
+                return 0;
             buffer[buffer_len] = '\0';
             OPENSSL_strlcat(buffer, sectconf->name, sizeof(buffer));
-            rc = provider_conf_params_internal(prov, provinfo, buffer,
-                                               sectconf->value, cnf, visited);
-            if (rc < 0) {
-                sk_OPENSSL_CSTRING_pop(visited);
-                return rc;
-            }
+            if (!provider_conf_params(prov, provinfo, buffer, sectconf->value,
+                                      cnf))
+                return 0;
         }
-        sk_OPENSSL_CSTRING_pop(visited);
 
         OSSL_TRACE1(CONF, "Provider params: finish section %s\n", value);
     } else {
@@ -148,33 +114,6 @@ static int provider_conf_params_internal(OSSL_PROVIDER *prov,
     }
 
     return ok;
-}
-
-/*
- * recursively parse the provider configuration section
- * of the config file. 
- * Returns
- * 1 on success
- * 0 on non-fatal error
- * < 0 on fatal errors
- */
-static int provider_conf_params(OSSL_PROVIDER *prov,
-                                OSSL_PROVIDER_INFO *provinfo,
-                                const char *name, const char *value,
-                                const CONF *cnf)
-{
-    int rc;
-    STACK_OF(OPENSSL_CSTRING) *visited = sk_OPENSSL_CSTRING_new_null();
-
-    if (visited == NULL)
-        return -1;
-
-    rc = provider_conf_params_internal(prov, provinfo, name,
-                                       value, cnf, visited);
-
-    sk_OPENSSL_CSTRING_free(visited);
-
-    return rc;
 }
 
 static int prov_already_activated(const char *name,
@@ -207,7 +146,6 @@ static int provider_conf_load(OSSL_LIB_CTX *libctx, const char *name,
     const char *path = NULL;
     long activate = 0;
     int ok = 0;
-    int added = 0;
 
     name = skip_dot(name);
     OSSL_TRACE1(CONF, "Configuring provider %s\n", name);
@@ -280,7 +218,7 @@ static int provider_conf_load(OSSL_LIB_CTX *libctx, const char *name,
 
             ok = provider_conf_params(prov, NULL, NULL, value, cnf);
 
-            if (ok > 0) {
+            if (ok) {
                 if (!ossl_provider_activate(prov, 1, 0)) {
                     ok = 0;
                 } else if (!ossl_provider_add_to_store(prov, &actual, 0)) {
@@ -304,7 +242,7 @@ static int provider_conf_load(OSSL_LIB_CTX *libctx, const char *name,
                     }
                 }
             }
-            if (ok <= 0)
+            if (!ok)
                 ossl_provider_free(prov);
         }
         CRYPTO_THREAD_unlock(pcgbl->lock);
@@ -329,23 +267,19 @@ static int provider_conf_load(OSSL_LIB_CTX *libctx, const char *name,
         }
         if (ok)
             ok = provider_conf_params(NULL, &entry, NULL, value, cnf);
-        if (ok >= 1 && (entry.path != NULL || entry.parameters != NULL)) {
+        if (ok && (entry.path != NULL || entry.parameters != NULL))
             ok = ossl_provider_info_add_to_store(libctx, &entry);
-            added = 1;
-        }
-        if (added == 0)
+        if (!ok || (entry.path == NULL && entry.parameters == NULL)) {
             ossl_provider_info_clear(&entry);
+        }
+
     }
 
     /*
-     * Provider activation returns a tristate:
-     * 1 for successful activation
-     * 0 for non-fatal activation failure
-     * < 0 for fatal activation failure
-     * We return success (1) for activation, (1) for non-fatal activation
-     * failure, and (0) for fatal activation failure
+     * Even if ok is 0, we still return success. Failure to load a provider is
+     * not fatal. We want to continue to load the rest of the config file.
      */
-    return ok >= 0;
+    return 1;
 }
 
 static int provider_conf_init(CONF_IMODULE *md, const CONF *cnf)
@@ -368,7 +302,7 @@ static int provider_conf_init(CONF_IMODULE *md, const CONF *cnf)
     for (i = 0; i < sk_CONF_VALUE_num(elist); i++) {
         cval = sk_CONF_VALUE_value(elist, i);
         if (!provider_conf_load(NCONF_get0_libctx((CONF *)cnf),
-                                cval->name, cval->value, cnf))
+                    cval->name, cval->value, cnf))
             return 0;
     }
 

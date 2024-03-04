@@ -8,7 +8,6 @@
 #include "src/base/pointer-with-payload.h"
 #include "src/codegen/register.h"
 #include "src/compiler/backend/instruction.h"
-#include "src/maglev/maglev-assembler.h"
 
 namespace v8 {
 namespace internal {
@@ -16,24 +15,29 @@ namespace maglev {
 
 class ValueNode;
 
+#define COUNT(V) +1
 static constexpr int kAllocatableGeneralRegisterCount =
-    MaglevAssembler::GetAllocatableRegisters().Count();
+    ALLOCATABLE_GENERAL_REGISTERS(COUNT);
+#undef COUNT
+
+#define COUNT(V) +1
 static constexpr int kAllocatableDoubleRegisterCount =
-    MaglevAssembler::GetAllocatableDoubleRegisters().Count();
+    ALLOCATABLE_DOUBLE_REGISTERS(COUNT);
+#undef COUNT
 
 template <typename T>
 struct AllocatableRegisters;
 
 template <>
 struct AllocatableRegisters<Register> {
-  static constexpr RegList kRegisters =
-      MaglevAssembler::GetAllocatableRegisters();
+  static constexpr RegList kRegisters = kAllocatableGeneralRegisters;
+  static constexpr int kCount = kAllocatableGeneralRegisterCount;
 };
 
 template <>
 struct AllocatableRegisters<DoubleRegister> {
-  static constexpr DoubleRegList kRegisters =
-      MaglevAssembler::GetAllocatableDoubleRegisters();
+  static constexpr DoubleRegList kRegisters = kAllocatableDoubleRegisters;
+  static constexpr int kCount = kAllocatableDoubleRegisterCount;
 };
 
 struct RegisterStateFlags {

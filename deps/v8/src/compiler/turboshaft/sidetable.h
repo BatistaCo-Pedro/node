@@ -33,7 +33,6 @@ class GrowingSidetable {
       : table_(size, initial_value, zone) {}
 
   T& operator[](Key index) {
-    DCHECK(index.valid());
     size_t i = index.id();
     if (V8_UNLIKELY(i >= table_.size())) {
       table_.resize(NextSize(i));
@@ -45,7 +44,6 @@ class GrowingSidetable {
   }
 
   const T& operator[](Key index) const {
-    DCHECK(index.valid());
     size_t i = index.id();
     if (V8_UNLIKELY(i >= table_.size())) {
       table_.resize(NextSize(i));

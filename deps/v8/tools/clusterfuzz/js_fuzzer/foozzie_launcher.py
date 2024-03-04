@@ -12,6 +12,7 @@ Obsolete now after switching to Python3 entirely. We keep the launcher
 for a transition period.
 """
 
+import os
 import re
 import shutil
 import subprocess
@@ -44,5 +45,6 @@ if __name__ == '__main__':
     python_exe = 'python2'
 
   process = subprocess.Popen([python_exe] + args)
+  process = subprocess.Popen(args)
   process.communicate()
   sys.exit(process.returncode)

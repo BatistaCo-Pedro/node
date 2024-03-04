@@ -48,7 +48,6 @@ class V8_EXPORT_PRIVATE Heap final : public HeapBase,
  private:
   void StartGarbageCollection(GCConfig);
   void FinalizeGarbageCollection(StackState);
-  void FinalizeGarbageCollectionImpl(StackState);
 
   void FinalizeIncrementalGarbageCollectionIfNeeded(StackState) final;
 

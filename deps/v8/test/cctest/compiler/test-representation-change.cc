@@ -13,7 +13,6 @@
 #include "test/cctest/cctest.h"
 #include "test/cctest/compiler/codegen-tester.h"
 #include "test/cctest/compiler/graph-and-builders.h"
-#include "test/cctest/compiler/js-heap-broker-base.h"
 #include "test/common/value-helper.h"
 
 namespace v8 {
@@ -21,23 +20,27 @@ namespace internal {
 namespace compiler {
 
 class RepresentationChangerTester : public HandleAndZoneScope,
-                                    public GraphAndBuilders,
-                                    public JSHeapBrokerTestBase {
+                                    public GraphAndBuilders {
  public:
   explicit RepresentationChangerTester(int num_parameters = 0)
       : HandleAndZoneScope(kCompressGraphZone),
         GraphAndBuilders(main_zone()),
-        JSHeapBrokerTestBase(main_isolate(), main_zone()),
         javascript_(main_zone()),
         jsgraph_(main_isolate(), main_graph_, &main_common_, &javascript_,
                  &main_simplified_, &main_machine_),
-        changer_(&jsgraph_, broker(), nullptr) {
+        broker_(main_isolate(), main_zone()),
+        current_broker_(&broker_),
+        canonical_(main_isolate()),
+        changer_(&jsgraph_, &broker_, nullptr) {
     Node* s = graph()->NewNode(common()->Start(num_parameters));
     graph()->SetStart(s);
   }
 
   JSOperatorBuilder javascript_;
   JSGraph jsgraph_;
+  JSHeapBroker broker_;
+  CurrentHeapBrokerScope current_broker_;
+  CanonicalHandleScope canonical_;
   RepresentationChanger changer_;
 
   Isolate* isolate() { return main_isolate(); }
@@ -77,7 +80,7 @@ class RepresentationChangerTester : public HandleAndZoneScope,
     CHECK_FLOAT_EQ(expected, fval);
   }
 
-  void CheckHeapConstant(Node* n, Tagged<HeapObject> expected) {
+  void CheckHeapConstant(Node* n, HeapObject expected) {
     HeapObjectMatcher m(n);
     CHECK(m.HasResolvedValue());
     CHECK_EQ(expected, *m.ResolvedValue());

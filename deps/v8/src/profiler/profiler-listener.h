@@ -56,10 +56,8 @@ class V8_EXPORT_PRIVATE ProfilerListener : public LogEventListener,
   void SetterCallbackEvent(Handle<Name> name, Address entry_point) override;
   void RegExpCodeCreateEvent(Handle<AbstractCode> code,
                              Handle<String> source) override;
-  void CodeMoveEvent(Tagged<InstructionStream> from,
-                     Tagged<InstructionStream> to) override;
-  void BytecodeMoveEvent(Tagged<BytecodeArray> from,
-                         Tagged<BytecodeArray> to) override;
+  void CodeMoveEvent(InstructionStream from, InstructionStream to) override;
+  void BytecodeMoveEvent(BytecodeArray from, BytecodeArray to) override;
   void SharedFunctionInfoMoveEvent(Address from, Address to) override {}
   void NativeContextMoveEvent(Address from, Address to) override;
   void CodeMovingGCEvent() override {}
@@ -77,7 +75,7 @@ class V8_EXPORT_PRIVATE ProfilerListener : public LogEventListener,
   // Invoked after a mark-sweep cycle.
   void CodeSweepEvent();
 
-  const char* GetName(Tagged<Name> name) {
+  const char* GetName(Name name) {
     return code_entries_.strings().GetName(name);
   }
   const char* GetName(int args_count) {
@@ -87,18 +85,17 @@ class V8_EXPORT_PRIVATE ProfilerListener : public LogEventListener,
     return code_entries_.strings().GetCopy(name);
   }
   const char* GetName(base::Vector<const char> name);
-  const char* GetConsName(const char* prefix, Tagged<Name> name) {
+  const char* GetConsName(const char* prefix, Name name) {
     return code_entries_.strings().GetConsName(prefix, name);
   }
 
   void set_observer(CodeEventObserver* observer) { observer_ = observer; }
 
  private:
-  const char* GetFunctionName(Tagged<SharedFunctionInfo>);
+  const char* GetFunctionName(SharedFunctionInfo);
 
   void AttachDeoptInlinedFrames(Handle<Code> code, CodeDeoptEventRecord* rec);
-  Tagged<Name> InferScriptName(Tagged<Name> name,
-                               Tagged<SharedFunctionInfo> info);
+  Name InferScriptName(Name name, SharedFunctionInfo info);
   V8_INLINE void DispatchCodeEvent(const CodeEventsContainer& evt_rec) {
     observer_->CodeEventHandler(evt_rec);
   }

@@ -1,5 +1,3 @@
-# Copyright (C) The c-ares project and its contributors
-# SPDX-License-Identifier: MIT
 # -----------------------------------------------
 # Detect NMAKE version deducing old MSVC versions
 # -----------------------------------------------

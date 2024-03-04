@@ -6,7 +6,6 @@
 #define V8_COMPILER_USE_INFO_H_
 
 #include "src/base/functional.h"
-#include "src/codegen/machine-type.h"
 #include "src/compiler/feedback-source.h"
 #include "src/compiler/globals.h"
 

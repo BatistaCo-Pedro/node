@@ -3,9 +3,10 @@
 // found in the LICENSE file.
 
 namespace array {
-transitioning javascript builtin ArrayEveryLoopEagerDeoptContinuation(
-    js-implicit context: NativeContext, receiver: JSAny)(callback: JSAny,
-    thisArg: JSAny, initialK: JSAny, length: JSAny): JSAny {
+transitioning javascript builtin
+ArrayEveryLoopEagerDeoptContinuation(
+    js-implicit context: NativeContext, receiver: JSAny)(
+    callback: JSAny, thisArg: JSAny, initialK: JSAny, length: JSAny): JSAny {
   // All continuation points in the optimized every implementation are
   // after the ToObject(O) call that ensures we are dealing with a
   // JSReceiver.
@@ -23,9 +24,11 @@ transitioning javascript builtin ArrayEveryLoopEagerDeoptContinuation(
       numberLength, Undefined);
 }
 
-transitioning javascript builtin ArrayEveryLoopLazyDeoptContinuation(
-    js-implicit context: NativeContext, receiver: JSAny)(callback: JSAny,
-    thisArg: JSAny, initialK: JSAny, length: JSAny, result: JSAny): JSAny {
+transitioning javascript builtin
+ArrayEveryLoopLazyDeoptContinuation(
+    js-implicit context: NativeContext, receiver: JSAny)(
+    callback: JSAny, thisArg: JSAny, initialK: JSAny, length: JSAny,
+    result: JSAny): JSAny {
   // All continuation points in the optimized every implementation are
   // after the ToObject(O) call that ensures we are dealing with a
   // JSReceiver.
@@ -48,10 +51,9 @@ transitioning javascript builtin ArrayEveryLoopLazyDeoptContinuation(
       numberLength, Undefined);
 }
 
-transitioning builtin ArrayEveryLoopContinuation(
-    implicit context: Context)(_receiver: JSReceiver, callbackfn: Callable,
-    thisArg: JSAny, _array: JSAny, o: JSReceiver, initialK: Number,
-    length: Number, _initialTo: JSAny): JSAny {
+transitioning builtin ArrayEveryLoopContinuation(implicit context: Context)(
+    _receiver: JSReceiver, callbackfn: Callable, thisArg: JSAny, _array: JSAny,
+    o: JSReceiver, initialK: Number, length: Number, _initialTo: JSAny): JSAny {
   // 5. Let k be 0.
   // 6. Repeat, while k < len
   for (let k: Number = initialK; k < length; k++) {
@@ -81,9 +83,8 @@ transitioning builtin ArrayEveryLoopContinuation(
   return True;
 }
 
-transitioning macro FastArrayEvery(
-    implicit context: Context)(o: JSReceiver, len: Number,
-    callbackfn: Callable, thisArg: JSAny): JSAny
+transitioning macro FastArrayEvery(implicit context: Context)(
+    o: JSReceiver, len: Number, callbackfn: Callable, thisArg: JSAny): JSAny
     labels Bailout(Smi) {
   let k: Smi = 0;
   const smiLen = Cast<Smi>(len) otherwise goto Bailout(k);
@@ -107,7 +108,8 @@ transitioning macro FastArrayEvery(
 }
 
 // https://tc39.github.io/ecma262/#sec-array.prototype.every
-transitioning javascript builtin ArrayEvery(
+transitioning javascript builtin
+ArrayEvery(
     js-implicit context: NativeContext, receiver: JSAny)(...arguments): JSAny {
   try {
     RequireObjectCoercible(receiver, 'Array.prototype.every');
@@ -136,7 +138,7 @@ transitioning javascript builtin ArrayEvery(
           o, callbackfn, thisArg, Undefined, o, kValue, len, Undefined);
     }
   } label TypeError deferred {
-    ThrowCalledNonCallable(arguments[0]);
+    ThrowTypeError(MessageTemplate::kCalledNonCallable, arguments[0]);
   }
 }
 }

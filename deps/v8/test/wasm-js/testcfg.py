@@ -5,8 +5,6 @@
 import os
 import re
 
-from pathlib import Path
-
 from testrunner.local import testsuite
 from testrunner.objects import testcase
 
@@ -18,27 +16,19 @@ META_TIMEOUT_REGEXP = re.compile(r"META:\s*timeout=(.*)")
 proposal_flags = [
     {
         'name': 'js-types',
-        'flags': ['--experimental-wasm-type-reflection']
+        'flags': ['--experimental-wasm-type-reflection', '--wasm-staging']
     },
     {
         'name': 'tail-call',
-        'flags': ['--experimental-wasm-tail-call']
+        'flags': ['--experimental-wasm-tail-call', '--wasm-staging']
     },
     {
         'name': 'memory64',
-        'flags': ['--experimental-wasm-memory64']
+        'flags': ['--experimental-wasm-memory64', '--wasm-staging']
     },
     {
         'name': 'extended-const',
-        'flags': ['--experimental-wasm-extended-const']
-    },
-    {
-        'name': 'function-references',
-        'flags': ['--experimental-wasm-typed-funcref']
-    },
-    {
-        'name': 'gc',
-        'flags': ['--experimental-wasm-gc']
+        'flags': ['--experimental-wasm-extended-const', '--wasm-staging']
     },
 ]
 
@@ -53,8 +43,9 @@ class TestSuite(testsuite.TestSuite):
 
   def __init__(self, ctx, *args, **kwargs):
     super(TestSuite, self).__init__(ctx, *args, **kwargs)
-    self.mjsunit_js = self.root.parent / "mjsunit" /"mjsunit.js"
-    self.test_root = self.root / "tests"
+    self.mjsunit_js = os.path.join(os.path.dirname(self.root), "mjsunit",
+                                   "mjsunit.js")
+    self.test_root = os.path.join(self.root, "tests")
     self._test_loader.test_root = self.test_root
 
   def _test_loader_class(self):
@@ -63,8 +54,8 @@ class TestSuite(testsuite.TestSuite):
   def _test_class(self):
     return TestCase
 
-def get_proposal_identifier(proposal):
-  return f"proposals/{proposal['name']}"
+def get_proposal_path_identifier(proposal):
+  return os.sep.join(['proposals', proposal['name']])
 
 class TestCase(testcase.D8TestCase):
   def _get_timeout_param(self):
@@ -82,44 +73,47 @@ class TestCase(testcase.D8TestCase):
 
   def _get_files_params(self):
     files = [self.suite.mjsunit_js,
-             self.suite.root / "third_party" / "testharness.js",
-             self.suite.root / "testharness-additions.js",
-             self.suite.root / "report.js"]
+             os.path.join(self.suite.root, "third_party", "testharness.js"),
+             os.path.join(self.suite.root, "testharness-additions.js"),
+             os.path.join(self.suite.root, "report.js")]
 
     source = self.get_source()
-    current_dir = self._get_source_path().parent
+    current_dir = os.path.dirname(self._get_source_path())
     for script in META_SCRIPT_REGEXP.findall(source):
       if script.startswith(WPT_ROOT):
         # Matched an absolute path, strip the root and replace it with our
         # local root.
         found = False
         for proposal in proposal_flags:
-          prop_path = get_proposal_identifier(proposal)
-          if prop_path in current_dir.as_posix():
+          if get_proposal_path_identifier(proposal) in current_dir:
             found = True
-            script = self.suite.test_root / prop_path / script[len(WPT_ROOT):]
-        if 'wpt' in current_dir.as_posix():
+            script = os.path.join(self.suite.test_root,
+                                  os.sep.join(['proposals', proposal['name']]),
+                                  script[len(WPT_ROOT):])
+        if 'wpt' in current_dir:
           found = True
-          script = self.suite.test_root / 'wpt' / script[len(WPT_ROOT):]
+          script = os.path.join(self.suite.test_root, 'wpt',
+                                script[len(WPT_ROOT):])
         if not found:
-          script = self.suite.test_root / script[len(WPT_ROOT):]
-      elif not Path(script).is_absolute():
+          script = os.path.join(self.suite.test_root, script[len(WPT_ROOT):])
+      elif not script.startswith("/"):
         # Matched a relative path, prepend this test's directory.
-        script = current_dir / script
+        script = os.path.join(current_dir, script)
       else:
-        raise Exception(f"Unexpected absolute path for script: \"{script}\"");
+        raise Exception("Unexpected absolute path for script: \"%s\"" % script);
 
       files.append(script)
 
-    files.extend([self._get_source_path(), self.suite.root / "after.js"])
+    files.extend([self._get_source_path(),
+                  os.path.join(self.suite.root, "after.js")])
     return files
 
   def _get_source_flags(self):
     for proposal in proposal_flags:
-      if get_proposal_identifier(proposal) in self.name:
+      if get_proposal_path_identifier(proposal) in self.path:
         return proposal['flags']
     return ['--wasm-staging']
 
   def _get_source_path(self):
     # All tests are named `path/name.any.js`
-    return self.suite.test_root / self.path_and_suffix(ANY_JS)
+    return os.path.join(self.suite.test_root, self.path + ANY_JS)

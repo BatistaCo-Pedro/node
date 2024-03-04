@@ -15,17 +15,16 @@ namespace internal {
 // computation of cage base inside trivial accessors for optimizing value
 // decompression. When pointer compression is disabled this function always
 // returns nullptr.
-V8_INLINE PtrComprCageBase GetPtrComprCageBase(Tagged<HeapObject> object);
+V8_INLINE PtrComprCageBase GetPtrComprCageBase(HeapObject object);
 
-V8_INLINE Heap* GetHeapFromWritableObject(Tagged<HeapObject> object);
+V8_INLINE Heap* GetHeapFromWritableObject(HeapObject object);
 
-V8_INLINE Isolate* GetIsolateFromWritableObject(Tagged<HeapObject> object);
+V8_INLINE Isolate* GetIsolateFromWritableObject(HeapObject object);
 
 // Returns true if it succeeded to obtain isolate from given object.
 // If it fails then the object is definitely a read-only object but it may also
 // succeed for read only objects if pointer compression is enabled.
-V8_INLINE bool GetIsolateFromHeapObject(Tagged<HeapObject> object,
-                                        Isolate** isolate);
+V8_INLINE bool GetIsolateFromHeapObject(HeapObject object, Isolate** isolate);
 
 }  // namespace internal
 }  // namespace v8

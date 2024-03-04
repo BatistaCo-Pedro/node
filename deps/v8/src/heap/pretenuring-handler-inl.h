@@ -17,38 +17,38 @@ namespace v8 {
 namespace internal {
 
 void PretenuringHandler::UpdateAllocationSite(
-    Tagged<Map> map, Tagged<HeapObject> object,
-    PretenuringFeedbackMap* pretenuring_feedback) {
+    Map map, HeapObject object, PretenuringFeedbackMap* pretenuring_feedback) {
   DCHECK_NE(pretenuring_feedback, &global_pretenuring_feedback_);
 #ifdef DEBUG
   BasicMemoryChunk* chunk = BasicMemoryChunk::FromHeapObject(object);
-  DCHECK_IMPLIES(chunk->IsToPage(), v8_flags.minor_ms);
-  DCHECK_IMPLIES(!v8_flags.minor_ms && !chunk->InYoungGeneration(),
+  DCHECK_IMPLIES(chunk->IsToPage(),
+                 v8_flags.minor_mc ||
+                     chunk->IsFlagSet(MemoryChunk::PAGE_NEW_NEW_PROMOTION));
+  DCHECK_IMPLIES(!v8_flags.minor_mc && !chunk->InYoungGeneration(),
                  chunk->IsFlagSet(MemoryChunk::PAGE_NEW_OLD_PROMOTION));
 #endif
   if (!v8_flags.allocation_site_pretenuring ||
-      !AllocationSite::CanTrack(map->instance_type())) {
+      !AllocationSite::CanTrack(map.instance_type())) {
     return;
   }
-  Tagged<AllocationMemento> memento_candidate =
+  AllocationMemento memento_candidate =
       FindAllocationMemento<kForGC>(map, object);
   if (memento_candidate.is_null()) return;
-  DCHECK(IsJSObjectMap(map));
+  DCHECK(map.IsJSObjectMap());
 
   // Entering cached feedback is used in the parallel case. We are not allowed
   // to dereference the allocation site and rather have to postpone all checks
   // till actually merging the data.
-  Address key = memento_candidate->GetAllocationSiteUnchecked();
-  (*pretenuring_feedback)[AllocationSite::unchecked_cast(
-      Tagged<Object>(key))]++;
+  Address key = memento_candidate.GetAllocationSiteUnchecked();
+  (*pretenuring_feedback)[AllocationSite::unchecked_cast(Object(key))]++;
 }
 
 template <PretenuringHandler::FindMementoMode mode>
-Tagged<AllocationMemento> PretenuringHandler::FindAllocationMemento(
-    Tagged<Map> map, Tagged<HeapObject> object) {
+AllocationMemento PretenuringHandler::FindAllocationMemento(Map map,
+                                                            HeapObject object) {
   Address object_address = object.address();
   Address memento_address =
-      object_address + ALIGN_TO_ALLOCATION_ALIGNMENT(object->SizeFromMap(map));
+      object_address + ALIGN_TO_ALLOCATION_ALIGNMENT(object.SizeFromMap(map));
   Address last_memento_word_address = memento_address + kTaggedSize;
   // If the memento would be on another page, bail out immediately.
   if (!Page::OnSamePage(object_address, last_memento_word_address)) {
@@ -61,13 +61,13 @@ Tagged<AllocationMemento> PretenuringHandler::FindAllocationMemento(
   if (mode != FindMementoMode::kForGC && !object_page->SweepingDone())
     return AllocationMemento();
 
-  Tagged<HeapObject> candidate = HeapObject::FromAddress(memento_address);
-  ObjectSlot candidate_map_slot = candidate->map_slot();
+  HeapObject candidate = HeapObject::FromAddress(memento_address);
+  ObjectSlot candidate_map_slot = candidate.map_slot();
   // This fast check may peek at an uninitialized word. However, the slow check
   // below (memento_address == top) ensures that this is safe. Mark the word as
   // initialized to silence MemorySanitizer warnings.
   MSAN_MEMORY_IS_INITIALIZED(candidate_map_slot.address(), kTaggedSize);
-  if (!candidate_map_slot.Relaxed_ContainsMapValue(
+  if (!candidate_map_slot.contains_map_value(
           ReadOnlyRoots(heap_).allocation_memento_map().ptr())) {
     return AllocationMemento();
   }
@@ -86,8 +86,7 @@ Tagged<AllocationMemento> PretenuringHandler::FindAllocationMemento(
     }
   }
 
-  Tagged<AllocationMemento> memento_candidate =
-      AllocationMemento::cast(candidate);
+  AllocationMemento memento_candidate = AllocationMemento::cast(candidate);
 
   // Depending on what the memento is used for, we might need to perform
   // additional checks.
@@ -101,11 +100,11 @@ Tagged<AllocationMemento> PretenuringHandler::FindAllocationMemento(
       // another object of at least word size (the header map word) following
       // it, so suffices to compare ptr and top here.
       top = heap_->NewSpaceTop();
-      DCHECK(memento_address >= heap_->NewSpaceLimit() ||
+      DCHECK(memento_address >= heap_->new_space()->limit() ||
              memento_address +
                      ALIGN_TO_ALLOCATION_ALIGNMENT(AllocationMemento::kSize) <=
                  top);
-      if ((memento_address != top) && memento_candidate->IsValid()) {
+      if ((memento_address != top) && memento_candidate.IsValid()) {
         return memento_candidate;
       }
       return AllocationMemento();

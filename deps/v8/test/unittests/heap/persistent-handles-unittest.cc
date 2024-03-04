@@ -117,8 +117,7 @@ class PersistentHandlesThread final : public v8::base::Thread {
  public:
   PersistentHandlesThread(Heap* heap, std::vector<Handle<HeapNumber>> handles,
                           std::unique_ptr<PersistentHandles> ph,
-                          Tagged<HeapNumber> number,
-                          base::Semaphore* sema_started,
+                          HeapNumber number, base::Semaphore* sema_started,
                           base::Semaphore* sema_gc_finished)
       : v8::base::Thread(base::Thread::Options("ThreadWithLocalHeap")),
         heap_(heap),
@@ -163,7 +162,7 @@ class PersistentHandlesThread final : public v8::base::Thread {
   Heap* heap_;
   std::vector<Handle<HeapNumber>> handles_;
   std::unique_ptr<PersistentHandles> ph_;
-  Tagged<HeapNumber> number_;
+  HeapNumber number_;
   base::Semaphore* sema_started_;
   base::Semaphore* sema_gc_finished_;
 };
@@ -190,7 +189,7 @@ TEST_F(PersistentHandlesTest, CreatePersistentHandles) {
 
   sema_started.Wait();
 
-  InvokeMajorGC();
+  CollectAllGarbage();
   sema_gc_finished.Signal();
 
   thread->Join();

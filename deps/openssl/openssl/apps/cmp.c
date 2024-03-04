@@ -2512,7 +2512,7 @@ static int get_opts(int argc, char **argv)
             }
             break;
         case OPT_CSR:
-            opt_csr = opt_str();
+            opt_csr = opt_arg();
             break;
         case OPT_OUT_TRUSTED:
             opt_out_trusted = opt_str();

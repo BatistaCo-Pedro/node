@@ -21,7 +21,6 @@
 #include "src/compiler/write-barrier-kind.h"
 #include "src/execution/isolate.h"
 #include "src/heap/factory.h"
-#include "src/objects/string.h"
 
 namespace v8 {
 namespace internal {
@@ -98,9 +97,6 @@ class V8_EXPORT_PRIVATE RawMachineAssembler {
   }
   Node* StackSlot(MachineRepresentation rep, int alignment = 0) {
     return AddNode(machine()->StackSlot(rep, alignment));
-  }
-  Node* StackSlot(int size, int alignment) {
-    return AddNode(machine()->StackSlot(size, alignment));
   }
   Node* Int64Constant(int64_t value) {
     return AddNode(common()->Int64Constant(value));
@@ -193,26 +189,12 @@ class V8_EXPORT_PRIVATE RawMachineAssembler {
   void OptimizedStoreField(MachineRepresentation rep, Node* object, int offset,
                            Node* value, WriteBarrierKind write_barrier) {
     DCHECK(!IsMapOffsetConstantMinusTag(offset));
-    DCHECK_NE(rep, MachineRepresentation::kIndirectPointer);
-    AddNode(simplified()->StoreField(
-                FieldAccess(BaseTaggedness::kTaggedBase, offset,
-                            MaybeHandle<Name>(), OptionalMapRef(), Type::Any(),
-                            MachineType::TypeForRepresentation(rep),
-                            write_barrier, "OptimizedStoreField")),
+    AddNode(simplified()->StoreField(FieldAccess(
+                BaseTaggedness::kTaggedBase, offset, MaybeHandle<Name>(),
+                MaybeHandle<Map>(), Type::Any(),
+                MachineType::TypeForRepresentation(rep), write_barrier,
+                "OptimizedStoreField")),
             object, value);
-  }
-  void OptimizedStoreIndirectPointerField(Node* object, int offset,
-                                          IndirectPointerTag tag, Node* value,
-                                          WriteBarrierKind write_barrier) {
-    DCHECK(!IsMapOffsetConstantMinusTag(offset));
-    DCHECK(write_barrier == WriteBarrierKind::kNoWriteBarrier ||
-           write_barrier == WriteBarrierKind::kIndirectPointerWriteBarrier);
-    FieldAccess access(BaseTaggedness::kTaggedBase, offset, MaybeHandle<Name>(),
-                       OptionalMapRef(), Type::Any(),
-                       MachineType::IndirectPointer(), write_barrier,
-                       "OptimizedStoreIndirectPointerField");
-    access.indirect_pointer_tag = tag;
-    AddNode(simplified()->StoreField(access), object, value);
   }
   void OptimizedStoreMap(Node* object, Node* value,
                          WriteBarrierKind write_barrier = kMapWriteBarrier) {
@@ -221,7 +203,8 @@ class V8_EXPORT_PRIVATE RawMachineAssembler {
   }
   Node* Retain(Node* value) { return AddNode(common()->Retain(), value); }
 
-  Node* OptimizedAllocate(Node* size, AllocationType allocation);
+  Node* OptimizedAllocate(Node* size, AllocationType allocation,
+                          AllowLargeObjects allow_large_objects);
 
   // Unaligned memory operations
   Node* UnalignedLoad(MachineType type, Node* base) {
@@ -967,7 +950,6 @@ class V8_EXPORT_PRIVATE RawMachineAssembler {
   // Parameters.
   Node* TargetParameter();
   Node* Parameter(size_t index);
-  Node* LoadRootRegister() { return AddNode(machine()->LoadRootRegister()); }
 
   // Pointer utilities.
   Node* LoadFromPointer(void* address, MachineType type, int32_t offset = 0) {

@@ -40,7 +40,8 @@ ElementsKind GetTypedArrayElementsKind(CTypeInfo::Type type) {
 }
 
 OverloadsResolutionResult ResolveOverloads(
-    const FastApiCallFunctionVector& candidates, unsigned int arg_count) {
+    Zone* zone, const FastApiCallFunctionVector& candidates,
+    unsigned int arg_count) {
   DCHECK_GT(arg_count, 0);
 
   static constexpr int kReceiver = 1;
@@ -248,7 +249,8 @@ Node* FastApiCallBuilder::Build(const FastApiCallFunctionVector& c_functions,
     generate_fast_call = true;
   } else {
     DCHECK_EQ(c_functions.size(), 2);
-    overloads_resolution_result = ResolveOverloads(c_functions, c_arg_count);
+    overloads_resolution_result =
+        ResolveOverloads(graph()->zone(), c_functions, c_arg_count);
     if (overloads_resolution_result.is_valid()) {
       generate_fast_call = true;
     }
@@ -267,7 +269,7 @@ Node* FastApiCallBuilder::Build(const FastApiCallFunctionVector& c_functions,
   int extra_input_count = FastApiCallNode::kEffectAndControlInputCount +
                           (c_signature->HasOptions() ? 1 : 0);
 
-  Node** const inputs = graph()->zone()->AllocateArray<Node*>(
+  Node** const inputs = graph()->zone()->NewArray<Node*>(
       kFastTargetAddressInputCount + c_arg_count + extra_input_count);
 
   ExternalReference::Type ref_type = ExternalReference::FAST_C_CALL;

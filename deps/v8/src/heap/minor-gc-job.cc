@@ -4,8 +4,6 @@
 
 #include "src/heap/minor-gc-job.h"
 
-#include <memory>
-
 #include "src/base/platform/time.h"
 #include "src/execution/isolate.h"
 #include "src/execution/vm-state-inl.h"
@@ -13,7 +11,6 @@
 #include "src/heap/heap-inl.h"
 #include "src/heap/heap.h"
 #include "src/init/v8.h"
-#include "src/tasks/cancelable-task.h"
 
 namespace v8 {
 namespace internal {
@@ -42,64 +39,35 @@ bool MinorGCJob::YoungGenerationSizeTaskTriggerReached(Heap* heap) {
   return heap->new_space()->Size() >= YoungGenerationTaskTriggerSize(heap);
 }
 
-void MinorGCJob::ScheduleTask() {
+void MinorGCJob::ScheduleTaskIfNeeded(Heap* heap) {
   if (!v8_flags.minor_gc_task) return;
-  if (current_task_id_ != CancelableTaskManager::kInvalidTaskId) return;
-  if (heap_->IsTearingDown()) return;
-  // A task should be scheduled when young generation size reaches the task
-  // trigger, but may also occur before the trigger is reached. For example,
-  // this method is called from the allocation observer for new space. The
-  // observer step size is detemine based on the current task trigger. However,
-  // due to refining allocated bytes after sweeping (allocated bytes after
-  // sweeping may be less than live bytes during marking), new space size may
-  // decrease while the observer step size remains the same.
-  if (v8_flags.minor_ms && heap_->ShouldOptimizeForLoadTime()) {
-    task_requested_ = true;
-    return;
-  }
-  task_requested_ = false;
-  std::shared_ptr<v8::TaskRunner> taskrunner = heap_->GetForegroundTaskRunner();
+  if (task_pending_) return;
+  if (heap->IsTearingDown()) return;
+  if (!YoungGenerationSizeTaskTriggerReached(heap)) return;
+  v8::Isolate* isolate = reinterpret_cast<v8::Isolate*>(heap->isolate());
+  auto taskrunner = V8::GetCurrentPlatform()->GetForegroundTaskRunner(isolate);
   if (taskrunner->NonNestableTasksEnabled()) {
-    std::unique_ptr<Task> task = std::make_unique<Task>(heap_->isolate(), this);
-    current_task_id_ = task->id();
-    taskrunner->PostNonNestableTask(std::move(task));
+    taskrunner->PostNonNestableTask(
+        std::make_unique<Task>(heap->isolate(), this));
+    task_pending_ = true;
   }
-}
-
-void MinorGCJob::SchedulePreviouslyRequestedTask() {
-  if (!task_requested_) return;
-  ScheduleTask();
-}
-
-void MinorGCJob::CancelTaskIfScheduled() {
-  task_requested_ = false;
-  if (current_task_id_ == CancelableTaskManager::kInvalidTaskId) return;
-  // The task may have ran and bailed out already if major incremental marking
-  // was running, in which `TryAbort` will return `kTaskRemoved`.
-  heap_->isolate()->cancelable_task_manager()->TryAbort(current_task_id_);
-  current_task_id_ = CancelableTaskManager::kInvalidTaskId;
 }
 
 void MinorGCJob::Task::RunInternal() {
   VMState<GC> state(isolate());
-  TRACE_EVENT_CALL_STATS_SCOPED(isolate(), "v8", "V8.MinorGCJob.Task");
+  TRACE_EVENT_CALL_STATS_SCOPED(isolate(), "v8", "V8.Task");
 
-  DCHECK_EQ(job_->current_task_id_, id());
-  job_->current_task_id_ = CancelableTaskManager::kInvalidTaskId;
+  job_->task_pending_ = false;
 
-  Heap* heap = isolate()->heap();
-  if (v8_flags.minor_ms && heap->ShouldOptimizeForLoadTime()) {
-    job_->task_requested_ = true;
-    return;
-  }
-
-  if (v8_flags.minor_ms &&
+  if (v8_flags.minor_mc &&
       isolate()->heap()->incremental_marking()->IsMajorMarking()) {
-    // Don't trigger a MinorMS cycle while major incremental marking is active.
+    // Don't trigger a MinorMC cycle while major incremental marking is active.
     return;
   }
+  if (!MinorGCJob::YoungGenerationSizeTaskTriggerReached(isolate()->heap()))
+    return;
 
-  heap->CollectGarbage(NEW_SPACE, GarbageCollectionReason::kTask);
+  isolate()->heap()->CollectGarbage(NEW_SPACE, GarbageCollectionReason::kTask);
 }
 
 }  // namespace internal

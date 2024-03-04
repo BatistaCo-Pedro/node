@@ -24,15 +24,12 @@
 
 namespace v8::internal::compiler::turboshaft {
 
-#include "src/compiler/turboshaft/define-assembler-macros.inc"
-
 template <typename Op>
 V8_INLINE bool CanBeTyped(const Op& operation) {
   return operation.outputs_rep().size() > 0;
 }
 
-struct TypeInferenceReducerArgs
-    : base::ContextualClass<TypeInferenceReducerArgs> {
+struct TypeInferenceReducerArgs {
   enum class InputGraphTyping {
     kNone,     // Do not compute types for the input graph.
     kPrecise,  // Run a complete fixpoint analysis on the input graph.
@@ -45,13 +42,9 @@ struct TypeInferenceReducerArgs
                             // for new nodes and more precise types where
                             // possible.
   };
+  Isolate* isolate;
   InputGraphTyping input_graph_typing;
   OutputGraphTyping output_graph_typing;
-
-  TypeInferenceReducerArgs(InputGraphTyping input_graph_typing,
-                           OutputGraphTyping output_graph_typing)
-      : input_graph_typing(input_graph_typing),
-        output_graph_typing(output_graph_typing) {}
 };
 
 // TypeInferenceReducer is the central component to infer types for Turboshaft
@@ -83,8 +76,20 @@ class TypeInferenceReducer
 
   using Adapter = UniformReducerAdapter<TypeInferenceReducer, Next>;
   using Args = TypeInferenceReducerArgs;
+  using ArgT = base::append_tuple_type<typename Next::ArgT, Args>;
 
-  TypeInferenceReducer() {
+  template <typename... Ts>
+  explicit TypeInferenceReducer(const std::tuple<Ts...>& args)
+      : Adapter(args),
+        args_(std::get<Args>(args)),
+        input_graph_types_(Asm().graph_zone()),
+        output_graph_types_(Asm().output_graph().operation_types()),
+        table_(Asm().phase_zone()),
+        op_to_key_mapping_(Asm().phase_zone()),
+        block_to_snapshot_mapping_(Asm().input_graph().block_count(),
+                                   base::nullopt, Asm().phase_zone()),
+        predecessors_(Asm().phase_zone()),
+        analyzer_(Asm().modifiable_input_graph(), Asm().phase_zone()) {
     // It is not reasonable to try to reuse input graph types if there are none.
     DCHECK_IMPLIES(args_.output_graph_typing ==
                        Args::OutputGraphTyping::kPreserveFromInputGraph,
@@ -190,7 +195,8 @@ class TypeInferenceReducer
     // Collect the snapshots of all predecessors.
     {
       predecessors_.clear();
-      for (const Block* pred : new_block->PredecessorsIterable()) {
+      for (const Block* pred = new_block->LastPredecessor(); pred != nullptr;
+           pred = pred->NeighboringPredecessor()) {
         base::Optional<table_t::Snapshot> pred_snapshot =
             block_to_snapshot_mapping_[pred->index()];
         DCHECK(pred_snapshot.has_value());
@@ -203,7 +209,7 @@ class TypeInferenceReducer
     // predecessors.
     {
       auto MergeTypes = [&](table_t::Key,
-                            base::Vector<const Type> predecessors) -> Type {
+                            base::Vector<Type> predecessors) -> Type {
         DCHECK_GT(predecessors.size(), 0);
         Type result_type = predecessors[0];
         for (size_t i = 1; i < predecessors.size(); ++i) {
@@ -281,8 +287,9 @@ class TypeInferenceReducer
     }
   }
 
-  OpIndex REDUCE(PendingLoopPhi)(OpIndex first, RegisterRepresentation rep) {
-    OpIndex index = Next::ReducePendingLoopPhi(first, rep);
+  OpIndex ReducePendingLoopPhi(OpIndex first, RegisterRepresentation rep,
+                               PendingLoopPhiOp::Data data) {
+    OpIndex index = Next::ReducePendingLoopPhi(first, rep, data);
     if (!NeedsTyping(index)) return index;
 
     // There is not much we can do for pending loop phis, because we don't know
@@ -293,8 +300,8 @@ class TypeInferenceReducer
     return index;
   }
 
-  OpIndex REDUCE(Phi)(base::Vector<const OpIndex> inputs,
-                      RegisterRepresentation rep) {
+  OpIndex ReducePhi(base::Vector<const OpIndex> inputs,
+                    RegisterRepresentation rep) {
     OpIndex index = Next::ReducePhi(inputs, rep);
     if (!NeedsTyping(index)) return index;
 
@@ -306,7 +313,7 @@ class TypeInferenceReducer
     return index;
   }
 
-  OpIndex REDUCE(Constant)(ConstantOp::Kind kind, ConstantOp::Storage value) {
+  OpIndex ReduceConstant(ConstantOp::Kind kind, ConstantOp::Storage value) {
     OpIndex index = Next::ReduceConstant(kind, value);
     if (!NeedsTyping(index)) return index;
 
@@ -315,9 +322,8 @@ class TypeInferenceReducer
     return index;
   }
 
-  OpIndex REDUCE(Comparison)(OpIndex left, OpIndex right,
-                             ComparisonOp::Kind kind,
-                             RegisterRepresentation rep) {
+  OpIndex ReduceComparison(OpIndex left, OpIndex right, ComparisonOp::Kind kind,
+                           RegisterRepresentation rep) {
     OpIndex index = Next::ReduceComparison(left, right, kind, rep);
     if (!NeedsTyping(index)) return index;
 
@@ -327,8 +333,8 @@ class TypeInferenceReducer
     return index;
   }
 
-  OpIndex REDUCE(Projection)(OpIndex input, uint16_t idx,
-                             RegisterRepresentation rep) {
+  OpIndex ReduceProjection(OpIndex input, uint16_t idx,
+                           RegisterRepresentation rep) {
     OpIndex index = Next::ReduceProjection(input, idx, rep);
     if (!NeedsTyping(index)) return index;
 
@@ -337,8 +343,8 @@ class TypeInferenceReducer
     return index;
   }
 
-  OpIndex REDUCE(WordBinop)(OpIndex left, OpIndex right, WordBinopOp::Kind kind,
-                            WordRepresentation rep) {
+  OpIndex ReduceWordBinop(OpIndex left, OpIndex right, WordBinopOp::Kind kind,
+                          WordRepresentation rep) {
     OpIndex index = Next::ReduceWordBinop(left, right, kind, rep);
     if (!NeedsTyping(index)) return index;
 
@@ -348,9 +354,9 @@ class TypeInferenceReducer
     return index;
   }
 
-  OpIndex REDUCE(OverflowCheckedBinop)(OpIndex left, OpIndex right,
-                                       OverflowCheckedBinopOp::Kind kind,
-                                       WordRepresentation rep) {
+  OpIndex ReduceOverflowCheckedBinop(OpIndex left, OpIndex right,
+                                     OverflowCheckedBinopOp::Kind kind,
+                                     WordRepresentation rep) {
     OpIndex index = Next::ReduceOverflowCheckedBinop(left, right, kind, rep);
     if (!NeedsTyping(index)) return index;
 
@@ -360,8 +366,8 @@ class TypeInferenceReducer
     return index;
   }
 
-  OpIndex REDUCE(FloatBinop)(OpIndex left, OpIndex right,
-                             FloatBinopOp::Kind kind, FloatRepresentation rep) {
+  OpIndex ReduceFloatBinop(OpIndex left, OpIndex right, FloatBinopOp::Kind kind,
+                           FloatRepresentation rep) {
     OpIndex index = Next::ReduceFloatBinop(left, right, kind, rep);
     if (!NeedsTyping(index)) return index;
 
@@ -371,9 +377,8 @@ class TypeInferenceReducer
     return index;
   }
 
-  OpIndex REDUCE(CheckTurboshaftTypeOf)(OpIndex input,
-                                        RegisterRepresentation rep, Type type,
-                                        bool successful) {
+  OpIndex ReduceCheckTurboshaftTypeOf(OpIndex input, RegisterRepresentation rep,
+                                      Type type, bool successful) {
     Type input_type = GetType(input);
     if (input_type.IsSubtypeOf(type)) {
       OpIndex index = Next::ReduceCheckTurboshaftTypeOf(input, rep, type, true);
@@ -404,7 +409,7 @@ class TypeInferenceReducer
   }
 
   void RemoveLast(OpIndex index_of_last_operation) {
-    if (op_to_key_mapping_[index_of_last_operation]) {
+    if (auto key_opt = op_to_key_mapping_[index_of_last_operation]) {
       op_to_key_mapping_[index_of_last_operation] = base::nullopt;
       TURBOSHAFT_TRACE_TYPING_OK(
           "REM  %3d:%-40s %-40s\n", index_of_last_operation.id(),
@@ -435,7 +440,7 @@ class TypeInferenceReducer
         (og_type.IsInvalid() ? "invalid" : og_type.ToString().c_str()),
         ig_type.ToString().c_str());
 
-    RefineOperationType(Asm().current_block(), index, ig_type, 'I');
+    SetType(index, ig_type);
   }
 
   Type GetTypeOrInvalid(OpIndex index) {
@@ -443,24 +448,11 @@ class TypeInferenceReducer
     return Type::Invalid();
   }
 
-  Type GetTupleType(const TupleOp& tuple) {
-    base::SmallVector<Type, 4> tuple_types;
-    for (OpIndex input : tuple.inputs()) {
-      tuple_types.push_back(GetType(input));
-    }
-    return TupleType::Tuple(base::VectorOf(tuple_types), Asm().graph_zone());
-  }
-
   Type GetType(OpIndex index) {
     Type type = GetTypeOrInvalid(index);
     if (type.IsInvalid()) {
       const Operation& op = Asm().output_graph().Get(index);
-      if (op.Is<TupleOp>()) {
-        return GetTupleType(op.Cast<TupleOp>());
-      } else {
-        return Typer::TypeForRepresentation(op.outputs_rep(),
-                                            Asm().graph_zone());
-      }
+      return Typer::TypeForRepresentation(op.outputs_rep(), Asm().graph_zone());
     }
     return type;
   }
@@ -546,25 +538,19 @@ class TypeInferenceReducer
                                 Args::OutputGraphTyping::kRefineFromInputGraph;
   }
 
-  TypeInferenceReducerArgs args_{TypeInferenceReducerArgs::Get()};
-  GrowingSidetable<Type> input_graph_types_{Asm().graph_zone()};
-  GrowingSidetable<Type>& output_graph_types_{
-      Asm().output_graph().operation_types()};
-  table_t table_{Asm().phase_zone()};
+  Args args_;
+  GrowingSidetable<Type> input_graph_types_;
+  GrowingSidetable<Type>& output_graph_types_;
+  table_t table_;
   const Block* current_block_ = nullptr;
-  GrowingSidetable<base::Optional<table_t::Key>> op_to_key_mapping_{
-      Asm().phase_zone()};
+  GrowingSidetable<base::Optional<table_t::Key>> op_to_key_mapping_;
   GrowingBlockSidetable<base::Optional<table_t::Snapshot>>
-      block_to_snapshot_mapping_{Asm().input_graph().block_count(),
-                                 base::nullopt, Asm().phase_zone()};
+      block_to_snapshot_mapping_;
   // {predecessors_} is used during merging, but we use an instance variable for
   // it, in order to save memory and not reallocate it for each merge.
-  ZoneVector<table_t::Snapshot> predecessors_{Asm().phase_zone()};
-  TypeInferenceAnalysis analyzer_{Asm().modifiable_input_graph(),
-                                  Asm().phase_zone()};
+  ZoneVector<table_t::Snapshot> predecessors_;
+  TypeInferenceAnalysis analyzer_;
 };
-
-#include "src/compiler/turboshaft/undef-assembler-macros.inc"
 
 }  // namespace v8::internal::compiler::turboshaft
 

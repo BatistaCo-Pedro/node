@@ -33,7 +33,7 @@ bytecodes: [
   /*   34 E> */ B(Throw),
 ]
 constant pool: [
-  INTERNALIZED_ONE_BYTE_STRING_TYPE ["Error"],
+  ONE_BYTE_INTERNALIZED_STRING_TYPE ["Error"],
 ]
 handlers: [
 ]
@@ -55,7 +55,7 @@ bytecodes: [
   /*   72 S> */ B(Return),
 ]
 constant pool: [
-  INTERNALIZED_ONE_BYTE_STRING_TYPE ["Error"],
+  ONE_BYTE_INTERNALIZED_STRING_TYPE ["Error"],
 ]
 handlers: [
 ]

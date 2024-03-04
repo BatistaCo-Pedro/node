@@ -17,7 +17,6 @@
 #include "src/heap/heap.h"
 #include "src/heap/memory-chunk.h"
 #include "src/heap/read-only-spaces.h"
-#include "src/heap/zapping.h"
 #include "src/logging/log.h"
 #include "src/utils/allocation.h"
 
@@ -37,12 +36,13 @@ MemoryAllocator::MemoryAllocator(Isolate* isolate,
     : isolate_(isolate),
       data_page_allocator_(isolate->page_allocator()),
       code_page_allocator_(code_page_allocator),
-      trusted_page_allocator_(isolate->page_allocator()),
       capacity_(RoundUp(capacity, Page::kPageSize)),
+      size_(0),
+      size_executable_(0),
+      lowest_ever_allocated_(static_cast<Address>(-1ll)),
+      highest_ever_allocated_(kNullAddress),
       unmapper_(isolate->heap(), this) {
-  DCHECK_NOT_NULL(data_page_allocator_);
-  DCHECK_NOT_NULL(code_page_allocator_);
-  DCHECK_NOT_NULL(trusted_page_allocator_);
+  DCHECK_NOT_NULL(code_page_allocator);
 }
 
 void MemoryAllocator::TearDown() {
@@ -60,31 +60,24 @@ void MemoryAllocator::TearDown() {
 
   code_page_allocator_ = nullptr;
   data_page_allocator_ = nullptr;
-  trusted_page_allocator_ = nullptr;
 }
 
 class MemoryAllocator::Unmapper::UnmapFreeMemoryJob : public JobTask {
  public:
   explicit UnmapFreeMemoryJob(Isolate* isolate, Unmapper* unmapper)
-      : unmapper_(unmapper),
-        tracer_(isolate->heap()->tracer()),
-        trace_id_(reinterpret_cast<uint64_t>(this) ^
-                  tracer_->CurrentEpoch(GCTracer::Scope::BACKGROUND_UNMAPPER)) {
-  }
+      : unmapper_(unmapper), tracer_(isolate->heap()->tracer()) {}
 
   UnmapFreeMemoryJob(const UnmapFreeMemoryJob&) = delete;
   UnmapFreeMemoryJob& operator=(const UnmapFreeMemoryJob&) = delete;
 
   void Run(JobDelegate* delegate) override {
     if (delegate->IsJoiningThread()) {
-      TRACE_GC_WITH_FLOW(tracer_, GCTracer::Scope::UNMAPPER, trace_id_,
-                         TRACE_EVENT_FLAG_FLOW_IN);
+      TRACE_GC(tracer_, GCTracer::Scope::UNMAPPER);
       RunImpl(delegate);
 
     } else {
-      TRACE_GC1_WITH_FLOW(tracer_, GCTracer::Scope::BACKGROUND_UNMAPPER,
-                          ThreadKind::kBackground, trace_id_,
-                          TRACE_EVENT_FLAG_FLOW_IN);
+      TRACE_GC1(tracer_, GCTracer::Scope::BACKGROUND_UNMAPPER,
+                ThreadKind::kBackground);
       RunImpl(delegate);
     }
   }
@@ -98,8 +91,6 @@ class MemoryAllocator::Unmapper::UnmapFreeMemoryJob : public JobTask {
                 kTaskPerChunk);
   }
 
-  uint64_t trace_id() const { return trace_id_; }
-
  private:
   void RunImpl(JobDelegate* delegate) {
     unmapper_->PerformFreeMemoryOnQueuedChunks(FreeMode::kUncommitPooled,
@@ -110,7 +101,6 @@ class MemoryAllocator::Unmapper::UnmapFreeMemoryJob : public JobTask {
   }
   Unmapper* const unmapper_;
   GCTracer* const tracer_;
-  const uint64_t trace_id_;
 };
 
 void MemoryAllocator::Unmapper::FreeQueuedChunks() {
@@ -120,11 +110,9 @@ void MemoryAllocator::Unmapper::FreeQueuedChunks() {
     if (job_handle_ && job_handle_->IsValid()) {
       job_handle_->NotifyConcurrencyIncrease();
     } else {
-      auto job = std::make_unique<UnmapFreeMemoryJob>(heap_->isolate(), this);
-      TRACE_GC_NOTE_WITH_FLOW("MemoryAllocator::Unmapper started",
-                              job->trace_id(), TRACE_EVENT_FLAG_FLOW_OUT);
       job_handle_ = V8::GetCurrentPlatform()->PostJob(
-          TaskPriority::kUserVisible, std::move(job));
+          TaskPriority::kUserVisible,
+          std::make_unique<UnmapFreeMemoryJob>(heap_->isolate(), this));
       if (v8_flags.trace_unmapper) {
         PrintIsolate(heap_->isolate(), "Unmapper::FreeQueuedChunks: new Job\n");
       }
@@ -233,14 +221,13 @@ bool MemoryAllocator::Unmapper::IsRunning() const {
   return job_handle_ && job_handle_->IsValid();
 }
 
-bool MemoryAllocator::CommitMemory(VirtualMemory* reservation,
-                                   Executability executable) {
+bool MemoryAllocator::CommitMemory(VirtualMemory* reservation) {
   Address base = reservation->address();
   size_t size = reservation->size();
   if (!reservation->SetPermissions(base, size, PageAllocator::kReadWrite)) {
     return false;
   }
-  UpdateAllocatedSpaceLimits(base, base + size, executable);
+  UpdateAllocatedSpaceLimits(base, base + size);
   return true;
 }
 
@@ -262,9 +249,7 @@ Address MemoryAllocator::AllocateAlignedMemory(
     size_t chunk_size, size_t area_size, size_t alignment,
     AllocationSpace space, Executability executable, void* hint,
     VirtualMemory* controller) {
-  DCHECK_EQ(space == CODE_SPACE || space == CODE_LO_SPACE,
-            executable == EXECUTABLE);
-  v8::PageAllocator* page_allocator = this->page_allocator(space);
+  v8::PageAllocator* page_allocator = this->page_allocator(executable);
   DCHECK_LT(area_size, chunk_size);
 
   VirtualMemory reservation(page_allocator, chunk_size, hint, alignment);
@@ -288,7 +273,7 @@ Address MemoryAllocator::AllocateAlignedMemory(
   if (executable == EXECUTABLE) {
     if (!SetPermissionsOnExecutableMemoryChunk(&reservation, base, area_size,
                                                chunk_size)) {
-      return HandleAllocationFailure(EXECUTABLE);
+      return HandleAllocationFailure(executable);
     }
   } else {
     // No guard page between page header and object area. This allows us to make
@@ -299,9 +284,9 @@ Address MemoryAllocator::AllocateAlignedMemory(
 
     if (reservation.SetPermissions(base, commit_size,
                                    PageAllocator::kReadWrite)) {
-      UpdateAllocatedSpaceLimits(base, base + commit_size, NOT_EXECUTABLE);
+      UpdateAllocatedSpaceLimits(base, base + commit_size);
     } else {
-      return HandleAllocationFailure(NOT_EXECUTABLE);
+      return HandleAllocationFailure(executable);
     }
   }
 
@@ -394,25 +379,18 @@ MemoryAllocator::AllocateUninitializedChunkAt(BaseSpace* space,
     size_executable_ += reservation.size();
   }
 
-  if (heap::ShouldZapGarbage()) {
+  if (Heap::ShouldZapGarbage()) {
     if (executable == EXECUTABLE) {
       // Page header and object area is split by guard page. Zap page header
       // first.
-      heap::ZapBlock(base, MemoryChunkLayout::CodePageGuardStartOffset(),
-                     kZapValue);
+      ZapBlock(base, MemoryChunkLayout::CodePageGuardStartOffset(), kZapValue);
       // Now zap object area.
-      Address code_start =
-          base + MemoryChunkLayout::ObjectPageOffsetInCodePage();
-      CodePageMemoryModificationScopeForDebugging memory_write_scope(
-          isolate_->heap(), &reservation,
-          base::AddressRegion(code_start,
-                              RoundUp(area_size, GetCommitPageSize())));
-      heap::ZapBlock(base + MemoryChunkLayout::ObjectPageOffsetInCodePage(),
-                     area_size, kZapValue);
+      ZapBlock(base + MemoryChunkLayout::ObjectStartOffsetInCodePage(),
+               area_size, kZapValue);
     } else {
       DCHECK_EQ(executable, NOT_EXECUTABLE);
       // Zap both page header and object area at once. No guard page in-between.
-      heap::ZapBlock(
+      ZapBlock(
           base,
           MemoryChunkLayout::ObjectStartOffsetInMemoryChunk(space->identity()) +
               area_size,
@@ -488,13 +466,8 @@ void MemoryAllocator::UnregisterBasicMemoryChunk(BasicMemoryChunk* chunk,
 #ifdef DEBUG
     UnregisterExecutableMemoryChunk(static_cast<MemoryChunk*>(chunk));
 #endif  // DEBUG
-
-    Address executable_page_start =
-        chunk->address() + MemoryChunkLayout::ObjectPageOffsetInCodePage();
-    size_t aligned_area_size =
-        RoundUp(chunk->area_end() - executable_page_start, GetCommitPageSize());
-    ThreadIsolation::UnregisterJitPage(executable_page_start,
-                                       aligned_area_size);
+    chunk->heap()->UnregisterUnprotectedMemoryChunk(
+        static_cast<MemoryChunk*>(chunk));
   }
   chunk->SetFlag(MemoryChunk::UNREGISTERED);
 }
@@ -514,7 +487,7 @@ void MemoryAllocator::FreeReadOnlyPage(ReadOnlyPage* chunk) {
 
   UnregisterSharedBasicMemoryChunk(chunk);
 
-  v8::PageAllocator* allocator = page_allocator(RO_SPACE);
+  v8::PageAllocator* allocator = page_allocator(NOT_EXECUTABLE);
   VirtualMemory* reservation = chunk->reserved_memory();
   if (reservation->IsReserved()) {
     reservation->FreeReadOnly();
@@ -559,11 +532,10 @@ void MemoryAllocator::PerformFreeMemory(MemoryChunk* chunk) {
 }
 
 void MemoryAllocator::Free(MemoryAllocator::FreeMode mode, MemoryChunk* chunk) {
-  if (chunk->IsLargePage()) {
-    RecordLargePageDestroyed(*LargePage::cast(chunk));
-  } else {
-    RecordNormalPageDestroyed(*Page::cast(chunk));
-  }
+  if (chunk->IsLargePage())
+    RecordLargePageDestroyed(*static_cast<LargePage*>(chunk));
+  else
+    RecordNormalPageDestroyed(*static_cast<Page*>(chunk));
   switch (mode) {
     case FreeMode::kImmediately:
       PreFreeMemory(chunk);
@@ -675,15 +647,23 @@ MemoryAllocator::AllocateUninitializedPageFromPool(Space* space) {
   // Pooled pages are always regular data pages.
   DCHECK_NE(CODE_SPACE, space->identity());
   VirtualMemory reservation(data_page_allocator(), start, size);
-  if (!CommitMemory(&reservation, NOT_EXECUTABLE)) return {};
-  if (heap::ShouldZapGarbage()) {
-    heap::ZapBlock(start, size, kZapValue);
+  if (!CommitMemory(&reservation)) return {};
+  if (Heap::ShouldZapGarbage()) {
+    ZapBlock(start, size, kZapValue);
   }
 
   size_ += size;
   return MemoryChunkAllocationResult{
       chunk, size, area_start, area_end, std::move(reservation),
   };
+}
+
+void MemoryAllocator::ZapBlock(Address start, size_t size,
+                               uintptr_t zap_value) {
+  DCHECK(IsAligned(start, kTaggedSize));
+  DCHECK(IsAligned(size, kTaggedSize));
+  MemsetTagged(ObjectSlot(start), Object(static_cast<Address>(zap_value)),
+               size >> kTaggedSizeLog2);
 }
 
 void MemoryAllocator::InitializeOncePerProcess() {
@@ -738,8 +718,6 @@ bool MemoryAllocator::SetPermissionsOnExecutableMemoryChunk(VirtualMemory* vm,
 
   bool jitless = isolate_->jitless();
 
-  ThreadIsolation::RegisterJitPage(code_area, aligned_area_size);
-
   if (V8_HEAP_USE_PTHREAD_JIT_WRITE_PROTECT && !jitless) {
     DCHECK(isolate_->RequiresCodeRange());
     // Commit the header, from start to pre-code guard page.
@@ -754,8 +732,7 @@ bool MemoryAllocator::SetPermissionsOnExecutableMemoryChunk(VirtualMemory* vm,
                               PageAllocator::kReadWriteExecute)) {
           // Create the post-code guard page.
           if (vm->DiscardSystemPages(post_guard_page, page_size)) {
-            UpdateAllocatedSpaceLimits(start, code_area + aligned_area_size,
-                                       EXECUTABLE);
+            UpdateAllocatedSpaceLimits(start, code_area + aligned_area_size);
             return true;
           }
 
@@ -774,12 +751,17 @@ bool MemoryAllocator::SetPermissionsOnExecutableMemoryChunk(VirtualMemory* vm,
                              PageAllocator::kNoAccess)) {
         // Commit the executable code body.
         bool set_permission_successed = false;
-        if (ThreadIsolation::Enabled()) {
-          DCHECK(!jitless);
+#if V8_HEAP_USE_PKU_JIT_WRITE_PROTECT
+        if (!jitless && RwxMemoryWriteScope::IsSupported()) {
+          base::AddressRegion region(code_area, aligned_area_size);
           set_permission_successed =
-              ThreadIsolation::MakeExecutable(code_area, aligned_area_size);
-
-        } else {
+              base::MemoryProtectionKey::SetPermissionsAndKey(
+                  code_page_allocator_, region,
+                  PageAllocator::kReadWriteExecute,
+                  RwxMemoryWriteScope::memory_protection_key());
+        } else
+#endif
+        {
           set_permission_successed = vm->SetPermissions(
               code_area, aligned_area_size,
               jitless ? PageAllocator::kReadWrite
@@ -789,8 +771,7 @@ bool MemoryAllocator::SetPermissionsOnExecutableMemoryChunk(VirtualMemory* vm,
           // Create the post-code guard page.
           if (vm->SetPermissions(post_guard_page, page_size,
                                  PageAllocator::kNoAccess)) {
-            UpdateAllocatedSpaceLimits(start, code_area + aligned_area_size,
-                                       EXECUTABLE);
+            UpdateAllocatedSpaceLimits(start, code_area + aligned_area_size);
             return true;
           }
 
@@ -802,31 +783,23 @@ bool MemoryAllocator::SetPermissionsOnExecutableMemoryChunk(VirtualMemory* vm,
                                PageAllocator::kNoAccess));
     }
   }
-
-  ThreadIsolation::UnregisterJitPage(code_area, aligned_area_size);
   return false;
 }
 
-#if defined(V8_ENABLE_CONSERVATIVE_STACK_SCANNING) || defined(DEBUG)
-
-const BasicMemoryChunk* MemoryAllocator::LookupChunkContainingAddress(
-    Address addr) const {
-  // All threads should be either parked or in a safepoint whenever this method
-  // is called, thus pages cannot be allocated or freed at the same time and a
-  // mutex is not required here.
-  // As the address may not correspond to a valid heap object, the chunk we
-  // obtain below is not necessarily a valid chunk.
+// static
+const MemoryChunk* MemoryAllocator::LookupChunkContainingAddress(
+    const NormalPagesSet& normal_pages, const LargePagesSet& large_pages,
+    Address addr) {
   BasicMemoryChunk* chunk = BasicMemoryChunk::FromAddress(addr);
-  // Check if it corresponds to a known normal or large page.
-  if (auto it = normal_pages_.find(chunk); it != normal_pages_.end()) {
+  if (auto it = normal_pages.find(static_cast<Page*>(chunk));
+      it != normal_pages.end()) {
     // The chunk is a normal page.
-    auto* normal_page = Page::cast(chunk);
-    DCHECK_LE(normal_page->address(), addr);
-    if (normal_page->Contains(addr)) return normal_page;
-  } else if (auto it = large_pages_.upper_bound(chunk);
-             it != large_pages_.begin()) {
+    DCHECK_LE(chunk->address(), addr);
+    if (chunk->Contains(addr)) return *it;
+  } else if (auto it = large_pages.upper_bound(static_cast<LargePage*>(chunk));
+             it != large_pages.begin()) {
     // The chunk could be inside a large page.
-    DCHECK_IMPLIES(it != large_pages_.end(), addr < (*it)->address());
+    DCHECK_IMPLIES(it != large_pages.end(), addr < (*it)->address());
     auto* large_page = *std::next(it, -1);
     DCHECK_NOT_NULL(large_page);
     DCHECK_LE(large_page->address(), addr);
@@ -836,42 +809,44 @@ const BasicMemoryChunk* MemoryAllocator::LookupChunkContainingAddress(
   return nullptr;
 }
 
-#endif  // V8_ENABLE_CONSERVATIVE_STACK_SCANNING || DEBUG
+const MemoryChunk* MemoryAllocator::LookupChunkContainingAddress(
+    Address addr) const {
+  // All threads should be either parked or in a safepoint whenever this method
+  // is called, thus pages cannot be allocated or freed at the same time and a
+  // mutex is not required here,
+  return LookupChunkContainingAddress(normal_pages_, large_pages_, addr);
+}
 
 void MemoryAllocator::RecordNormalPageCreated(const Page& page) {
-#ifdef V8_ENABLE_CONSERVATIVE_STACK_SCANNING
   base::MutexGuard guard(&pages_mutex_);
   auto result = normal_pages_.insert(&page);
   USE(result);
   DCHECK(result.second);
-#endif  // V8_ENABLE_CONSERVATIVE_STACK_SCANNING
 }
 
 void MemoryAllocator::RecordNormalPageDestroyed(const Page& page) {
-#ifdef V8_ENABLE_CONSERVATIVE_STACK_SCANNING
   base::MutexGuard guard(&pages_mutex_);
+  DCHECK_IMPLIES(v8_flags.minor_mc && isolate_->heap()->sweeping_in_progress(),
+                 isolate_->heap()->tracer()->IsInAtomicPause());
   auto size = normal_pages_.erase(&page);
   USE(size);
   DCHECK_EQ(1u, size);
-#endif  // V8_ENABLE_CONSERVATIVE_STACK_SCANNING
 }
 
 void MemoryAllocator::RecordLargePageCreated(const LargePage& page) {
-#ifdef V8_ENABLE_CONSERVATIVE_STACK_SCANNING
   base::MutexGuard guard(&pages_mutex_);
   auto result = large_pages_.insert(&page);
   USE(result);
   DCHECK(result.second);
-#endif  // V8_ENABLE_CONSERVATIVE_STACK_SCANNING
 }
 
 void MemoryAllocator::RecordLargePageDestroyed(const LargePage& page) {
-#ifdef V8_ENABLE_CONSERVATIVE_STACK_SCANNING
   base::MutexGuard guard(&pages_mutex_);
+  DCHECK_IMPLIES(v8_flags.minor_mc && isolate_->heap()->sweeping_in_progress(),
+                 isolate_->heap()->tracer()->IsInAtomicPause());
   auto size = large_pages_.erase(&page);
   USE(size);
   DCHECK_EQ(1u, size);
-#endif  // V8_ENABLE_CONSERVATIVE_STACK_SCANNING
 }
 
 }  // namespace internal

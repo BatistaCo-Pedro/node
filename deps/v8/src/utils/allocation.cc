@@ -182,9 +182,7 @@ void FreePages(v8::PageAllocator* page_allocator, void* address,
                const size_t size) {
   DCHECK_NOT_NULL(page_allocator);
   DCHECK(IsAligned(size, page_allocator->AllocatePageSize()));
-  if (!page_allocator->FreePages(address, size)) {
-    V8::FatalProcessOutOfMemory(nullptr, "FreePages");
-  }
+  CHECK(page_allocator->FreePages(address, size));
 }
 
 void ReleasePages(v8::PageAllocator* page_allocator, void* address, size_t size,

@@ -19,8 +19,3 @@ pattern[Symbol.replace] = null;
 assertEquals("abXde", "abcde".replace(pattern, "X"));
 
 assertEquals("[Symbol.replace]", RegExp.prototype[Symbol.replace].name);
-
-assertThrows(
-    () => { RegExp.prototype[Symbol.replace].call("xyz", "foo", "a"); },
-    TypeError,
-    "Method RegExp.prototype.@@replace called on incompatible receiver xyz");

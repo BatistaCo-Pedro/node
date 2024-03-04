@@ -2,7 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// Flags: --allow-natives-syntax --no-always-turbofan --no-stress-flush-code
+// Flags: --allow-natives-syntax --no-always-turbofan --harmony-public-fields
+// Flags: --harmony-static-fields --no-stress-flush-code
 // Flags: --expose-gc
 // Files: test/mjsunit/code-coverage-utils.js
 
@@ -27,7 +28,7 @@ class X {                                  // 000
 };                                         // 100
     `,
     [ {"start":0,"end":149,"count":1},
-      {"start":8,"end":101,"count":0} ]
+      {"start":0,"end":101,"count":0} ]
   );
 
   await TestCoverage(
@@ -39,7 +40,7 @@ class X {                                  // 000
 let x = new X();                           // 150
     `,
     [ {"start":0,"end":199,"count":1},
-      {"start":8,"end":101,"count":1},
+      {"start":0,"end":101,"count":1},
       {"start":56,"end":70,"count":0} ]
   );
 
@@ -53,7 +54,7 @@ let x = new X();                           // 150
 x.x();                                     // 200
     `,
     [ {"start":0,"end":249,"count":1},
-      {"start":8,"end":101,"count":1},
+      {"start":0,"end":101,"count":1},
       {"start":56,"end":70,"count":1} ]
   );
 
@@ -70,7 +71,7 @@ x.x();                                     // 300
 x.y();                                     // 350
     `,
     [ {"start":0,"end":399,"count":1},
-      {"start":8,"end":201,"count":1},
+      {"start":0,"end":201,"count":1},
       {"start":56,"end":70,"count":1},
       {"start":102,"end":111,"count":0},
       {"start":156,"end":169,"count":1} ]
@@ -90,7 +91,7 @@ x.y();                                     // 350
 x.foo();                                   // 400
     `,
     [ {"start":0,"end":449,"count":1},
-      {"start":8,"end":201,"count":1},
+      {"start":0,"end":201,"count":1},
       {"start":56,"end":70,"count":1},
       {"start":102,"end":111,"count":1},
       {"start":156,"end":169,"count":1} ]
@@ -105,7 +106,7 @@ class X {                                  // 000
 let x = new X();                           // 150
     `,
     [ {"start":0,"end":199,"count":1},
-      {"start":8,"end":101,"count":1},
+      {"start":0,"end":101,"count":1},
       {"start":57,"end":71,"count":1} ]
   );
 
@@ -120,7 +121,7 @@ let x = new X();                           // 200
     `,
     [ {"start":0,"end":249,"count":1},
       {"start":0,"end":15,"count":1},
-      {"start":58,"end":151,"count":1},
+      {"start":50,"end":151,"count":1},
       {"start":111,"end":125,"count":1} ]
   );
 
@@ -132,7 +133,7 @@ class X {                                  // 000
 };                                         // 100
     `,
     [ {"start":0,"end":149,"count":1},
-      {"start":8,"end":101,"count":1},
+      {"start":52,"end":77,"count":1},
       {"start":63,"end":77,"count":0} ]
   );
 
@@ -145,7 +146,7 @@ class X {                                  // 000
 X.x();                                     // 150
     `,
     [ {"start":0,"end":199,"count":1},
-      {"start":8,"end":101,"count":1},
+      {"start":52,"end":77,"count":1},
       {"start":63,"end":77,"count":1} ]
   );
 
@@ -157,7 +158,7 @@ class X {                                  // 000
 };                                         // 100
     `,
     [ {"start":0,"end":149,"count":1},
-      {"start":8,"end":101,"count":1},
+      {"start":52,"end":81,"count":1},
       {"start":64,"end":78,"count":1} ]
   );
 
@@ -171,7 +172,7 @@ class X {                                  // 050
     `,
     [ {"start":0,"end":199,"count":1},
       {"start":0,"end":15,"count":1},
-      {"start":58,"end":151,"count":1},
+      {"start":102,"end":135,"count":1},
       {"start":118,"end":132,"count":1} ]
   );
 

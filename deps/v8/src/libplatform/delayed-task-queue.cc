@@ -15,6 +15,7 @@ DelayedTaskQueue::DelayedTaskQueue(TimeFunction time_function)
     : time_function_(time_function) {}
 
 DelayedTaskQueue::~DelayedTaskQueue() {
+  base::MutexGuard guard(&lock_);
   DCHECK(terminated_);
   DCHECK(task_queue_.empty());
 }
@@ -24,8 +25,10 @@ double DelayedTaskQueue::MonotonicallyIncreasingTime() {
 }
 
 void DelayedTaskQueue::Append(std::unique_ptr<Task> task) {
+  base::MutexGuard guard(&lock_);
   DCHECK(!terminated_);
   task_queue_.push(std::move(task));
+  queues_condition_var_.NotifyOne();
 }
 
 void DelayedTaskQueue::AppendDelayed(std::unique_ptr<Task> task,
@@ -33,40 +36,47 @@ void DelayedTaskQueue::AppendDelayed(std::unique_ptr<Task> task,
   DCHECK_GE(delay_in_seconds, 0.0);
   double deadline = MonotonicallyIncreasingTime() + delay_in_seconds;
   {
+    base::MutexGuard guard(&lock_);
     DCHECK(!terminated_);
     delayed_task_queue_.emplace(deadline, std::move(task));
+    queues_condition_var_.NotifyOne();
   }
 }
 
-DelayedTaskQueue::MaybeNextTask DelayedTaskQueue::TryGetNext() {
+std::unique_ptr<Task> DelayedTaskQueue::GetNext() {
+  base::MutexGuard guard(&lock_);
   for (;;) {
     // Move delayed tasks that have hit their deadline to the main queue.
     double now = MonotonicallyIncreasingTime();
-    for (;;) {
-      std::unique_ptr<Task> task = PopTaskFromDelayedQueue(now);
-      if (!task) break;
+    std::unique_ptr<Task> task = PopTaskFromDelayedQueue(now);
+    while (task) {
       task_queue_.push(std::move(task));
+      task = PopTaskFromDelayedQueue(now);
     }
     if (!task_queue_.empty()) {
-      std::unique_ptr<Task> task = std::move(task_queue_.front());
+      std::unique_ptr<Task> result = std::move(task_queue_.front());
       task_queue_.pop();
-      return {MaybeNextTask::kTask, std::move(task), {}};
+      return result;
     }
 
     if (terminated_) {
-      return {MaybeNextTask::kTerminated, {}, {}};
+      queues_condition_var_.NotifyAll();
+      return nullptr;
     }
 
     if (task_queue_.empty() && !delayed_task_queue_.empty()) {
       // Wait for the next delayed task or a newly posted task.
       double wait_in_seconds = delayed_task_queue_.begin()->first - now;
-      return {
-          MaybeNextTask::kWaitDelayed,
-          {},
-          base::TimeDelta::FromMicroseconds(
-              base::TimeConstants::kMicrosecondsPerSecond * wait_in_seconds)};
+      base::TimeDelta wait_delta = base::TimeDelta::FromMicroseconds(
+          base::TimeConstants::kMicrosecondsPerSecond * wait_in_seconds);
+
+      // WaitFor unfortunately doesn't care about our fake time and will wait
+      // the 'real' amount of time, based on whatever clock the system call
+      // uses.
+      bool notified = queues_condition_var_.WaitFor(&lock_, wait_delta);
+      USE(notified);
     } else {
-      return {MaybeNextTask::kWaitIndefinite, {}, {}};
+      queues_condition_var_.Wait(&lock_);
     }
   }
 }
@@ -85,8 +95,10 @@ std::unique_ptr<Task> DelayedTaskQueue::PopTaskFromDelayedQueue(double now) {
 }
 
 void DelayedTaskQueue::Terminate() {
+  base::MutexGuard guard(&lock_);
   DCHECK(!terminated_);
   terminated_ = true;
+  queues_condition_var_.NotifyAll();
 }
 
 }  // namespace platform

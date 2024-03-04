@@ -95,13 +95,11 @@ class RegExpImpl final : public AllStatic {
                       uint32_t& backtrack_limit);
 
   // For acting on the JSRegExp data FixedArray.
-  static int IrregexpMaxRegisterCount(Tagged<FixedArray> re);
-  static void SetIrregexpMaxRegisterCount(Tagged<FixedArray> re, int value);
-  static int IrregexpNumberOfCaptures(Tagged<FixedArray> re);
-  static Tagged<ByteArray> IrregexpByteCode(Tagged<FixedArray> re,
-                                            bool is_one_byte);
-  static Tagged<Code> IrregexpNativeCode(Tagged<FixedArray> re,
-                                         bool is_one_byte);
+  static int IrregexpMaxRegisterCount(FixedArray re);
+  static void SetIrregexpMaxRegisterCount(FixedArray re, int value);
+  static int IrregexpNumberOfCaptures(FixedArray re);
+  static ByteArray IrregexpByteCode(FixedArray re, bool is_one_byte);
+  static Code IrregexpNativeCode(FixedArray re, bool is_one_byte);
 };
 
 // static
@@ -273,7 +271,7 @@ MaybeHandle<Object> RegExp::Compile(Isolate* isolate, Handle<JSRegExp> re,
     RegExpImpl::IrregexpInitialize(isolate, re, pattern, flags,
                                    parse_result.capture_count, backtrack_limit);
   }
-  DCHECK(IsFixedArray(re->data()));
+  DCHECK(re->data().IsFixedArray());
   // Compilation succeeded so the data is set on the regexp
   // and we can store it in the cache.
   Handle<FixedArray> data(FixedArray::cast(re->data()), isolate);
@@ -350,8 +348,8 @@ void RegExpImpl::AtomCompile(Isolate* isolate, Handle<JSRegExp> re,
 namespace {
 
 void SetAtomLastCapture(Isolate* isolate,
-                        Handle<RegExpMatchInfo> last_match_info,
-                        Tagged<String> subject, int from, int to) {
+                        Handle<RegExpMatchInfo> last_match_info, String subject,
+                        int from, int to) {
   SealHandleScope shs(isolate);
   last_match_info->SetNumberOfCaptureRegisters(2);
   last_match_info->SetLastSubject(subject);
@@ -371,9 +369,9 @@ int RegExpImpl::AtomExecRaw(Isolate* isolate, Handle<JSRegExp> regexp,
   subject = String::Flatten(isolate, subject);
   DisallowGarbageCollection no_gc;  // ensure vectors stay valid
 
-  Tagged<String> needle = regexp->atom_pattern();
-  int needle_len = needle->length();
-  DCHECK(needle->IsFlat());
+  String needle = regexp->atom_pattern();
+  int needle_len = needle.length();
+  DCHECK(needle.IsFlat());
   DCHECK_LT(0, needle_len);
 
   if (index + needle_len > subject->length()) {
@@ -381,7 +379,7 @@ int RegExpImpl::AtomExecRaw(Isolate* isolate, Handle<JSRegExp> regexp,
   }
 
   for (int i = 0; i < output_size; i += 2) {
-    String::FlatContent needle_content = needle->GetFlatContent(no_gc);
+    String::FlatContent needle_content = needle.GetFlatContent(no_gc);
     String::FlatContent subject_content = subject->GetFlatContent(no_gc);
     DCHECK(needle_content.IsFlat());
     DCHECK(subject_content.IsFlat());
@@ -439,15 +437,15 @@ Handle<Object> RegExpImpl::AtomExec(Isolate* isolate, Handle<JSRegExp> re,
 bool RegExpImpl::EnsureCompiledIrregexp(Isolate* isolate, Handle<JSRegExp> re,
                                         Handle<String> sample_subject,
                                         bool is_one_byte) {
-  Tagged<Object> compiled_code = re->code(is_one_byte);
-  Tagged<Object> bytecode = re->bytecode(is_one_byte);
+  Object compiled_code = re->code(is_one_byte);
+  Object bytecode = re->bytecode(is_one_byte);
   bool needs_initial_compilation =
       compiled_code == Smi::FromInt(JSRegExp::kUninitializedValue);
   // Recompile is needed when we're dealing with the first execution of the
   // regexp after the decision to tier up has been made. If the tiering up
   // strategy is not in use, this value is always false.
   bool needs_tier_up_compilation =
-      re->MarkedForTierUp() && IsByteArray(bytecode);
+      re->MarkedForTierUp() && bytecode.IsByteArray();
 
   if (v8_flags.trace_regexp_tier_up && needs_tier_up_compilation) {
     PrintF("JSRegExp object %p needs tier-up compilation\n",
@@ -455,12 +453,12 @@ bool RegExpImpl::EnsureCompiledIrregexp(Isolate* isolate, Handle<JSRegExp> re,
   }
 
   if (!needs_initial_compilation && !needs_tier_up_compilation) {
-    DCHECK(IsCode(compiled_code));
-    DCHECK_IMPLIES(v8_flags.regexp_interpret_all, IsByteArray(bytecode));
+    DCHECK(compiled_code.IsCode());
+    DCHECK_IMPLIES(v8_flags.regexp_interpret_all, bytecode.IsByteArray());
     return true;
   }
 
-  DCHECK_IMPLIES(needs_tier_up_compilation, IsByteArray(bytecode));
+  DCHECK_IMPLIES(needs_tier_up_compilation, bytecode.IsByteArray());
 
   return CompileIrregexp(isolate, re, sample_subject, is_one_byte);
 }
@@ -469,8 +467,8 @@ namespace {
 
 #ifdef DEBUG
 bool RegExpCodeIsValidForPreCompilation(Handle<JSRegExp> re, bool is_one_byte) {
-  Tagged<Object> entry = re->code(is_one_byte);
-  Tagged<Object> bytecode = re->bytecode(is_one_byte);
+  Object entry = re->code(is_one_byte);
+  Object bytecode = re->bytecode(is_one_byte);
   // If we're not using the tier-up strategy, entry can only be a smi
   // representing an uncompiled regexp here. If we're using the tier-up
   // strategy, entry can still be a smi representing an uncompiled regexp, when
@@ -481,14 +479,14 @@ bool RegExpCodeIsValidForPreCompilation(Handle<JSRegExp> re, bool is_one_byte) {
   // representing an uncompiled regexp, even though we're "recompiling" after
   // the tier-up.
   if (re->ShouldProduceBytecode()) {
-    DCHECK(IsSmi(entry));
-    DCHECK(IsSmi(bytecode));
+    DCHECK(entry.IsSmi());
+    DCHECK(bytecode.IsSmi());
     int entry_value = Smi::ToInt(entry);
     int bytecode_value = Smi::ToInt(bytecode);
     DCHECK_EQ(JSRegExp::kUninitializedValue, entry_value);
     DCHECK_EQ(JSRegExp::kUninitializedValue, bytecode_value);
   } else {
-    DCHECK(IsSmi(entry) || (IsCode(entry) && IsByteArray(bytecode)));
+    DCHECK(entry.IsSmi() || (entry.IsCode() && bytecode.IsByteArray()));
   }
 
   return true;
@@ -581,7 +579,7 @@ bool RegExpImpl::CompileIrregexp(Isolate* isolate, Handle<JSRegExp> re,
   Handle<FixedArray> data =
       Handle<FixedArray>(FixedArray::cast(re->data()), isolate);
   if (compile_data.compilation_target == RegExpCompilationTarget::kNative) {
-    Tagged<Code> code = Code::cast(*compile_data.code);
+    Code code = Code::cast(*compile_data.code);
     data->set(JSRegExp::code_index(is_one_byte), code);
 
     // Reset bytecode to uninitialized. In case we use tier-up we know that
@@ -612,33 +610,31 @@ bool RegExpImpl::CompileIrregexp(Isolate* isolate, Handle<JSRegExp> re,
            reinterpret_cast<void*>(re->ptr()),
            re->ShouldProduceBytecode() ? "bytecode" : "native code",
            re->ShouldProduceBytecode()
-               ? IrregexpByteCode(*data, is_one_byte)->AllocatedSize()
-               : IrregexpNativeCode(*data, is_one_byte)->Size());
+               ? IrregexpByteCode(*data, is_one_byte).Size()
+               : IrregexpNativeCode(*data, is_one_byte).Size());
   }
 
   return true;
 }
 
-int RegExpImpl::IrregexpMaxRegisterCount(Tagged<FixedArray> re) {
-  return Smi::ToInt(re->get(JSRegExp::kIrregexpMaxRegisterCountIndex));
+int RegExpImpl::IrregexpMaxRegisterCount(FixedArray re) {
+  return Smi::ToInt(re.get(JSRegExp::kIrregexpMaxRegisterCountIndex));
 }
 
-void RegExpImpl::SetIrregexpMaxRegisterCount(Tagged<FixedArray> re, int value) {
-  re->set(JSRegExp::kIrregexpMaxRegisterCountIndex, Smi::FromInt(value));
+void RegExpImpl::SetIrregexpMaxRegisterCount(FixedArray re, int value) {
+  re.set(JSRegExp::kIrregexpMaxRegisterCountIndex, Smi::FromInt(value));
 }
 
-int RegExpImpl::IrregexpNumberOfCaptures(Tagged<FixedArray> re) {
-  return Smi::ToInt(re->get(JSRegExp::kIrregexpCaptureCountIndex));
+int RegExpImpl::IrregexpNumberOfCaptures(FixedArray re) {
+  return Smi::ToInt(re.get(JSRegExp::kIrregexpCaptureCountIndex));
 }
 
-Tagged<ByteArray> RegExpImpl::IrregexpByteCode(Tagged<FixedArray> re,
-                                               bool is_one_byte) {
-  return ByteArray::cast(re->get(JSRegExp::bytecode_index(is_one_byte)));
+ByteArray RegExpImpl::IrregexpByteCode(FixedArray re, bool is_one_byte) {
+  return ByteArray::cast(re.get(JSRegExp::bytecode_index(is_one_byte)));
 }
 
-Tagged<Code> RegExpImpl::IrregexpNativeCode(Tagged<FixedArray> re,
-                                            bool is_one_byte) {
-  return Code::cast(re->get(JSRegExp::code_index(is_one_byte)));
+Code RegExpImpl::IrregexpNativeCode(FixedArray re, bool is_one_byte) {
+  return Code::cast(re.get(JSRegExp::code_index(is_one_byte)));
 }
 
 void RegExpImpl::IrregexpInitialize(Isolate* isolate, Handle<JSRegExp> re,
@@ -748,7 +744,7 @@ MaybeHandle<Object> RegExpImpl::IrregexpExec(
 
 #ifdef DEBUG
   if (v8_flags.trace_regexp_bytecodes && regexp->ShouldProduceBytecode()) {
-    PrintF("\n\nRegexp match:   /%s/\n\n", regexp->source()->ToCString().get());
+    PrintF("\n\nRegexp match:   /%s/\n\n", regexp->source().ToCString().get());
     PrintF("\n\nSubject string: '%s'\n\n", subject->ToCString().get());
   }
 #endif
@@ -1221,37 +1217,37 @@ int32_t* RegExpGlobalCache::LastSuccessfulMatch() {
   return &register_array_[index];
 }
 
-Tagged<Object> RegExpResultsCache::Lookup(Heap* heap, Tagged<String> key_string,
-                                          Tagged<Object> key_pattern,
-                                          Tagged<FixedArray>* last_match_cache,
-                                          ResultsCacheType type) {
-  Tagged<FixedArray> cache;
-  if (!IsInternalizedString(key_string)) return Smi::zero();
+Object RegExpResultsCache::Lookup(Heap* heap, String key_string,
+                                  Object key_pattern,
+                                  FixedArray* last_match_cache,
+                                  ResultsCacheType type) {
+  FixedArray cache;
+  if (!key_string.IsInternalizedString()) return Smi::zero();
   if (type == STRING_SPLIT_SUBSTRINGS) {
-    DCHECK(IsString(key_pattern));
-    if (!IsInternalizedString(key_pattern)) return Smi::zero();
+    DCHECK(key_pattern.IsString());
+    if (!key_pattern.IsInternalizedString()) return Smi::zero();
     cache = heap->string_split_cache();
   } else {
     DCHECK(type == REGEXP_MULTIPLE_INDICES);
-    DCHECK(IsFixedArray(key_pattern));
+    DCHECK(key_pattern.IsFixedArray());
     cache = heap->regexp_multiple_cache();
   }
 
-  uint32_t hash = key_string->hash();
+  uint32_t hash = key_string.hash();
   uint32_t index = ((hash & (kRegExpResultsCacheSize - 1)) &
                     ~(kArrayEntriesPerCacheEntry - 1));
-  if (cache->get(index + kStringOffset) != key_string ||
-      cache->get(index + kPatternOffset) != key_pattern) {
+  if (cache.get(index + kStringOffset) != key_string ||
+      cache.get(index + kPatternOffset) != key_pattern) {
     index =
         ((index + kArrayEntriesPerCacheEntry) & (kRegExpResultsCacheSize - 1));
-    if (cache->get(index + kStringOffset) != key_string ||
-        cache->get(index + kPatternOffset) != key_pattern) {
+    if (cache.get(index + kStringOffset) != key_string ||
+        cache.get(index + kPatternOffset) != key_pattern) {
       return Smi::zero();
     }
   }
 
-  *last_match_cache = FixedArray::cast(cache->get(index + kLastMatchOffset));
-  return cache->get(index + kArrayOffset);
+  *last_match_cache = FixedArray::cast(cache.get(index + kLastMatchOffset));
+  return cache.get(index + kArrayOffset);
 }
 
 void RegExpResultsCache::Enter(Isolate* isolate, Handle<String> key_string,
@@ -1261,14 +1257,14 @@ void RegExpResultsCache::Enter(Isolate* isolate, Handle<String> key_string,
                                ResultsCacheType type) {
   Factory* factory = isolate->factory();
   Handle<FixedArray> cache;
-  if (!IsInternalizedString(*key_string)) return;
+  if (!key_string->IsInternalizedString()) return;
   if (type == STRING_SPLIT_SUBSTRINGS) {
-    DCHECK(IsString(*key_pattern));
-    if (!IsInternalizedString(*key_pattern)) return;
+    DCHECK(key_pattern->IsString());
+    if (!key_pattern->IsInternalizedString()) return;
     cache = factory->string_split_cache();
   } else {
     DCHECK(type == REGEXP_MULTIPLE_INDICES);
-    DCHECK(IsFixedArray(*key_pattern));
+    DCHECK(key_pattern->IsFixedArray());
     cache = factory->regexp_multiple_cache();
   }
 
@@ -1313,9 +1309,9 @@ void RegExpResultsCache::Enter(Isolate* isolate, Handle<String> key_string,
       ReadOnlyRoots(isolate).fixed_cow_array_map());
 }
 
-void RegExpResultsCache::Clear(Tagged<FixedArray> cache) {
+void RegExpResultsCache::Clear(FixedArray cache) {
   for (int i = 0; i < kRegExpResultsCacheSize; i++) {
-    cache->set(i, Smi::zero());
+    cache.set(i, Smi::zero());
   }
 }
 

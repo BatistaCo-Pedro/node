@@ -34,8 +34,7 @@ class StackMemory {
  public:
   static StackMemory* New(Isolate* isolate) { return new StackMemory(isolate); }
 
-  // Returns a non-owning view of the current (main) stack. This may be
-  // the simulator's stack when running on the simulator.
+  // Returns a non-owning view of the current stack.
   static StackMemory* GetCurrentStackView(Isolate* isolate);
 
   ~StackMemory();
@@ -64,10 +63,10 @@ class StackMemory {
   explicit StackMemory(Isolate* isolate);
 
   // Overload to represent a view of the libc stack.
-  StackMemory(Isolate* isolate, uint8_t* limit, size_t size);
+  StackMemory(Isolate* isolate, byte* limit, size_t size);
 
   Isolate* isolate_;
-  uint8_t* limit_;
+  byte* limit_;
   size_t size_;
   bool owned_;
   JumpBuffer jmpbuf_;

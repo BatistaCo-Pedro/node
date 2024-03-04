@@ -27,7 +27,7 @@ UnifiedHeapTest::UnifiedHeapTest(
                               WrapperHelper::DefaultWrapperDescriptor()})) {
   // --stress-incremental-marking may have started an incremental GC at this
   // point already.
-  InvokeAtomicMajorGC();
+  FinalizeGCIfRunning(isolate());
   isolate()->heap()->AttachCppHeap(cpp_heap_.get());
 }
 
@@ -36,7 +36,7 @@ void UnifiedHeapTest::CollectGarbageWithEmbedderStack(
   EmbedderStackStateScope stack_scope(
       heap(), EmbedderStackStateScope::kExplicitInvocation,
       StackState::kMayContainHeapPointers);
-  InvokeMajorGC();
+  CollectGarbage(OLD_SPACE);
   if (sweeping_type == cppgc::Heap::SweepingType::kAtomic) {
     cpp_heap().AsBase().sweeper().FinishIfRunning();
   }
@@ -47,7 +47,7 @@ void UnifiedHeapTest::CollectGarbageWithoutEmbedderStack(
   EmbedderStackStateScope stack_scope(
       heap(), EmbedderStackStateScope::kExplicitInvocation,
       StackState::kNoHeapPointers);
-  InvokeMajorGC();
+  CollectGarbage(OLD_SPACE);
   if (sweeping_type == cppgc::Heap::SweepingType::kAtomic) {
     cpp_heap().AsBase().sweeper().FinishIfRunning();
   }
@@ -58,7 +58,7 @@ void UnifiedHeapTest::CollectYoungGarbageWithEmbedderStack(
   EmbedderStackStateScope stack_scope(
       heap(), EmbedderStackStateScope::kExplicitInvocation,
       StackState::kMayContainHeapPointers);
-  InvokeMinorGC();
+  CollectGarbage(NEW_SPACE);
   if (sweeping_type == cppgc::Heap::SweepingType::kAtomic) {
     cpp_heap().AsBase().sweeper().FinishIfRunning();
   }
@@ -68,7 +68,7 @@ void UnifiedHeapTest::CollectYoungGarbageWithoutEmbedderStack(
   EmbedderStackStateScope stack_scope(
       heap(), EmbedderStackStateScope::kExplicitInvocation,
       StackState::kNoHeapPointers);
-  InvokeMinorGC();
+  CollectGarbage(NEW_SPACE);
   if (sweeping_type == cppgc::Heap::SweepingType::kAtomic) {
     cpp_heap().AsBase().sweeper().FinishIfRunning();
   }
@@ -103,7 +103,7 @@ v8::Local<v8::Object> WrapperHelper::CreateWrapper(
   SetWrappableConnection(instance, wrappable_type, wrappable_object);
   CHECK(!instance.IsEmpty());
   i::Handle<i::JSReceiver> js_obj = v8::Utils::OpenHandle(*instance);
-  CHECK_EQ(i::JS_API_OBJECT_TYPE, js_obj->map()->instance_type());
+  CHECK_EQ(i::JS_API_OBJECT_TYPE, js_obj->map().instance_type());
   return scope.Escape(instance);
 }
 

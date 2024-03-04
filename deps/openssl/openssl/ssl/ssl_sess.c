@@ -198,11 +198,8 @@ SSL_SESSION *ssl_session_dup(const SSL_SESSION *src, int ticket)
     dest->references = 1;
 
     dest->lock = CRYPTO_THREAD_lock_new();
-    if (dest->lock == NULL) {
-        OPENSSL_free(dest);
-        dest = NULL;
+    if (dest->lock == NULL)
         goto err;
-    }
 
     if (!CRYPTO_new_ex_data(CRYPTO_EX_INDEX_SSL_SESSION, dest, &dest->ex_data))
         goto err;

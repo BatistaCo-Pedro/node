@@ -210,18 +210,6 @@ t.test('audit fix - bulk endpoint', async t => {
   )
 })
 
-t.test('audit fix no package lock', async t => {
-  const { npm } = await loadMockNpm(t, {
-    config: {
-      'package-lock': false,
-    },
-  })
-  await t.rejects(
-    npm.exec('audit', ['fix']),
-    { code: 'EUSAGE' }
-  )
-})
-
 t.test('completion', async t => {
   const { audit } = await loadMockNpm(t, { command: 'audit' })
   t.test('fix', async t => {
@@ -939,7 +927,7 @@ t.test('audit signatures', async t => {
     const opts = {
       baseURL: 'https://tuf-repo-cdn.sigstore.dev',
       metadataPathPrefix: '',
-      cachePath: path.join(npm.cache, '_tuf', 'tuf-repo-cdn.sigstore.dev'),
+      cachePath: path.join(npm.cache, '_tuf'),
     }
     return tufmock(target, opts)
   }
@@ -1393,7 +1381,7 @@ t.test('audit signatures', async t => {
 
     await t.rejects(
       npm.exec('audit', ['signatures']),
-      /found no dependencies to audit that were installed from a supported registry/
+      /found no dependencies to audit that where installed from a supported registry/
     )
   })
 
@@ -1424,7 +1412,7 @@ t.test('audit signatures', async t => {
 
     await t.rejects(
       npm.exec('audit', ['signatures']),
-      /found no dependencies to audit that were installed from a supported registry/
+      /found no dependencies to audit that where installed from a supported registry/
     )
   })
 
@@ -1711,12 +1699,16 @@ t.test('audit signatures', async t => {
     const { npm } = await loadMockNpm(t, {
       prefixDir: installWithMultipleDeps,
       mocks: {
-        '@sigstore/tuf': {
-          initTUF: async () => ({
-            getTarget: async () => {
-              throw new Error('error refreshing TUF metadata')
+        sigstore: {
+          sigstore: {
+            tuf: {
+              client: async () => ({
+                getTarget: async () => {
+                  throw new Error('error refreshing TUF metadata')
+                },
+              }),
             },
-          }),
+          },
         },
       },
     })
@@ -1766,7 +1758,7 @@ t.test('audit signatures', async t => {
 
     await t.rejects(
       npm.exec('audit', ['signatures']),
-      /found no dependencies to audit that were installed from a supported registry/
+      /found no dependencies to audit that where installed from a supported registry/
     )
   })
 
@@ -1787,7 +1779,7 @@ t.test('audit signatures', async t => {
 
     await t.rejects(
       npm.exec('audit', ['signatures']),
-      /found no dependencies to audit that were installed from a supported registry/
+      /found no dependencies to audit that where installed from a supported registry/
     )
   })
 
@@ -1815,7 +1807,7 @@ t.test('audit signatures', async t => {
 
     await t.rejects(
       npm.exec('audit', ['signatures']),
-      /found no dependencies to audit that were installed from a supported registry/
+      /found no dependencies to audit that where installed from a supported registry/
     )
   })
 
@@ -1844,7 +1836,7 @@ t.test('audit signatures', async t => {
 
     await t.rejects(
       npm.exec('audit', ['signatures']),
-      /found no dependencies to audit that were installed from a supported registry/
+      /found no dependencies to audit that where installed from a supported registry/
     )
   })
 
@@ -1885,7 +1877,9 @@ t.test('audit signatures', async t => {
       prefixDir: installWithValidAttestations,
       mocks: {
         pacote: t.mock('pacote', {
-          sigstore: { verify: async () => true },
+          sigstore: {
+            sigstore: { verify: async () => true },
+          },
         }),
       },
     })
@@ -1910,7 +1904,9 @@ t.test('audit signatures', async t => {
       prefixDir: installWithMultipleValidAttestations,
       mocks: {
         pacote: t.mock('pacote', {
-          sigstore: { verify: async () => true },
+          sigstore: {
+            sigstore: { verify: async () => true },
+          },
         }),
       },
     })
@@ -1941,8 +1937,10 @@ t.test('audit signatures', async t => {
       mocks: {
         pacote: t.mock('pacote', {
           sigstore: {
-            verify: async () => {
-              throw new Error(`artifact signature verification failed`)
+            sigstore: {
+              verify: async () => {
+                throw new Error(`artifact signature verification failed`)
+              },
             },
           },
         }),
@@ -1976,8 +1974,10 @@ t.test('audit signatures', async t => {
       mocks: {
         pacote: t.mock('pacote', {
           sigstore: {
-            verify: async () => {
-              throw new Error(`artifact signature verification failed`)
+            sigstore: {
+              verify: async () => {
+                throw new Error(`artifact signature verification failed`)
+              },
             },
           },
         }),
@@ -2005,8 +2005,10 @@ t.test('audit signatures', async t => {
       mocks: {
         pacote: t.mock('pacote', {
           sigstore: {
-            verify: async () => {
-              throw new Error(`artifact signature verification failed`)
+            sigstore: {
+              verify: async () => {
+                throw new Error(`artifact signature verification failed`)
+              },
             },
           },
         }),

@@ -11,9 +11,7 @@
 
 #include "src/codegen/assembler-arch.h"
 #include "src/codegen/assembler.h"
-#include "src/codegen/bailout-reason.h"
 #include "src/common/globals.h"
-#include "src/execution/frame-constants.h"
 #include "src/execution/isolate-data.h"
 #include "src/objects/tagged-index.h"
 
@@ -118,9 +116,7 @@ class V8_EXPORT_PRIVATE MacroAssembler : public MacroAssemblerBase {
   }
 
   // Jump unconditionally to given label.
-  void jmp(Label* L, Label::Distance distance = Label::kFar) {
-    Branch(L, distance);
-  }
+  void jmp(Label* L) { Branch(L); }
 
   // -------------------------------------------------------------------------
   // Debugging.
@@ -134,9 +130,6 @@ class V8_EXPORT_PRIVATE MacroAssembler : public MacroAssemblerBase {
   // Calls Abort(msg) if the condition cc is not satisfied.
   // Use --debug_code to enable.
   void Assert(Condition cc, AbortReason reason, Register rs, Operand rt);
-
-  void AssertJSAny(Register object, Register map_tmp, Register tmp,
-                   AbortReason abort_reason);
 
   // Like Assert(), but always enabled.
   void Check(Condition cc, AbortReason reason, Register rs, Operand rt);
@@ -164,14 +157,9 @@ class V8_EXPORT_PRIVATE MacroAssembler : public MacroAssemblerBase {
   void Branch(int32_t target);
   void BranchLong(Label* L);
   void Branch(Label* target, Condition cond, Register r1, const Operand& r2,
-              Label::Distance distance = Label::kFar);
-  void Branch(Label* target, Label::Distance distance) {
-    Branch(target, cc_always, zero_reg, Operand(zero_reg), distance);
-  }
+              Label::Distance near_jump = Label::kFar);
   void Branch(int32_t target, Condition cond, Register r1, const Operand& r2,
-              Label::Distance distance = Label::kFar);
-  void Branch(Label* L, Condition cond, Register rj, RootIndex index,
-              Label::Distance distance = Label::kFar);
+              Label::Distance near_jump = Label::kFar);
 #undef DECLARE_BRANCH_PROTOTYPES
 #undef COND_TYPED_ARGS
 #undef COND_ARGS
@@ -204,8 +192,8 @@ class V8_EXPORT_PRIVATE MacroAssembler : public MacroAssemblerBase {
   void BranchTrueF(Register rs, Label* target);
   void BranchFalseF(Register rs, Label* target);
 
-  void CompareTaggedAndBranch(Label* label, Condition cond, Register r1,
-                              const Operand& r2, bool need_link = false);
+  void Branch(Label* L, Condition cond, Register rs, RootIndex index);
+
   static int InstrCountForLi64Bit(int64_t value);
   inline void LiLower32BitHelper(Register rd, Operand j);
   void li_optimized(Register rd, Operand j, LiFlags mode = OPTIMIZE_SIZE);
@@ -225,14 +213,6 @@ class V8_EXPORT_PRIVATE MacroAssembler : public MacroAssemblerBase {
   void LoadFromConstantsTable(Register destination, int constant_index) final;
   void LoadRootRegisterOffset(Register destination, intptr_t offset) final;
   void LoadRootRelative(Register destination, int32_t offset) final;
-  // Operand pointing to an external reference.
-  // May emit code to set up the scratch register. The operand is
-  // only guaranteed to be correct as long as the scratch register
-  // isn't changed.
-  // If the operand is used more than once, use a scratch register
-  // that is guaranteed not to be clobbered.
-  MemOperand ExternalReferenceAsOperand(ExternalReference reference,
-                                        Register scratch);
 
   inline void GenPCRelativeJump(Register rd, int32_t imm32) {
     BlockTrampolinePoolScope block_trampoline_pool(this);
@@ -305,23 +285,17 @@ class V8_EXPORT_PRIVATE MacroAssembler : public MacroAssemblerBase {
       RelocInfo::Mode rmode = RelocInfo::INTERNAL_REFERENCE_ENCODED);
 
   // Load the code entry point from the Code object.
-  void LoadCodeInstructionStart(Register destination, Register code_object);
+  void LoadCodeEntry(Register destination, Register code_object);
   void CallCodeObject(Register code_object);
   void JumpCodeObject(Register code_object,
                       JumpMode jump_mode = JumpMode::kJump);
 
-  // Convenience functions to call/jmp to the code of a JSFunction object.
-  void CallJSFunction(Register function_object);
-  void JumpJSFunction(Register function_object,
-                      JumpMode jump_mode = JumpMode::kJump);
-
   // Load the builtin given by the Smi in |builtin| into the same
   // register.
-  // Load the builtin given by the Smi in |builtin_index| into |target|.
-  void LoadEntryFromBuiltinIndex(Register builtin_index, Register target);
+  void LoadEntryFromBuiltinIndex(Register builtin);
   void LoadEntryFromBuiltin(Builtin builtin, Register destination);
   MemOperand EntryFromBuiltinAsOperand(Builtin builtin);
-  void CallBuiltinByIndex(Register builtin_index, Register target);
+  void CallBuiltinByIndex(Register builtin);
   void CallBuiltin(Builtin builtin);
   void TailCallBuiltin(Builtin builtin);
 
@@ -352,7 +326,7 @@ class V8_EXPORT_PRIVATE MacroAssembler : public MacroAssemblerBase {
   }
   void Push(Register src) { push(src); }
   void Push(Handle<HeapObject> handle);
-  void Push(Tagged<Smi> smi);
+  void Push(Smi smi);
 
   // Push two registers. Pushes leftmost register first (to highest address).
   void Push(Register src1, Register src2) {
@@ -844,7 +818,7 @@ class V8_EXPORT_PRIVATE MacroAssembler : public MacroAssemblerBase {
   bool IsDoubleZeroRegSet() { return has_double_zero_reg_set_; }
   bool IsSingleZeroRegSet() { return has_single_zero_reg_set_; }
 
-  inline void Move(Register dst, Tagged<Smi> smi) { li(dst, Operand(smi)); }
+  inline void Move(Register dst, Smi smi) { li(dst, Operand(smi)); }
 
   inline void Move(Register dst, Register src) {
     if (dst != src) {
@@ -953,13 +927,10 @@ class V8_EXPORT_PRIVATE MacroAssembler : public MacroAssemblerBase {
 
   // Load an object from the root table.
   void LoadRoot(Register destination, RootIndex index) final;
-  void LoadTaggedRoot(Register destination, RootIndex index);
+  void LoadRoot(Register destination, RootIndex index, Condition cond,
+                Register src1, const Operand& src2);
 
   void LoadMap(Register destination, Register object);
-
-  void LoadFeedbackVector(Register dst, Register closure, Register scratch,
-                          Label* fbv_undef);
-  void LoadCompressedMap(Register dst, Register object);
 
   // If the value is a NaN, canonicalize the value else, do nothing.
   void FPUCanonicalizeNaN(const DoubleRegister dst, const DoubleRegister src);
@@ -1079,8 +1050,7 @@ class V8_EXPORT_PRIVATE MacroAssembler : public MacroAssemblerBase {
   void SmiTag(Register reg) { SmiTag(reg, reg); }
 
   // Jump the register contains a smi.
-  void JumpIfSmi(Register value, Label* smi_label,
-                 Label::Distance distance = Label::kFar);
+  void JumpIfSmi(Register value, Label* smi_label);
 
   void JumpIfEqual(Register a, int32_t b, Label* dest) {
     Branch(dest, eq, a, Operand(b));
@@ -1122,30 +1092,12 @@ class V8_EXPORT_PRIVATE MacroAssembler : public MacroAssemblerBase {
   // Compresses and stores tagged value to given on-heap location.
   void StoreTaggedField(const Register& value,
                         const MemOperand& dst_field_operand);
-  void AtomicStoreTaggedField(Register dst, const MemOperand& src);
 
   void DecompressTaggedSigned(const Register& destination,
                               const MemOperand& field_operand);
   void DecompressTagged(const Register& destination,
                         const MemOperand& field_operand);
   void DecompressTagged(const Register& destination, const Register& source);
-  void DecompressTagged(Register dst, Tagged_t immediate);
-
-  // ---------------------------------------------------------------------------
-  // V8 Sandbox support
-
-  // Transform a SandboxedPointer from/to its encoded form, which is used when
-  // the pointer is stored on the heap and ensures that the pointer will always
-  // point into the sandbox.
-  void DecodeSandboxedPointer(Register value);
-  void LoadSandboxedPointerField(Register destination,
-                                 const MemOperand& field_operand);
-  void StoreSandboxedPointerField(Register value,
-                                  const MemOperand& dst_field_operand);
-
-  void AtomicDecompressTaggedSigned(Register dst, const MemOperand& src);
-  void AtomicDecompressTagged(Register dst, const MemOperand& src);
-
   void CmpTagged(const Register& rd, const Register& rs1, const Register& rs2) {
     if (COMPRESS_POINTERS_BOOL) {
       Sub32(rd, rs1, rs2);
@@ -1177,11 +1129,6 @@ class V8_EXPORT_PRIVATE MacroAssembler : public MacroAssemblerBase {
     Sw(value, dst_field_operand);
   }
 #endif
-  // Loads a field containing off-heap pointer and does necessary decoding
-  // if sandboxed external pointers are enabled.
-  void LoadExternalPointerField(Register destination, MemOperand field_operand,
-                                ExternalPointerTag tag,
-                                Register isolate_root = no_reg);
   // Control-flow integrity:
 
   // Define a function entrypoint. This doesn't emit any code for this
@@ -1204,6 +1151,7 @@ class V8_EXPORT_PRIVATE MacroAssembler : public MacroAssemblerBase {
 
   void WasmRvvEq(VRegister dst, VRegister lhs, VRegister rhs, VSew sew,
                  Vlmul lmul);
+
   void WasmRvvNe(VRegister dst, VRegister lhs, VRegister rhs, VSew sew,
                  Vlmul lmul);
   void WasmRvvGeS(VRegister dst, VRegister lhs, VRegister rhs, VSew sew,
@@ -1214,15 +1162,22 @@ class V8_EXPORT_PRIVATE MacroAssembler : public MacroAssemblerBase {
                   Vlmul lmul);
   void WasmRvvGtU(VRegister dst, VRegister lhs, VRegister rhs, VSew sew,
                   Vlmul lmul);
-
   void WasmRvvS128const(VRegister dst, const uint8_t imms[16]);
 
   void LoadLane(int sz, VRegister dst, uint8_t laneidx, MemOperand src);
   void StoreLane(int sz, VRegister src, uint8_t laneidx, MemOperand dst);
 
   // It assumes that the arguments are located below the stack pointer.
-  void LoadReceiver(Register dest) { LoadWord(dest, MemOperand(sp, 0)); }
-  void StoreReceiver(Register rec) { StoreWord(rec, MemOperand(sp, 0)); }
+  // argc is the number of arguments not including the receiver.
+  // TODO(victorgomes): Remove this function once we stick with the reversed
+  // arguments order.
+  void LoadReceiver(Register dest, Register argc) {
+    LoadWord(dest, MemOperand(sp, 0));
+  }
+
+  void StoreReceiver(Register rec, Register argc, Register scratch) {
+    StoreWord(rec, MemOperand(sp, 0));
+  }
 
   bool IsNear(Label* L, Condition cond, int rs_reg);
 
@@ -1238,35 +1193,26 @@ class V8_EXPORT_PRIVATE MacroAssembler : public MacroAssemblerBase {
   }
 
   // Compare the object in a register to a value and jump if they are equal.
-  void JumpIfRoot(Register with, RootIndex index, Label* if_equal,
-                  Label::Distance distance = Label::kFar) {
-    Branch(if_equal, eq, with, index, distance);
+  void JumpIfRoot(Register with, RootIndex index, Label* if_equal) {
+    UseScratchRegisterScope temps(this);
+    Register scratch = temps.Acquire();
+    LoadRoot(scratch, index);
+    Branch(if_equal, eq, with, Operand(scratch));
   }
 
   // Compare the object in a register to a value and jump if they are not equal.
-  void JumpIfNotRoot(Register with, RootIndex index, Label* if_not_equal,
-                     Label::Distance distance = Label::kFar) {
-    Branch(if_not_equal, ne, with, index, distance);
+  void JumpIfNotRoot(Register with, RootIndex index, Label* if_not_equal) {
+    UseScratchRegisterScope temps(this);
+    Register scratch = temps.Acquire();
+    LoadRoot(scratch, index);
+    Branch(if_not_equal, ne, with, Operand(scratch));
   }
 
   // Checks if value is in range [lower_limit, higher_limit] using a single
   // comparison.
   void JumpIfIsInRange(Register value, unsigned lower_limit,
                        unsigned higher_limit, Label* on_in_range);
-  void JumpIfObjectType(Label* target, Condition cc, Register object,
-                        InstanceType instance_type, Register scratch = no_reg);
-  // Fast check if the object is a js receiver type. Assumes only primitive
-  // objects or js receivers are passed.
-  void JumpIfJSAnyIsNotPrimitive(
-      Register heap_object, Register scratch, Label* target,
-      Label::Distance distance = Label::kFar,
-      Condition condition = Condition::kUnsignedGreaterThanEqual);
-  void JumpIfJSAnyIsPrimitive(Register heap_object, Register scratch,
-                              Label* target,
-                              Label::Distance distance = Label::kFar) {
-    return JumpIfJSAnyIsNotPrimitive(heap_object, scratch, target, distance,
-                                     Condition::kUnsignedLessThan);
-  }
+
   // ---------------------------------------------------------------------------
   // GC Support
 
@@ -1356,8 +1302,6 @@ class V8_EXPORT_PRIVATE MacroAssembler : public MacroAssemblerBase {
   void PopStackHandler();
 
   // Tiering support.
-  void AssertFeedbackCell(Register object,
-                          Register scratch) NOOP_UNLESS_DEBUG_CODE;
   void AssertFeedbackVector(Register object,
                             Register scratch) NOOP_UNLESS_DEBUG_CODE;
   void ReplaceClosureCodeWithOptimizedCode(Register optimized_code,
@@ -1467,8 +1411,8 @@ class V8_EXPORT_PRIVATE MacroAssembler : public MacroAssemblerBase {
   Operand ClearedValue() const;
 
   // Jump if the register contains a non-smi.
-  void JumpIfNotSmi(Register value, Label* not_smi_label,
-                    Label::Distance dist = Label::kFar);
+  void JumpIfNotSmi(Register value, Label* not_smi_label);
+
   // Abort execution if argument is not a Constructor, enabled via --debug-code.
   void AssertConstructor(Register object);
 
@@ -1508,6 +1452,7 @@ class V8_EXPORT_PRIVATE MacroAssembler : public MacroAssemblerBase {
  private:
   bool has_double_zero_reg_set_ = false;
   bool has_single_zero_reg_set_ = false;
+
   // Performs a truncating conversion of a floating point number as used by
   // the JS bitwise operations. See ECMA-262 9.5: ToInt32. Goes to 'done' if it
   // succeeds, otherwise falls through if result is saturated. On return
@@ -1615,22 +1560,6 @@ struct MoveCycleState {
   // Scratch register picked by {MoveToTempLocation}.
   base::Optional<Register> scratch_reg;
 };
-
-inline MemOperand ExitFrameStackSlotOperand(int offset) {
-  static constexpr int kSPOffset = 1 * kSystemPointerSize;
-  return MemOperand(sp, kSPOffset + offset);
-}
-
-inline MemOperand ExitFrameCallerStackSlotOperand(int index) {
-  return MemOperand(fp, (ExitFrameConstants::kFixedSlotCountAboveFp + index) *
-                            kSystemPointerSize);
-}
-
-void CallApiFunctionAndReturn(MacroAssembler* masm, bool with_profiling,
-                              Register function_address,
-                              ExternalReference thunk_ref, Register thunk_arg,
-                              int stack_space, MemOperand* stack_space_operand,
-                              MemOperand return_value_operand);
 
 #define ACCESS_MASM(masm) masm->
 

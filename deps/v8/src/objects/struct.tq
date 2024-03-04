@@ -3,7 +3,8 @@
 // found in the LICENSE file.
 
 @abstract
-extern class Struct extends HeapObject {}
+extern class Struct extends HeapObject {
+}
 
 extern class Tuple2 extends Struct {
   value1: Object;

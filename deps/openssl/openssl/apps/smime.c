@@ -453,8 +453,7 @@ int smime_main(int argc, char **argv)
                              "recipient certificate file");
             if (cert == NULL)
                 goto end;
-            if (!sk_X509_push(encerts, cert))
-                goto end;
+            sk_X509_push(encerts, cert);
             cert = NULL;
             argv++;
         }

@@ -12,22 +12,21 @@
 
 namespace v8::internal::compiler::turboshaft {
 
-void PrintTurboshaftGraph(Zone* temp_zone, CodeTracer* code_tracer,
-                          const char* phase_name) {
-  const PipelineData& data = PipelineData::Get();
-  if (data.info()->trace_turbo_json()) {
-    UnparkedScopeIfNeeded scope(data.broker());
+void PrintTurboshaftGraph(PipelineData* data, Zone* temp_zone,
+                          CodeTracer* code_tracer, const char* phase_name) {
+  if (data->info()->trace_turbo_json()) {
+    UnparkedScopeIfNeeded scope(data->broker());
     AllowHandleDereference allow_deref;
-    turboshaft::Graph& graph = data.graph();
+    turboshaft::Graph& graph = data->graph();
 
     {
-      TurboJsonFile json_of(data.info(), std::ios_base::app);
+      TurboJsonFile json_of(data->info(), std::ios_base::app);
       json_of << "{\"name\":\"" << phase_name
               << "\",\"type\":\"turboshaft_graph\",\"data\":"
-              << AsJSON(graph, data.node_origins(), temp_zone) << "},\n";
+              << AsJSON(graph, data->node_origins(), temp_zone) << "},\n";
     }
     PrintTurboshaftCustomDataPerOperation(
-        data.info(), "Properties", graph,
+        data->info(), "Properties", graph,
         [](std::ostream& stream, const turboshaft::Graph& graph,
            turboshaft::OpIndex index) -> bool {
           const auto& op = graph.Get(index);
@@ -35,7 +34,7 @@ void PrintTurboshaftGraph(Zone* temp_zone, CodeTracer* code_tracer,
           return true;
         });
     PrintTurboshaftCustomDataPerOperation(
-        data.info(), "Types", graph,
+        data->info(), "Types", graph,
         [](std::ostream& stream, const turboshaft::Graph& graph,
            turboshaft::OpIndex index) -> bool {
           turboshaft::Type type = graph.operation_types()[index];
@@ -46,16 +45,15 @@ void PrintTurboshaftGraph(Zone* temp_zone, CodeTracer* code_tracer,
           return false;
         });
     PrintTurboshaftCustomDataPerOperation(
-        data.info(), "Use Count (saturated)", graph,
+        data->info(), "Use Count (saturated)", graph,
         [](std::ostream& stream, const turboshaft::Graph& graph,
            turboshaft::OpIndex index) -> bool {
-          stream << static_cast<int>(
-              graph.Get(index).saturated_use_count.Get());
+          stream << static_cast<int>(graph.Get(index).saturated_use_count);
           return true;
         });
 #ifdef DEBUG
     PrintTurboshaftCustomDataPerBlock(
-        data.info(), "Type Refinements", graph,
+        data->info(), "Type Refinements", graph,
         [](std::ostream& stream, const turboshaft::Graph& graph,
            turboshaft::BlockIndex index) -> bool {
           const std::vector<std::pair<turboshaft::OpIndex, turboshaft::Type>>&
@@ -70,14 +68,14 @@ void PrintTurboshaftGraph(Zone* temp_zone, CodeTracer* code_tracer,
 #endif  // DEBUG
   }
 
-  if (data.info()->trace_turbo_graph()) {
+  if (data->info()->trace_turbo_graph()) {
     DCHECK(code_tracer);
-    UnparkedScopeIfNeeded scope(data.broker());
+    UnparkedScopeIfNeeded scope(data->broker());
     AllowHandleDereference allow_deref;
 
     CodeTracer::StreamScope tracing_scope(code_tracer);
     tracing_scope.stream() << "\n----- " << phase_name << " -----\n"
-                           << data.graph();
+                           << data->graph();
   }
 }
 

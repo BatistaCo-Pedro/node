@@ -115,8 +115,8 @@ TEST(RISCV_SIMPLE2) {
   assm.GetCode(isolate, &desc);
   Handle<Code> code =
       Factory::CodeBuilder(isolate, desc, CodeKind::FOR_TESTING).Build();
-#ifdef OBJECT_PRINT
-  Print(*code);
+#ifdef DEBUG
+  code->Print();
 #endif
   auto f = GeneratedCode<F1>::FromCode(isolate, *code);
   int64_t res = reinterpret_cast<int64_t>(f.Call(100, 0, 0, 0, 0));

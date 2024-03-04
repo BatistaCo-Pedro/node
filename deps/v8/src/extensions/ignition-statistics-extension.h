@@ -23,7 +23,7 @@ class IgnitionStatisticsExtension : public v8::Extension {
       v8::Isolate* isolate, v8::Local<v8::String> name) override;
 
   static void GetIgnitionDispatchCounters(
-      const v8::FunctionCallbackInfo<v8::Value>& info);
+      const v8::FunctionCallbackInfo<v8::Value>& args);
 
  private:
   static const char* const kSource;

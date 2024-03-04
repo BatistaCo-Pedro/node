@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// Flags: --experimental-value-unavailable
 
 function dbg(x) {
   debugger;
@@ -34,11 +33,7 @@ Debug.setListener(function(event, exec_state, event_data, data) {
   for (var i = 0; i < exec_state.frameCount(); i++) {
     var f = exec_state.frame(i);
     for (var j = 0; j < f.localCount(); j++) {
-      if (f.localValue(j).isUnavailable()) {
-        print(`${f.localName(j)} is unavailable`);
-      } else {
-        print("'" + f.localName(j) + "' = " + f.localValue(j).value());
-      }
+      print("'" + f.localName(j) + "' = " + f.localValue(j).value());
     }
   }
 });

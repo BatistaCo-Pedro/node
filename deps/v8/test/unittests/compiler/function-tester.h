@@ -31,6 +31,7 @@ class FunctionTester {
   explicit FunctionTester(Isolate* i_isolate, Handle<InstructionStream> code);
 
   Isolate* isolate;
+  CanonicalHandleScope canonical;
   Handle<JSFunction> function;
 
   MaybeHandle<Object> Call() {
@@ -141,9 +142,12 @@ class FunctionTester {
 
   // Takes a JSFunction and runs it through the test version of the optimizing
   // pipeline, allocating the temporary compilation artifacts in a given Zone.
-  // For possible {flags} values, look at OptimizedCompilationInfo::Flag.
-  Handle<JSFunction> Optimize(Handle<JSFunction> function, Zone* zone,
-                              uint32_t flags);
+  // For possible {flags} values, look at OptimizedCompilationInfo::Flag.  If
+  // {out_broker} is not nullptr, returns the JSHeapBroker via that
+  // (transferring ownership to the caller).
+  Handle<JSFunction> Optimize(
+      Handle<JSFunction> function, Zone* zone, uint32_t flags,
+      std::unique_ptr<compiler::JSHeapBroker>* out_broker = nullptr);
 };
 
 }  // namespace compiler

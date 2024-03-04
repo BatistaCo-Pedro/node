@@ -136,6 +136,7 @@
     'uv_sources_android': [
       'src/unix/linux.c',
       'src/unix/procfs-exepath.c',
+      'src/unix/pthread-fixes.c',
       'src/unix/random-getentropy.c',
       'src/unix/random-getrandom.c',
       'src/unix/random-sysctl-linux.c',
@@ -397,6 +398,7 @@
         }],
         ['OS=="zos"', {
           'sources': [
+            'src/unix/pthread-fixes.c',
             'src/unix/os390.c',
             'src/unix/os390-syscalls.c'
           ]

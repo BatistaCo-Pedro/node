@@ -25,8 +25,12 @@ struct RecreateScheduleResult {
   Schedule* schedule;
 };
 
-RecreateScheduleResult RecreateSchedule(CallDescriptor* call_descriptor,
-                                        Zone* phase_zone);
+RecreateScheduleResult RecreateSchedule(const Graph& graph,
+                                        JSHeapBroker* broker,
+                                        CallDescriptor* call_descriptor,
+                                        Zone* graph_zone, Zone* phase_zone,
+                                        SourcePositionTable* source_positions,
+                                        NodeOriginTable* origins);
 
 }  // namespace v8::internal::compiler::turboshaft
 

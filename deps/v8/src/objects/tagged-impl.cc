@@ -25,8 +25,8 @@ bool CheckObjectComparisonAllowed(Address a, Address b) {
   if (!HAS_STRONG_HEAP_OBJECT_TAG(a) || !HAS_STRONG_HEAP_OBJECT_TAG(b)) {
     return true;
   }
-  Tagged<HeapObject> obj_a = HeapObject::unchecked_cast(Tagged<Object>(a));
-  Tagged<HeapObject> obj_b = HeapObject::unchecked_cast(Tagged<Object>(b));
+  HeapObject obj_a = HeapObject::unchecked_cast(Object(a));
+  HeapObject obj_b = HeapObject::unchecked_cast(Object(b));
   // This check might fail when we try to compare InstructionStream object with
   // non-InstructionStream object. The main legitimate case when such "mixed"
   // comparison could happen is comparing two AbstractCode objects. If that's
@@ -38,72 +38,49 @@ bool CheckObjectComparisonAllowed(Address a, Address b) {
 #endif  // V8_EXTERNAL_CODE_SPACE
 
 template <HeapObjectReferenceType kRefType, typename StorageType>
-void ShortPrint(TaggedImpl<kRefType, StorageType> ptr, FILE* out) {
+void TaggedImpl<kRefType, StorageType>::ShortPrint(FILE* out) {
   OFStream os(out);
-  os << Brief(ptr);
+  os << Brief(*this);
 }
-template EXPORT_TEMPLATE_DEFINE(V8_EXPORT_PRIVATE) void ShortPrint(
-    TaggedImpl<HeapObjectReferenceType::STRONG, Address> ptr, FILE* out);
-template EXPORT_TEMPLATE_DEFINE(V8_EXPORT_PRIVATE) void ShortPrint(
-    TaggedImpl<HeapObjectReferenceType::WEAK, Address> ptr, FILE* out);
 
 template <HeapObjectReferenceType kRefType, typename StorageType>
-void ShortPrint(TaggedImpl<kRefType, StorageType> ptr,
-                StringStream* accumulator) {
+void TaggedImpl<kRefType, StorageType>::ShortPrint(StringStream* accumulator) {
   std::ostringstream os;
-  os << Brief(ptr);
+  os << Brief(*this);
   accumulator->Add(os.str().c_str());
 }
-template EXPORT_TEMPLATE_DEFINE(V8_EXPORT_PRIVATE) void ShortPrint(
-    TaggedImpl<HeapObjectReferenceType::STRONG, Address> ptr,
-    StringStream* accumulator);
-template EXPORT_TEMPLATE_DEFINE(V8_EXPORT_PRIVATE) void ShortPrint(
-    TaggedImpl<HeapObjectReferenceType::WEAK, Address> ptr,
-    StringStream* accumulator);
 
 template <HeapObjectReferenceType kRefType, typename StorageType>
-void ShortPrint(TaggedImpl<kRefType, StorageType> ptr, std::ostream& os) {
-  os << Brief(ptr);
+void TaggedImpl<kRefType, StorageType>::ShortPrint(std::ostream& os) {
+  os << Brief(*this);
 }
-template EXPORT_TEMPLATE_DEFINE(V8_EXPORT_PRIVATE) void ShortPrint(
-    TaggedImpl<HeapObjectReferenceType::STRONG, Address> ptr, std::ostream& os);
-template EXPORT_TEMPLATE_DEFINE(V8_EXPORT_PRIVATE) void ShortPrint(
-    TaggedImpl<HeapObjectReferenceType::WEAK, Address> ptr, std::ostream& os);
 
 #ifdef OBJECT_PRINT
 template <HeapObjectReferenceType kRefType, typename StorageType>
-void Print(TaggedImpl<kRefType, StorageType> ptr) {
+void TaggedImpl<kRefType, StorageType>::Print() {
   StdoutStream os;
-  Print(ptr, os);
+  this->Print(os);
   os << std::flush;
 }
-template EXPORT_TEMPLATE_DEFINE(V8_EXPORT_PRIVATE) void Print(
-    TaggedImpl<HeapObjectReferenceType::STRONG, Address> ptr);
-template EXPORT_TEMPLATE_DEFINE(V8_EXPORT_PRIVATE) void Print(
-    TaggedImpl<HeapObjectReferenceType::WEAK, Address> ptr);
 
 template <HeapObjectReferenceType kRefType, typename StorageType>
-void Print(TaggedImpl<kRefType, StorageType> ptr, std::ostream& os) {
-  Tagged<Smi> smi;
-  Tagged<HeapObject> heap_object;
-  if (ptr.ToSmi(&smi)) {
+void TaggedImpl<kRefType, StorageType>::Print(std::ostream& os) {
+  Smi smi(0);
+  HeapObject heap_object;
+  if (ToSmi(&smi)) {
     os << "Smi: " << std::hex << "0x" << smi.value();
     os << std::dec << " (" << smi.value() << ")\n";
-  } else if (ptr.IsCleared()) {
+  } else if (IsCleared()) {
     os << "[cleared]";
-  } else if (ptr.GetHeapObjectIfWeak(&heap_object)) {
+  } else if (GetHeapObjectIfWeak(&heap_object)) {
     os << "[weak] ";
-    heap_object->HeapObjectPrint(os);
-  } else if (ptr.GetHeapObjectIfStrong(&heap_object)) {
-    heap_object->HeapObjectPrint(os);
+    heap_object.HeapObjectPrint(os);
+  } else if (GetHeapObjectIfStrong(&heap_object)) {
+    heap_object.HeapObjectPrint(os);
   } else {
     UNREACHABLE();
   }
 }
-template EXPORT_TEMPLATE_DEFINE(V8_EXPORT_PRIVATE) void Print(
-    TaggedImpl<HeapObjectReferenceType::STRONG, Address> ptr, std::ostream& os);
-template EXPORT_TEMPLATE_DEFINE(V8_EXPORT_PRIVATE) void Print(
-    TaggedImpl<HeapObjectReferenceType::WEAK, Address> ptr, std::ostream& os);
 #endif  // OBJECT_PRINT
 
 // Explicit instantiation declarations.

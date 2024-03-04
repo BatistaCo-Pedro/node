@@ -56,7 +56,7 @@ class DictionaryTest : public TestWithHeapInternalsAndContext {
     CHECK_EQ(table->Lookup(b), roots.the_hole_value());
 
     // Keys still have to be valid after objects were moved.
-    InvokeMinorGC();
+    CollectGarbage(NEW_SPACE);
     CHECK_EQ(1, table->NumberOfElements());
     CHECK_EQ(table->Lookup(a), *b);
     CHECK_EQ(table->Lookup(b), roots.the_hole_value());
@@ -82,17 +82,17 @@ class DictionaryTest : public TestWithHeapInternalsAndContext {
       CHECK_EQ(table->NumberOfElements(), i + 1);
       CHECK(table->FindEntry(isolate(), key).is_found());
       CHECK_EQ(table->Lookup(key), *value);
-      CHECK(IsSmi(key->GetIdentityHash()));
+      CHECK(key->GetIdentityHash().IsSmi());
     }
 
     // Keys never added to the map which already have an identity hash
     // code should not be found.
     for (int i = 0; i < 100; i++) {
       Handle<JSReceiver> key = factory->NewJSArray(7);
-      CHECK(IsSmi(key->GetOrCreateIdentityHash(isolate())));
+      CHECK(key->GetOrCreateIdentityHash(isolate()).IsSmi());
       CHECK(table->FindEntry(isolate(), key).is_not_found());
       CHECK_EQ(table->Lookup(key), roots.the_hole_value());
-      CHECK(IsSmi(key->GetIdentityHash()));
+      CHECK(key->GetIdentityHash().IsSmi());
     }
 
     // Keys that don't have an identity hash should not be found and also
@@ -100,7 +100,7 @@ class DictionaryTest : public TestWithHeapInternalsAndContext {
     for (int i = 0; i < 100; i++) {
       Handle<JSReceiver> key = factory->NewJSArray(7);
       CHECK_EQ(table->Lookup(key), roots.the_hole_value());
-      Tagged<Object> identity_hash = key->GetIdentityHash();
+      Object identity_hash = key->GetIdentityHash();
       CHECK_EQ(roots.undefined_value(), identity_hash);
     }
   }
@@ -117,7 +117,7 @@ class DictionaryTest : public TestWithHeapInternalsAndContext {
     CHECK(!table->Has(isolate(), b));
 
     // Keys still have to be valid after objects were moved.
-    InvokeMinorGC();
+    CollectGarbage(NEW_SPACE);
     CHECK_EQ(1, table->NumberOfElements());
     CHECK(table->Has(isolate(), a));
     CHECK(!table->Has(isolate(), b));
@@ -144,16 +144,16 @@ class DictionaryTest : public TestWithHeapInternalsAndContext {
       table = HashSet::Add(isolate(), table, key);
       CHECK_EQ(table->NumberOfElements(), i + 2);
       CHECK(table->Has(isolate(), key));
-      CHECK(IsSmi(key->GetIdentityHash()));
+      CHECK(key->GetIdentityHash().IsSmi());
     }
 
     // Keys never added to the map which already have an identity hash
     // code should not be found.
     for (int i = 0; i < 100; i++) {
       Handle<JSReceiver> key = factory->NewJSArray(7);
-      CHECK(IsSmi(key->GetOrCreateIdentityHash(isolate())));
+      CHECK(key->GetOrCreateIdentityHash(isolate()).IsSmi());
       CHECK(!table->Has(isolate(), key));
-      CHECK(IsSmi(key->GetIdentityHash()));
+      CHECK(key->GetIdentityHash().IsSmi());
     }
 
     // Keys that don't have an identity hash should not be found and also
@@ -161,7 +161,7 @@ class DictionaryTest : public TestWithHeapInternalsAndContext {
     for (int i = 0; i < 100; i++) {
       Handle<JSReceiver> key = factory->NewJSArray(7);
       CHECK(!table->Has(isolate(), key));
-      Tagged<Object> identity_hash = key->GetIdentityHash();
+      Object identity_hash = key->GetIdentityHash();
       CHECK_EQ(ReadOnlyRoots(heap()).undefined_value(), identity_hash);
     }
   }
@@ -210,7 +210,7 @@ class DictionaryTest : public TestWithHeapInternalsAndContext {
     SimulateFullSpace(heap()->old_space());
 
     // Calling Lookup() should not cause GC ever.
-    CHECK(IsTheHole(table->Lookup(key), isolate()));
+    CHECK(table->Lookup(key).IsTheHole(isolate()));
 
     // Calling Put() should request GC by returning a failure.
     int gc_count = heap()->gc_count();
@@ -228,31 +228,21 @@ TEST_F(DictionaryTest, HashSet) {
   TestHashSet(ObjectHashSet::New(isolate(), 23));
 }
 
-class ObjectHashTableTest {
+class ObjectHashTableTest : public ObjectHashTable {
  public:
-  explicit ObjectHashTableTest(Tagged<ObjectHashTable> o) : table_(o) {}
-
-  // For every object, add a `->` operator which returns a pointer to this
-  // object. This will allow smoother transition between T and Tagged<T>.
-  ObjectHashTableTest* operator->() { return this; }
-  const ObjectHashTableTest* operator->() const { return this; }
+  explicit ObjectHashTableTest(ObjectHashTable o) : ObjectHashTable(o) {}
 
   void insert(InternalIndex entry, int key, int value) {
-    table_->set(table_->EntryToIndex(entry), Smi::FromInt(key));
-    table_->set(table_->EntryToIndex(entry) + 1, Smi::FromInt(value));
+    set(EntryToIndex(entry), Smi::FromInt(key));
+    set(EntryToIndex(entry) + 1, Smi::FromInt(value));
   }
 
   int lookup(int key, Isolate* isolate) {
     Handle<Object> key_obj(Smi::FromInt(key), isolate);
-    return Smi::ToInt(table_->Lookup(key_obj));
+    return Smi::ToInt(Lookup(key_obj));
   }
 
-  int capacity() { return table_->Capacity(); }
-
-  void Rehash(Isolate* isolate) { table_->Rehash(isolate); }
-
- private:
-  Tagged<ObjectHashTable> table_;
+  int capacity() { return Capacity(); }
 };
 
 TEST_F(DictionaryTest, HashTableRehash) {
@@ -260,26 +250,26 @@ TEST_F(DictionaryTest, HashTableRehash) {
   {
     Handle<ObjectHashTable> table = ObjectHashTable::New(isolate(), 100);
     ObjectHashTableTest t(*table);
-    int capacity = t->capacity();
+    int capacity = t.capacity();
     for (int i = 0; i < capacity - 1; i++) {
-      t->insert(InternalIndex(i), i * i, i);
+      t.insert(InternalIndex(i), i * i, i);
     }
-    t->Rehash(isolate());
+    t.Rehash(isolate());
     for (int i = 0; i < capacity - 1; i++) {
-      CHECK_EQ(i, t->lookup(i * i, isolate()));
+      CHECK_EQ(i, t.lookup(i * i, isolate()));
     }
   }
   // Test half-filled table.
   {
     Handle<ObjectHashTable> table = ObjectHashTable::New(isolate(), 100);
     ObjectHashTableTest t(*table);
-    int capacity = t->capacity();
+    int capacity = t.capacity();
     for (int i = 0; i < capacity / 2; i++) {
-      t->insert(InternalIndex(i), i * i, i);
+      t.insert(InternalIndex(i), i * i, i);
     }
-    t->Rehash(isolate());
+    t.Rehash(isolate());
     for (int i = 0; i < capacity / 2; i++) {
-      CHECK_EQ(i, t->lookup(i * i, isolate()));
+      CHECK_EQ(i, t.lookup(i * i, isolate()));
     }
   }
 }

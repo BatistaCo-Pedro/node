@@ -18,7 +18,7 @@ RUNTIME_FUNCTION(Runtime_ArrayBufferDetach) {
   HandleScope scope(isolate);
   // This runtime function is exposed in ClusterFuzz and as such has to
   // support arbitrary arguments.
-  if (args.length() < 1 || !IsJSArrayBuffer(*args.at(0))) {
+  if (args.length() < 1 || !args.at(0)->IsJSArrayBuffer()) {
     THROW_NEW_ERROR_RETURN_FAILURE(
         isolate, NewTypeError(MessageTemplate::kNotTypedArray));
   }
@@ -37,7 +37,7 @@ RUNTIME_FUNCTION(Runtime_ArrayBufferSetDetachKey) {
   Handle<Object> key = args.at(1);
   // This runtime function is exposed in ClusterFuzz and as such has to
   // support arbitrary arguments.
-  if (!IsJSArrayBuffer(*argument)) {
+  if (!argument->IsJSArrayBuffer()) {
     THROW_NEW_ERROR_RETURN_FAILURE(
         isolate, NewTypeError(MessageTemplate::kNotTypedArray));
   }
@@ -120,7 +120,7 @@ RUNTIME_FUNCTION(Runtime_TypedArraySortFast) {
   // In case of a SAB, the data is copied into temporary memory, as
   // std::sort might crash in case the underlying data is concurrently
   // modified while sorting.
-  CHECK(IsJSArrayBuffer(array->buffer()));
+  CHECK(array->buffer().IsJSArrayBuffer());
   Handle<JSArrayBuffer> buffer(JSArrayBuffer::cast(array->buffer()), isolate);
   const bool copy_data = buffer->is_shared();
 

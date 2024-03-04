@@ -16,8 +16,7 @@ class Isolate;
 
 struct WrappableInfo final {
  public:
-  static V8_INLINE base::Optional<WrappableInfo> From(Isolate*,
-                                                      Tagged<JSObject>,
+  static V8_INLINE base::Optional<WrappableInfo> From(Isolate*, JSObject,
                                                       const WrapperDescriptor&);
   static V8_INLINE base::Optional<WrappableInfo> From(
       Isolate*, const EmbedderDataSlot& type_slot,

@@ -28,12 +28,9 @@ class UnaryOpAssemblerImpl final : public CodeStubAssembler {
     TVARIABLE(BigInt, var_bigint);
     TVARIABLE(Object, var_result);
     Label if_number(this), if_bigint(this, Label::kDeferred), out(this);
-    LazyNode<HeapObject> get_vector = [&]() { return maybe_feedback_vector; };
-    FeedbackValues feedback = {&var_feedback, &get_vector, &slot,
-                               update_feedback_mode};
     TaggedToWord32OrBigIntWithFeedback(context, value, &if_number, &var_word32,
                                        &if_bigint, nullptr, &var_bigint,
-                                       feedback);
+                                       &var_feedback);
 
     // Number case.
     BIND(&if_number);
@@ -140,10 +137,8 @@ class UnaryOpAssemblerImpl final : public CodeStubAssembler {
     TVARIABLE(Object, var_result);
     TVARIABLE(Float64T, var_float_value);
     TVARIABLE(Smi, var_feedback, SmiConstant(BinaryOperationFeedback::kNone));
-    TVARIABLE(Object, var_exception);
     Label start(this, {&var_value, &var_feedback}), end(this);
     Label do_float_op(this, &var_float_value);
-    Label if_exception(this, Label::kDeferred);
     Goto(&start);
     // We might have to try again after ToNumeric conversion.
     BIND(&start);
@@ -204,21 +199,10 @@ class UnaryOpAssemblerImpl final : public CodeStubAssembler {
         CSA_DCHECK(this, SmiEqual(var_feedback.value(),
                                   SmiConstant(BinaryOperationFeedback::kNone)));
         OverwriteFeedback(&var_feedback, BinaryOperationFeedback::kAny);
-        {
-          ScopedExceptionHandler handler(this, &if_exception, &var_exception);
-          var_value = CallBuiltin(Builtin::kNonNumberToNumeric, context,
-                                  value_heap_object);
-        }
+        var_value = CallBuiltin(Builtin::kNonNumberToNumeric, context,
+                                value_heap_object);
         Goto(&start);
       }
-    }
-
-    BIND(&if_exception);
-    {
-      UpdateFeedback(var_feedback.value(), maybe_feedback_vector, slot,
-                     update_feedback_mode);
-      CallRuntime(Runtime::kReThrow, context, var_exception.value());
-      Unreachable();
     }
 
     BIND(&do_float_op);

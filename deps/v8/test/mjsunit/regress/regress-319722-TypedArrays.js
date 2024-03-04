@@ -28,16 +28,23 @@
 // Flags: --allow-natives-syntax --mock-arraybuffer-allocator
 
 let kArrayBufferByteLengthLimit = %ArrayBufferMaxByteLength() + 1;
+let kTypedArrayLengthLimit = %TypedArrayMaxLength() + 1;
 
 function TestArray(constr, elementSize) {
-  assertEquals(elementSize, constr.BYTES_PER_ELEMENT);
   assertEquals(kArrayBufferByteLengthLimit % elementSize, 0);
-  let ta_limit = kArrayBufferByteLengthLimit / elementSize;
+  let bufferSizeLength = kArrayBufferByteLengthLimit / elementSize;
 
-  assertThrows(() => new constr(ta_limit), RangeError);
+  let minUnallocatableSize =
+      kTypedArrayLengthLimit < bufferSizeLength
+        ? kTypedArrayLengthLimit
+        : bufferSizeLength;
+
+  assertThrows(function() {
+    new constr(minUnallocatableSize);
+  }, RangeError);
 
   // This one must succeed.
-  new constr(ta_limit - 1);
+  new constr(minUnallocatableSize - 1);
 }
 
 TestArray(Uint8Array, 1);

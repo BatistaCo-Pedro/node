@@ -524,25 +524,22 @@ TF_BUILTIN(AtomicsExchange, SharedArrayBufferBuiltinsAssembler) {
 
 // https://tc39.es/ecma262/#sec-atomics.compareexchange
 TF_BUILTIN(AtomicsCompareExchange, SharedArrayBufferBuiltinsAssembler) {
-  auto maybe_array_or_shared_object =
-      Parameter<Object>(Descriptor::kArrayOrSharedObject);
-  auto index_or_field_name = Parameter<Object>(Descriptor::kIndexOrFieldName);
+  auto maybe_array = Parameter<Object>(Descriptor::kArray);
+  auto index = Parameter<Object>(Descriptor::kIndex);
   auto old_value = Parameter<Object>(Descriptor::kOldValue);
   auto new_value = Parameter<Object>(Descriptor::kNewValue);
   auto context = Parameter<Context>(Descriptor::kContext);
 
   // 1. Let buffer be ? ValidateIntegerTypedArray(typedArray).
-  Label detached_or_out_of_bounds(this), is_shared_struct_or_shared_array(this);
+  Label detached_or_out_of_bounds(this);
   TNode<Int32T> elements_kind;
   TNode<RawPtrT> backing_store;
-  ValidateIntegerTypedArray(
-      maybe_array_or_shared_object, context, &elements_kind, &backing_store,
-      &detached_or_out_of_bounds, &is_shared_struct_or_shared_array);
-  TNode<JSTypedArray> array = CAST(maybe_array_or_shared_object);
+  ValidateIntegerTypedArray(maybe_array, context, &elements_kind,
+                            &backing_store, &detached_or_out_of_bounds);
+  TNode<JSTypedArray> array = CAST(maybe_array);
 
   // 2. Let i be ? ValidateAtomicAccess(typedArray, index).
-  TNode<UintPtrT> index_word =
-      ValidateAtomicAccess(array, index_or_field_name, context);
+  TNode<UintPtrT> index_word = ValidateAtomicAccess(array, index, context);
 
 #if V8_TARGET_ARCH_MIPS64
   TNode<Number> index_number = ChangeUintPtrToTagged(index_word);
@@ -669,13 +666,6 @@ TF_BUILTIN(AtomicsCompareExchange, SharedArrayBufferBuiltinsAssembler) {
   {
     ThrowTypeError(context, MessageTemplate::kDetachedOperation,
                    "Atomics.store");
-  }
-
-  BIND(&is_shared_struct_or_shared_array);
-  {
-    Return(CallRuntime(Runtime::kAtomicsCompareExchangeSharedStructOrArray,
-                       context, maybe_array_or_shared_object,
-                       index_or_field_name, old_value, new_value));
   }
 }
 

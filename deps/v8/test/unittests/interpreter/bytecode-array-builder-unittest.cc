@@ -274,8 +274,7 @@ TEST_F(BytecodeArrayBuilderTest, AllBytecodesGenerated) {
       .CompareNull();
 
   // Emit conversion operator invocations.
-  builder.ToNumber(1).ToNumeric(1).ToObject(reg).ToName().ToString().ToBoolean(
-      ToBooleanMode::kConvertToBoolean);
+  builder.ToNumber(1).ToNumeric(1).ToObject(reg).ToName(reg).ToString();
 
   // Emit GetSuperConstructor.
   builder.GetSuperConstructor(reg);
@@ -518,7 +517,7 @@ TEST_F(BytecodeArrayBuilderTest, FrameSizesLookGood) {
         builder.StoreAccumulatorInRegister(temp);
         // Ensure temporaries are used so not optimized away by the
         // register optimizer.
-        builder.ToName().StoreAccumulatorInRegister(temp);
+        builder.ToName(temp);
       }
       builder.Return();
 
@@ -573,7 +572,7 @@ TEST_F(BytecodeArrayBuilderTest, Constants) {
   ast_factory.Internalize(isolate());
   Handle<BytecodeArray> array = builder.ToBytecodeArray(isolate());
   // Should only have one entry for each identical constant.
-  EXPECT_EQ(4, array->constant_pool()->length());
+  EXPECT_EQ(4, array->constant_pool().length());
 }
 
 TEST_F(BytecodeArrayBuilderTest, ForwardJumps) {

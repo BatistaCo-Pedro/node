@@ -14,12 +14,12 @@ namespace v8 {
 namespace internal {
 
 struct Ephemeron {
-  Tagged<HeapObject> key;
-  Tagged<HeapObject> value;
+  HeapObject key;
+  HeapObject value;
 };
 
-using HeapObjectAndSlot = std::pair<Tagged<HeapObject>, HeapObjectSlot>;
-using HeapObjectAndCode = std::pair<Tagged<HeapObject>, Tagged<Code>>;
+using HeapObjectAndSlot = std::pair<HeapObject, HeapObjectSlot>;
+using HeapObjectAndCode = std::pair<HeapObject, Code>;
 class EphemeronHashTable;
 class JSFunction;
 class SharedFunctionInfo;
@@ -35,10 +35,10 @@ class TransitionArray;
 // If you add a new entry, then you also need to implement the corresponding
 // Update*() function in the cc file for updating pointers after Scavenge.
 #define WEAK_OBJECT_WORKLISTS(F)                                             \
-  F(Tagged<TransitionArray>, transition_arrays, TransitionArrays)            \
+  F(TransitionArray, transition_arrays, TransitionArrays)                    \
   /* Keep track of all EphemeronHashTables in the heap to process            \
      them in the atomic pause. */                                            \
-  F(Tagged<EphemeronHashTable>, ephemeron_hash_tables, EphemeronHashTables)  \
+  F(EphemeronHashTable, ephemeron_hash_tables, EphemeronHashTables)          \
   /* Keep track of all ephemerons for concurrent marking tasks. Only store   \
      ephemerons in these worklists if both (key, value) are unreachable at   \
      the moment.                                                             \
@@ -55,13 +55,11 @@ class TransitionArray;
      Optimize this by adding a different storage for old space. */           \
   F(HeapObjectAndSlot, weak_references, WeakReferences)                      \
   F(HeapObjectAndCode, weak_objects_in_code, WeakObjectsInCode)              \
-  F(Tagged<JSWeakRef>, js_weak_refs, JSWeakRefs)                             \
-  F(Tagged<WeakCell>, weak_cells, WeakCells)                                 \
-  F(Tagged<SharedFunctionInfo>, code_flushing_candidates,                    \
-    CodeFlushingCandidates)                                                  \
-  F(Tagged<JSFunction>, baseline_flushing_candidates,                        \
-    BaselineFlushingCandidates)                                              \
-  F(Tagged<JSFunction>, flushed_js_functions, FlushedJSFunctions)
+  F(JSWeakRef, js_weak_refs, JSWeakRefs)                                     \
+  F(WeakCell, weak_cells, WeakCells)                                         \
+  F(SharedFunctionInfo, code_flushing_candidates, CodeFlushingCandidates)    \
+  F(JSFunction, baseline_flushing_candidates, BaselineFlushingCandidates)    \
+  F(JSFunction, flushed_js_functions, FlushedJSFunctions)
 
 class WeakObjects final {
  private:
@@ -98,7 +96,7 @@ class WeakObjects final {
 
 #ifdef DEBUG
   template <typename Type>
-  static bool ContainsYoungObjects(WeakObjectWorklist<Tagged<Type>>& worklist);
+  static bool ContainsYoungObjects(WeakObjectWorklist<Type>& worklist);
 #endif
 };
 

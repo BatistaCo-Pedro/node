@@ -25,43 +25,6 @@ class HeapInternalsBase {
                        std::vector<Handle<FixedArray>>* out_handles = nullptr);
 };
 
-inline void InvokeMajorGC(i::Isolate* isolate) {
-  isolate->heap()->CollectGarbage(OLD_SPACE, GarbageCollectionReason::kTesting);
-}
-
-inline void InvokeMajorGC(i::Isolate* isolate, GCFlag gc_flag) {
-  isolate->heap()->CollectAllGarbage(gc_flag,
-                                     GarbageCollectionReason::kTesting);
-}
-
-inline void InvokeMinorGC(i::Isolate* isolate) {
-  isolate->heap()->CollectGarbage(NEW_SPACE, GarbageCollectionReason::kTesting);
-}
-
-inline void InvokeAtomicMajorGC(i::Isolate* isolate) {
-  Heap* heap = isolate->heap();
-  heap->PreciseCollectAllGarbage(GCFlag::kNoFlags,
-                                 GarbageCollectionReason::kTesting);
-  if (heap->sweeping_in_progress()) {
-    heap->EnsureSweepingCompleted(
-        Heap::SweepingForcedFinalizationMode::kUnifiedHeap);
-  }
-}
-
-inline void InvokeAtomicMinorGC(i::Isolate* isolate) {
-  InvokeMinorGC(isolate);
-  Heap* heap = isolate->heap();
-  if (heap->sweeping_in_progress()) {
-    heap->EnsureSweepingCompleted(
-        Heap::SweepingForcedFinalizationMode::kUnifiedHeap);
-  }
-}
-
-inline void InvokeMemoryReducingMajorGCs(i::Isolate* isolate) {
-  isolate->heap()->CollectAllAvailableGarbage(
-      GarbageCollectionReason::kTesting);
-}
-
 template <typename TMixin>
 class WithHeapInternals : public TMixin, HeapInternalsBase {
  public:
@@ -69,25 +32,20 @@ class WithHeapInternals : public TMixin, HeapInternalsBase {
   WithHeapInternals(const WithHeapInternals&) = delete;
   WithHeapInternals& operator=(const WithHeapInternals&) = delete;
 
-  void InvokeMajorGC() { i::InvokeMajorGC(this->i_isolate()); }
-
-  void InvokeMajorGC(GCFlag gc_flag) {
-    i::InvokeMajorGC(this->i_isolate(), gc_flag);
+  void CollectGarbage(AllocationSpace space) {
+    heap()->CollectGarbage(space, GarbageCollectionReason::kTesting);
   }
 
-  void InvokeMinorGC() { i::InvokeMinorGC(this->i_isolate()); }
-
-  void InvokeAtomicMajorGC() { i::InvokeAtomicMajorGC(this->i_isolate()); }
-
-  void InvokeAtomicMinorGC() { i::InvokeAtomicMinorGC(this->i_isolate()); }
-
-  void InvokeMemoryReducingMajorGCs() {
-    i::InvokeMemoryReducingMajorGCs(this->i_isolate());
+  void FullGC() {
+    heap()->CollectGarbage(OLD_SPACE, GarbageCollectionReason::kTesting);
   }
 
-  void PreciseCollectAllGarbage() {
-    heap()->PreciseCollectAllGarbage(GCFlag::kNoFlags,
-                                     GarbageCollectionReason::kTesting);
+  void YoungGC() {
+    heap()->CollectGarbage(NEW_SPACE, GarbageCollectionReason::kTesting);
+  }
+
+  void CollectAllAvailableGarbage() {
+    heap()->CollectAllAvailableGarbage(GarbageCollectionReason::kTesting);
   }
 
   Heap* heap() const { return this->i_isolate()->heap(); }
@@ -108,11 +66,10 @@ class WithHeapInternals : public TMixin, HeapInternalsBase {
 
   void GrowNewSpace() {
     IsolateSafepointScope scope(heap());
-    NewSpace* new_space = heap()->new_space();
-    if (new_space->TotalCapacity() < new_space->MaximumCapacity()) {
-      new_space->Grow();
+    if (!heap()->new_space()->IsAtMaximumCapacity()) {
+      heap()->new_space()->Grow();
     }
-    CHECK(new_space->EnsureCurrentCapacity());
+    CHECK(heap()->new_space()->EnsureCurrentCapacity());
   }
 
   void SealCurrentObjects() {
@@ -120,8 +77,8 @@ class WithHeapInternals : public TMixin, HeapInternalsBase {
     // test: v8_flags.stress_concurrent_allocation = false; Background thread
     // allocating concurrently interferes with this function.
     CHECK(!v8_flags.stress_concurrent_allocation);
-    InvokeMajorGC();
-    InvokeMajorGC();
+    FullGC();
+    FullGC();
     heap()->EnsureSweepingCompleted(
         Heap::SweepingForcedFinalizationMode::kV8Only);
     heap()->old_space()->FreeLinearAllocationArea();
@@ -130,7 +87,14 @@ class WithHeapInternals : public TMixin, HeapInternalsBase {
     }
   }
 
-  void EmptyNewSpaceUsingGC() { InvokeMajorGC(); }
+  void GcAndSweep(AllocationSpace space) {
+    heap()->CollectGarbage(space, GarbageCollectionReason::kTesting);
+    if (heap()->sweeping_in_progress()) {
+      IsolateSafepointScope scope(heap());
+      heap()->EnsureSweepingCompleted(
+          Heap::SweepingForcedFinalizationMode::kV8Only);
+    }
+  }
 };
 
 using TestWithHeapInternals =                  //
@@ -145,6 +109,21 @@ using TestWithHeapInternalsAndContext =  //
     WithContextMixin<                    //
         TestWithHeapInternals>;
 
+inline void CollectGarbage(AllocationSpace space, v8::Isolate* isolate) {
+  Heap* heap = reinterpret_cast<i::Isolate*>(isolate)->heap();
+  heap->CollectGarbage(space, GarbageCollectionReason::kTesting);
+}
+
+inline void FullGC(v8::Isolate* isolate) {
+  Heap* heap = reinterpret_cast<i::Isolate*>(isolate)->heap();
+  heap->CollectAllGarbage(Heap::kNoGCFlags, GarbageCollectionReason::kTesting);
+}
+
+inline void YoungGC(v8::Isolate* isolate) {
+  Heap* heap = reinterpret_cast<i::Isolate*>(isolate)->heap();
+  heap->CollectGarbage(NEW_SPACE, GarbageCollectionReason::kTesting);
+}
+
 template <typename GlobalOrPersistent>
 bool InYoungGeneration(v8::Isolate* isolate, const GlobalOrPersistent& global) {
   CHECK(!v8_flags.single_generation);
@@ -153,7 +132,7 @@ bool InYoungGeneration(v8::Isolate* isolate, const GlobalOrPersistent& global) {
   return Heap::InYoungGeneration(*v8::Utils::OpenHandle(*tmp));
 }
 
-bool IsNewObjectInCorrectGeneration(Tagged<HeapObject> object);
+bool IsNewObjectInCorrectGeneration(HeapObject object);
 
 template <typename GlobalOrPersistent>
 bool IsNewObjectInCorrectGeneration(v8::Isolate* isolate,
@@ -163,26 +142,7 @@ bool IsNewObjectInCorrectGeneration(v8::Isolate* isolate,
   return IsNewObjectInCorrectGeneration(*v8::Utils::OpenHandle(*tmp));
 }
 
-// ManualGCScope allows for disabling GC heuristics. This is useful for tests
-// that want to check specific corner cases around GC.
-//
-// The scope will finalize any ongoing GC on the provided Isolate.
-class V8_NODISCARD ManualGCScope final {
- public:
-  explicit ManualGCScope(Isolate* isolate);
-  ~ManualGCScope();
-
- private:
-  Isolate* const isolate_;
-  const bool flag_concurrent_marking_;
-  const bool flag_concurrent_sweeping_;
-  const bool flag_concurrent_minor_ms_marking_;
-  const bool flag_stress_concurrent_allocation_;
-  const bool flag_stress_incremental_marking_;
-  const bool flag_parallel_marking_;
-  const bool flag_detect_ineffective_gcs_near_heap_limit_;
-  const bool flag_cppheap_concurrent_marking_;
-};
+void FinalizeGCIfRunning(Isolate* isolate);
 
 }  // namespace internal
 }  // namespace v8

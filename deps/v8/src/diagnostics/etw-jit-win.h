@@ -23,7 +23,12 @@ void Unregister();
 void AddIsolate(Isolate* isolate);
 void RemoveIsolate(Isolate* isolate);
 void EventHandler(const v8::JitCodeEvent* event);
-void MaybeSetHandlerNow(Isolate* isolate);
+void EnableETWLog(Isolate* isolate);
+V8_INLINE void MaybeSetHandlerNow(Isolate* isolate) {
+  if (is_etw_enabled) {
+    EnableETWLog(isolate);
+  }
+}
 }  // namespace ETWJITInterface
 }  // namespace internal
 }  // namespace v8

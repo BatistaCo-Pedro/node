@@ -5,7 +5,6 @@ const { Readable } = require('stream');
 
 const bench = common.createBenchmark(main, {
   n: [1e1, 1e2, 1e3, 1e4, 1e5, 1e6],
-  type: ['old', 'new'],
 });
 
 const loremIpsum = `Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed
@@ -22,37 +21,6 @@ Condimentum mattis pellentesque id nibh tortor id aliquet lectus proin.
 Diam in arcu cursus euismod quis viverra nibh.
 Rest of line`;
 
-function oldWay() {
-  const readable = new Readable({
-    objectMode: true,
-    read: () => {
-      this.resume();
-    },
-    destroy: (err, cb) => {
-      this.off('line', lineListener);
-      this.off('close', closeListener);
-      this.close();
-      cb(err);
-    },
-  });
-  const lineListener = (input) => {
-    if (!readable.push(input)) {
-      // TODO(rexagod): drain to resume flow
-      this.pause();
-    }
-  };
-  const closeListener = () => {
-    readable.push(null);
-  };
-  const errorListener = (err) => {
-    readable.destroy(err);
-  };
-  this.on('error', errorListener);
-  this.on('line', lineListener);
-  this.on('close', closeListener);
-  return readable[Symbol.asyncIterator]();
-}
-
 function getLoremIpsumStream(repetitions) {
   const readable = Readable({
     objectMode: true,
@@ -64,7 +32,7 @@ function getLoremIpsumStream(repetitions) {
   return readable;
 }
 
-async function main({ n, type }) {
+async function main({ n }) {
   bench.start();
   let lineCount = 0;
 
@@ -72,10 +40,8 @@ async function main({ n, type }) {
     input: getLoremIpsumStream(n),
   });
 
-  const readlineIterable = type === 'old' ? oldWay.call(iterable) : iterable;
-
   // eslint-disable-next-line no-unused-vars
-  for await (const _ of readlineIterable) {
+  for await (const _ of iterable) {
     lineCount++;
   }
   bench.end(lineCount);

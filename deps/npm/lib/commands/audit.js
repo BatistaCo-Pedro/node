@@ -4,7 +4,7 @@ const localeCompare = require('@isaacs/string-locale-compare')('en')
 const npa = require('npm-package-arg')
 const pacote = require('pacote')
 const pMap = require('p-map')
-const tufClient = require('@sigstore/tuf')
+const { sigstore } = require('sigstore')
 
 const ArboristWorkspaceCmd = require('../arborist-cmd.js')
 const auditError = require('../utils/audit-error.js')
@@ -38,8 +38,8 @@ class VerifySignatures {
       throw new Error('found no installed dependencies to audit')
     }
 
-    const tuf = await tufClient.initTUF({
-      cachePath: this.opts.tufCache,
+    const tuf = await sigstore.tuf.client({
+      tufCachePath: this.opts.tufCache,
       retry: this.opts.retry,
       timeout: this.opts.timeout,
     })
@@ -55,7 +55,7 @@ class VerifySignatures {
     // Didn't find any dependencies that could be verified, e.g. only local
     // deps, missing version, not on a registry etc.
     if (!this.auditedWithKeysCount) {
-      throw new Error('found no dependencies to audit that were installed from ' +
+      throw new Error('found no dependencies to audit that where installed from ' +
                       'a supported registry')
     }
 
@@ -404,9 +404,7 @@ class Audit extends ArboristWorkspaceCmd {
     'force',
     'json',
     'package-lock-only',
-    'package-lock',
     'omit',
-    'include',
     'foreground-scripts',
     'ignore-scripts',
     ...super.params,
@@ -441,10 +439,6 @@ class Audit extends ArboristWorkspaceCmd {
   }
 
   async auditAdvisories (args) {
-    const fix = args[0] === 'fix'
-    if (this.npm.config.get('package-lock') === false && fix) {
-      throw this.usageError('fix can not be used without a package-lock')
-    }
     const reporter = this.npm.config.get('json') ? 'json' : 'detail'
     const Arborist = require('@npmcli/arborist')
     const opts = {
@@ -456,6 +450,7 @@ class Audit extends ArboristWorkspaceCmd {
     }
 
     const arb = new Arborist(opts)
+    const fix = args[0] === 'fix'
     await arb.audit({ fix })
     if (fix) {
       await reifyFinish(this.npm, arb)

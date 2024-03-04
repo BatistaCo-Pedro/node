@@ -19,7 +19,6 @@ class OptimizedCompilationInfo;
 class CompilationStatistics;
 
 struct AsPrintableStatistics {
-  const char* compiler;
   const CompilationStatistics& s;
   const bool machine_output;
 };
@@ -32,16 +31,19 @@ class CompilationStatistics final : public Malloced {
 
   class BasicStats {
    public:
+    BasicStats()
+        : total_allocated_bytes_(0),
+          max_allocated_bytes_(0),
+          absolute_max_allocated_bytes_(0) {}
+
     void Accumulate(const BasicStats& stats);
 
     std::string AsJSON();
 
     base::TimeDelta delta_;
-    size_t total_allocated_bytes_ = 0;
-    size_t max_allocated_bytes_ = 0;
-    size_t absolute_max_allocated_bytes_ = 0;
-    size_t input_graph_size_ = 0;
-    size_t output_graph_size_ = 0;
+    size_t total_allocated_bytes_;
+    size_t max_allocated_bytes_;
+    size_t absolute_max_allocated_bytes_;
     std::string function_name_;
   };
 
@@ -56,9 +58,8 @@ class CompilationStatistics final : public Malloced {
  private:
   class TotalStats : public BasicStats {
    public:
-    TotalStats() : source_size_(0), count_(0) {}
+    TotalStats() : source_size_(0) {}
     uint64_t source_size_;
-    size_t count_;
   };
 
   class OrderedStats : public BasicStats {

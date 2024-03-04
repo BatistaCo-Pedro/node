@@ -13,30 +13,27 @@
 namespace v8 {
 namespace internal {
 
-class FixedArray;
-class WeakFixedArray;
-
 #include "torque-generated/src/objects/property-cell-tq.inc"
 
 class PropertyCell
     : public TorqueGeneratedPropertyCell<PropertyCell, HeapObject> {
  public:
   // [name]: the name of the global property.
-  DECL_GETTER(name, Tagged<Name>)
+  DECL_GETTER(name, Name)
 
   // [property_details]: details of the global property.
-  DECL_GETTER(property_details_raw, Tagged<Smi>)
-  DECL_ACQUIRE_GETTER(property_details_raw, Tagged<Smi>)
+  DECL_GETTER(property_details_raw, Smi)
+  DECL_ACQUIRE_GETTER(property_details_raw, Smi)
   inline PropertyDetails property_details() const;
   inline PropertyDetails property_details(AcquireLoadTag tag) const;
   inline void UpdatePropertyDetailsExceptCellType(PropertyDetails details);
 
   // [value]: value of the global property.
-  DECL_GETTER(value, Tagged<Object>)
-  DECL_ACQUIRE_GETTER(value, Tagged<Object>)
+  DECL_GETTER(value, Object)
+  DECL_ACQUIRE_GETTER(value, Object)
 
   // [dependent_code]: code that depends on the type of the global property.
-  DECL_ACCESSORS(dependent_code, Tagged<DependentCode>)
+  DECL_ACCESSORS(dependent_code, DependentCode)
 
   // Changes the value and/or property details.
   // For global properties:
@@ -44,14 +41,12 @@ class PropertyCell
   // For protectors:
   void InvalidateProtector();
 
-  static PropertyCellType InitialType(Isolate* isolate, Tagged<Object> value);
+  static PropertyCellType InitialType(Isolate* isolate, Object value);
 
   // Computes the new type of the cell's contents for the given value, but
   // without actually modifying the details.
-  static PropertyCellType UpdatedType(Isolate* isolate,
-                                      Tagged<PropertyCell> cell,
-                                      Tagged<Object> value,
-                                      PropertyDetails details);
+  static PropertyCellType UpdatedType(Isolate* isolate, PropertyCell cell,
+                                      Object value, PropertyDetails details);
 
   // Prepares property cell at given entry for receiving given value and sets
   // that value.  As a result the old cell could be invalidated and/or dependent
@@ -68,8 +63,7 @@ class PropertyCell
 
   // Whether or not the {details} and {value} fit together. This is an
   // approximation with false positives.
-  static bool CheckDataIsCompatible(PropertyDetails details,
-                                    Tagged<Object> value);
+  static bool CheckDataIsCompatible(PropertyDetails details, Object value);
 
   DECL_PRINTER(PropertyCell)
   DECL_VERIFIER(PropertyCell)
@@ -81,17 +75,16 @@ class PropertyCell
  private:
   friend class Factory;
 
-  DECL_SETTER(name, Tagged<Name>)
-  DECL_SETTER(value, Tagged<Object>)
-  DECL_RELEASE_SETTER(value, Tagged<Object>)
-  DECL_SETTER(property_details_raw, Tagged<Smi>)
-  DECL_RELEASE_SETTER(property_details_raw, Tagged<Smi>)
+  DECL_SETTER(name, Name)
+  DECL_SETTER(value, Object)
+  DECL_RELEASE_SETTER(value, Object)
+  DECL_SETTER(property_details_raw, Smi)
+  DECL_RELEASE_SETTER(property_details_raw, Smi)
 
 #ifdef DEBUG
   // Whether the property cell can transition to the given state. This is an
   // approximation with false positives.
-  bool CanTransitionTo(PropertyDetails new_details,
-                       Tagged<Object> new_value) const;
+  bool CanTransitionTo(PropertyDetails new_details, Object new_value) const;
 #endif  // DEBUG
 };
 

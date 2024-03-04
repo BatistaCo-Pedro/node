@@ -2493,11 +2493,6 @@ Running test: testArrayBuffer
                     type : boolean
                     value : false
                 }
-                [3] : {
-                    name : detached
-                    type : boolean
-                    value : false
-                }
             ]
             subtype : arraybuffer
             type : object
@@ -2528,11 +2523,6 @@ Running test: testArrayBuffer
                 }
                 [2] : {
                     name : resizable
-                    type : boolean
-                    value : false
-                }
-                [3] : {
-                    name : detached
                     type : boolean
                     value : false
                 }

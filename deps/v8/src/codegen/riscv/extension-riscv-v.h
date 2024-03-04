@@ -6,7 +6,6 @@
 #define V8_CODEGEN_RISCV_EXTENSION_RISCV_V_H_
 
 #include "src/codegen/assembler.h"
-#include "src/codegen/machine-type.h"
 #include "src/codegen/riscv/base-assembler-riscv.h"
 #include "src/codegen/riscv/constant-riscv-v.h"
 #include "src/codegen/riscv/register-riscv.h"
@@ -95,10 +94,9 @@ class AssemblerRISCVV : public AssemblerRiscvBase {
   void vmadc_vx(VRegister vd, Register rs1, VRegister vs2);
   void vmadc_vi(VRegister vd, uint8_t imm5, VRegister vs2);
 
-  void vfmv_vf(VRegister vd, FPURegister fs1);
+  void vfmv_vf(VRegister vd, FPURegister fs1, MaskType mask = NoMask);
   void vfmv_fs(FPURegister fd, VRegister vs2);
   void vfmv_sf(VRegister vd, FPURegister fs);
-  void vfmerge_vf(VRegister vd, FPURegister fs1, VRegister vs2);
 
   void vwaddu_wx(VRegister vd, VRegister vs2, Register rs1,
                  MaskType mask = NoMask);
@@ -180,7 +178,7 @@ class AssemblerRISCVV : public AssemblerRiscvBase {
   DEFINE_OPIVX(vsadd, VSADD_FUNCT6)
   DEFINE_OPIVV(vsadd, VSADD_FUNCT6)
   DEFINE_OPIVI(vsadd, VSADD_FUNCT6)
-  DEFINE_OPIVX(vsaddu, VSADDU_FUNCT6)
+  DEFINE_OPIVX(vsaddu, VSADD_FUNCT6)
   DEFINE_OPIVV(vsaddu, VSADDU_FUNCT6)
   DEFINE_OPIVI(vsaddu, VSADDU_FUNCT6)
   DEFINE_OPIVX(vssub, VSSUB_FUNCT6)
@@ -212,12 +210,8 @@ class AssemblerRISCVV : public AssemblerRiscvBase {
 
   DEFINE_OPIVX(vslidedown, VSLIDEDOWN_FUNCT6)
   DEFINE_OPIVI(vslidedown, VSLIDEDOWN_FUNCT6)
-  DEFINE_OPMVX(vslide1down, VSLIDEDOWN_FUNCT6)
-  DEFINE_OPFVF(vfslide1down, VSLIDEDOWN_FUNCT6)
   DEFINE_OPIVX(vslideup, VSLIDEUP_FUNCT6)
   DEFINE_OPIVI(vslideup, VSLIDEUP_FUNCT6)
-  DEFINE_OPMVX(vslide1up, VSLIDEUP_FUNCT6)
-  DEFINE_OPFVF(vfslide1up, VSLIDEUP_FUNCT6)
 
   DEFINE_OPIVV(vmseq, VMSEQ_FUNCT6)
   DEFINE_OPIVX(vmseq, VMSEQ_FUNCT6)
@@ -282,8 +276,8 @@ class AssemblerRISCVV : public AssemblerRiscvBase {
   DEFINE_OPFWF(vfwsub, VFWSUB_W_FUNCT6)
 
   // Vector Widening Floating-Point Reduction Instructions
-  DEFINE_OPFRED(vfwredusum, VFWREDUSUM_FUNCT6)
-  DEFINE_OPFRED(vfwredosum, VFWREDOSUM_FUNCT6)
+  DEFINE_OPFVV(vfwredusum, VFWREDUSUM_FUNCT6)
+  DEFINE_OPFVV(vfwredosum, VFWREDOSUM_FUNCT6)
 
   // Vector Widening Floating-Point Multiply
   DEFINE_OPFVV(vfwmul, VFWMUL_FUNCT6)
@@ -404,18 +398,6 @@ class AssemblerRISCVV : public AssemblerRiscvBase {
   void vfirst_m(Register rd, VRegister vs2, MaskType mask = NoMask);
 
   void vcpop_m(Register rd, VRegister vs2, MaskType mask = NoMask);
-
-  void vmslt_vi(VRegister vd, VRegister vs1, int8_t imm5,
-                MaskType mask = NoMask) {
-    DCHECK(imm5 >= -15 && imm5 <= 16);
-    vmsle_vi(vd, vs1, imm5 - 1, mask);
-  }
-
-  void vmsltu_vi(VRegister vd, VRegister vs1, int8_t imm5,
-                 MaskType mask = NoMask) {
-    DCHECK(imm5 >= 1 && imm5 <= 16);
-    vmsleu_vi(vd, vs1, imm5 - 1, mask);
-  }
 
  protected:
   void vsetvli(Register rd, Register rs1, VSew vsew, Vlmul vlmul,

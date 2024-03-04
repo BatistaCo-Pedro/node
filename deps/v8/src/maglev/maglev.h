@@ -20,8 +20,7 @@ class Maglev : public AllStatic {
   // TODO(v8:7700): This entry point is only used for testing. Consider
   // removing it once BenchMaglev runtime functions are no longer useful.
   static MaybeHandle<Code> Compile(Isolate* isolate,
-                                   Handle<JSFunction> function,
-                                   BytecodeOffset osr_offset);
+                                   Handle<JSFunction> function);
 };
 
 }  // namespace internal

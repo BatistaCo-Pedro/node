@@ -20,25 +20,28 @@ SlotCallbackResult UpdateTypedSlotHelper::UpdateTypedSlot(Heap* heap,
                                                           Callback callback) {
   switch (slot_type) {
     case SlotType::kCodeEntry: {
-      WritableRelocInfo rinfo(addr, RelocInfo::CODE_TARGET);
+      RelocInfo rinfo(addr, RelocInfo::CODE_TARGET, 0, Code(),
+                      InstructionStream());
       return UpdateCodeTarget(&rinfo, callback);
     }
     case SlotType::kConstPoolCodeEntry: {
       return UpdateCodeEntry(addr, callback);
     }
     case SlotType::kEmbeddedObjectCompressed: {
-      WritableRelocInfo rinfo(addr, RelocInfo::COMPRESSED_EMBEDDED_OBJECT);
+      RelocInfo rinfo(addr, RelocInfo::COMPRESSED_EMBEDDED_OBJECT, 0, Code(),
+                      InstructionStream());
       return UpdateEmbeddedPointer(heap, &rinfo, callback);
     }
     case SlotType::kEmbeddedObjectFull: {
-      WritableRelocInfo rinfo(addr, RelocInfo::FULL_EMBEDDED_OBJECT);
+      RelocInfo rinfo(addr, RelocInfo::FULL_EMBEDDED_OBJECT, 0, Code(),
+                      InstructionStream());
       return UpdateEmbeddedPointer(heap, &rinfo, callback);
     }
     case SlotType::kConstPoolEmbeddedObjectCompressed: {
-      Tagged<HeapObject> old_target = HeapObject::cast(
-          Tagged<Object>(V8HeapCompressionScheme::DecompressTagged(
+      HeapObject old_target =
+          HeapObject::cast(Object(V8HeapCompressionScheme::DecompressTagged(
               heap->isolate(), base::Memory<Tagged_t>(addr))));
-      Tagged<HeapObject> new_target = old_target;
+      HeapObject new_target = old_target;
       SlotCallbackResult result = callback(FullMaybeObjectSlot(&new_target));
       DCHECK(!HasWeakHeapObjectTag(new_target));
       if (new_target != old_target) {
@@ -56,29 +59,32 @@ SlotCallbackResult UpdateTypedSlotHelper::UpdateTypedSlot(Heap* heap,
   UNREACHABLE();
 }
 
-Tagged<HeapObject> UpdateTypedSlotHelper::GetTargetObject(Heap* heap,
-                                                          SlotType slot_type,
-                                                          Address addr) {
+HeapObject UpdateTypedSlotHelper::GetTargetObject(Heap* heap,
+                                                  SlotType slot_type,
+                                                  Address addr) {
   switch (slot_type) {
     case SlotType::kCodeEntry: {
-      RelocInfo rinfo(addr, RelocInfo::CODE_TARGET);
+      RelocInfo rinfo(addr, RelocInfo::CODE_TARGET, 0, Code(),
+                      InstructionStream());
       return InstructionStream::FromTargetAddress(rinfo.target_address());
     }
     case SlotType::kConstPoolCodeEntry: {
       return InstructionStream::FromEntryAddress(addr);
     }
     case SlotType::kEmbeddedObjectCompressed: {
-      RelocInfo rinfo(addr, RelocInfo::COMPRESSED_EMBEDDED_OBJECT);
+      RelocInfo rinfo(addr, RelocInfo::COMPRESSED_EMBEDDED_OBJECT, 0, Code(),
+                      InstructionStream());
       return rinfo.target_object(heap->isolate());
     }
     case SlotType::kEmbeddedObjectFull: {
-      RelocInfo rinfo(addr, RelocInfo::FULL_EMBEDDED_OBJECT);
+      RelocInfo rinfo(addr, RelocInfo::FULL_EMBEDDED_OBJECT, 0, Code(),
+                      InstructionStream());
       return rinfo.target_object(heap->isolate());
     }
     case SlotType::kConstPoolEmbeddedObjectCompressed: {
       Address full = V8HeapCompressionScheme::DecompressTagged(
           heap->isolate(), base::Memory<Tagged_t>(addr));
-      return HeapObject::cast(Tagged<Object>(full));
+      return HeapObject::cast(Object(full));
     }
     case SlotType::kConstPoolEmbeddedObjectFull: {
       FullHeapObjectSlot slot(addr);

@@ -101,9 +101,7 @@ void Heap::CollectGarbage(GCConfig config) {
   DCHECK_EQ(GCConfig::MarkingType::kAtomic, config.marking_type);
   CheckConfig(config, marking_support_, sweeping_support_);
 
-  if (!IsGCAllowed()) {
-    return;
-  }
+  if (in_no_gc_scope()) return;
 
   config_ = config;
 
@@ -164,15 +162,11 @@ void Heap::StartGarbageCollection(GCConfig config) {
 }
 
 void Heap::FinalizeGarbageCollection(StackState stack_state) {
-  stack()->SetMarkerIfNeededAndCallback(
-      [this, stack_state]() { FinalizeGarbageCollectionImpl(stack_state); });
-}
-
-void Heap::FinalizeGarbageCollectionImpl(StackState stack_state) {
   DCHECK(IsMarking());
   DCHECK(!in_no_gc_scope());
   CHECK(!in_disallow_gc_scope());
   config_.stack_state = stack_state;
+  stack()->SetMarkerToCurrentStackPosition();
   in_atomic_pause_ = true;
 
 #if defined(CPPGC_YOUNG_GENERATION)

@@ -17,14 +17,14 @@ class BackgroundMergeTask;
 
 class V8_EXPORT_PRIVATE AlignedCachedData {
  public:
-  AlignedCachedData(const uint8_t* data, int length);
+  AlignedCachedData(const byte* data, int length);
   ~AlignedCachedData() {
     if (owns_data_) DeleteArray(data_);
   }
   AlignedCachedData(const AlignedCachedData&) = delete;
   AlignedCachedData& operator=(const AlignedCachedData&) = delete;
 
-  const uint8_t* data() const { return data_; }
+  const byte* data() const { return data_; }
   int length() const { return length_; }
   bool rejected() const { return rejected_; }
 
@@ -45,16 +45,20 @@ class V8_EXPORT_PRIVATE AlignedCachedData {
  private:
   bool owns_data_ : 1;
   bool rejected_ : 1;
-  const uint8_t* data_;
+  const byte* data_;
   int length_;
 };
 
-typedef v8::ScriptCompiler::CachedData::CompatibilityCheckResult
-    SerializedCodeSanityCheckResult;
-
-// If this fails, update the static_assert AND the code_cache_reject_reason
-// histogram definition.
-static_assert(static_cast<int>(SerializedCodeSanityCheckResult::kLast) == 9);
+enum class SerializedCodeSanityCheckResult {
+  kSuccess = 0,
+  kMagicNumberMismatch = 1,
+  kVersionMismatch = 2,
+  kSourceMismatch = 3,
+  kFlagsMismatch = 5,
+  kChecksumMismatch = 6,
+  kInvalidHeader = 7,
+  kLengthMismatch = 8
+};
 
 class CodeSerializer : public Serializer {
  public:
@@ -101,10 +105,11 @@ class CodeSerializer : public Serializer {
   CodeSerializer(Isolate* isolate, uint32_t source_hash);
   ~CodeSerializer() override { OutputStatistics("CodeSerializer"); }
 
-  void SerializeGeneric(Handle<HeapObject> heap_object, SlotType slot_type);
+  virtual bool ElideObject(Object obj) { return false; }
+  void SerializeGeneric(Handle<HeapObject> heap_object);
 
  private:
-  void SerializeObjectImpl(Handle<HeapObject> o, SlotType slot_type) override;
+  void SerializeObjectImpl(Handle<HeapObject> o) override;
 
   DISALLOW_GARBAGE_COLLECTION(no_gc_)
   uint32_t source_hash_;
@@ -114,26 +119,29 @@ class CodeSerializer : public Serializer {
 class SerializedCodeData : public SerializedData {
  public:
   // The data header consists of uint32_t-sized entries:
+  // [0] magic number and (internally provided) external reference count
+  // [1] version hash
+  // [2] source hash
+  // [3] flag hash
+  // [4] payload length
+  // [5] payload checksum
+  // ...  serialized payload
   static const uint32_t kVersionHashOffset = kMagicNumberOffset + kUInt32Size;
   static const uint32_t kSourceHashOffset = kVersionHashOffset + kUInt32Size;
   static const uint32_t kFlagHashOffset = kSourceHashOffset + kUInt32Size;
-  static const uint32_t kReadOnlySnapshotChecksumOffset =
-      kFlagHashOffset + kUInt32Size;
-  static const uint32_t kPayloadLengthOffset =
-      kReadOnlySnapshotChecksumOffset + kUInt32Size;
+  static const uint32_t kPayloadLengthOffset = kFlagHashOffset + kUInt32Size;
   static const uint32_t kChecksumOffset = kPayloadLengthOffset + kUInt32Size;
   static const uint32_t kUnalignedHeaderSize = kChecksumOffset + kUInt32Size;
   static const uint32_t kHeaderSize = POINTER_SIZE_ALIGN(kUnalignedHeaderSize);
 
   // Used when consuming.
   static SerializedCodeData FromCachedData(
-      Isolate* isolate, AlignedCachedData* cached_data,
-      uint32_t expected_source_hash,
+      AlignedCachedData* cached_data, uint32_t expected_source_hash,
       SerializedCodeSanityCheckResult* rejection_result);
   // For cached data which is consumed before the source is available (e.g.
   // off-thread).
   static SerializedCodeData FromCachedDataWithoutSource(
-      LocalIsolate* local_isolate, AlignedCachedData* cached_data,
+      AlignedCachedData* cached_data,
       SerializedCodeSanityCheckResult* rejection_result);
   // For cached data which was previously already sanity checked by
   // FromCachedDataWithoutSource. The rejection result from that call should be
@@ -143,34 +151,31 @@ class SerializedCodeData : public SerializedData {
       SerializedCodeSanityCheckResult* rejection_result);
 
   // Used when producing.
-  SerializedCodeData(const std::vector<uint8_t>* payload,
+  SerializedCodeData(const std::vector<byte>* payload,
                      const CodeSerializer* cs);
 
   // Return ScriptData object and relinquish ownership over it to the caller.
   AlignedCachedData* GetScriptData();
 
-  base::Vector<const uint8_t> Payload() const;
+  base::Vector<const byte> Payload() const;
 
   static uint32_t SourceHash(Handle<String> source,
                              ScriptOriginOptions origin_options);
 
  private:
   explicit SerializedCodeData(AlignedCachedData* data);
-  SerializedCodeData(const uint8_t* data, int size)
-      : SerializedData(const_cast<uint8_t*>(data), size) {}
+  SerializedCodeData(const byte* data, int size)
+      : SerializedData(const_cast<byte*>(data), size) {}
 
-  base::Vector<const uint8_t> ChecksummedContent() const {
-    return base::Vector<const uint8_t>(data_ + kHeaderSize,
-                                       size_ - kHeaderSize);
+  base::Vector<const byte> ChecksummedContent() const {
+    return base::Vector<const byte>(data_ + kHeaderSize, size_ - kHeaderSize);
   }
 
   SerializedCodeSanityCheckResult SanityCheck(
-      uint32_t expected_ro_snapshot_checksum,
       uint32_t expected_source_hash) const;
   SerializedCodeSanityCheckResult SanityCheckJustSource(
       uint32_t expected_source_hash) const;
-  SerializedCodeSanityCheckResult SanityCheckWithoutSource(
-      uint32_t expected_ro_snapshot_checksum) const;
+  SerializedCodeSanityCheckResult SanityCheckWithoutSource() const;
 };
 
 }  // namespace internal

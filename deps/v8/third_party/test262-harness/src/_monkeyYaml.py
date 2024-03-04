@@ -127,7 +127,7 @@ def myMultiline(lines, preserveNewlines=False):
             break;
         else:
             if preserveNewlines:
-                if wasEmpty is not None:
+                if wasEmpty != None:
                     value += "\n"
             else:
                 if wasEmpty == False:

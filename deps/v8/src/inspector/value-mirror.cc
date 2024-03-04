@@ -19,10 +19,9 @@
 #include "src/base/optional.h"
 #include "src/debug/debug-interface.h"
 #include "src/inspector/v8-debugger.h"
-#include "src/inspector/v8-deep-serializer.h"
 #include "src/inspector/v8-inspector-impl.h"
-#include "src/inspector/v8-serialization-duplicate-tracker.h"
 #include "src/inspector/v8-value-utils.h"
+#include "src/inspector/v8-webdriver-serializer.h"
 
 namespace v8_inspector {
 
@@ -31,13 +30,6 @@ using protocol::Runtime::EntryPreview;
 using protocol::Runtime::ObjectPreview;
 using protocol::Runtime::PropertyPreview;
 using protocol::Runtime::RemoteObject;
-
-#if defined(V8_USE_ADDRESS_SANITIZER) && V8_OS_DARWIN
-// For whatever reason, ASan on MacOS has bigger stack frames.
-static const int kMaxProtocolDepth = 900;
-#else
-static const int kMaxProtocolDepth = 1000;
-#endif
 
 Response toProtocolValue(v8::Local<v8::Context> context,
                          v8::Local<v8::Value> value, int maxDepth,
@@ -162,7 +154,13 @@ Response toProtocolValue(v8::Local<v8::Context> context,
                          v8::Local<v8::Value> value,
                          std::unique_ptr<protocol::Value>* result) {
   if (value->IsUndefined()) return Response::Success();
-  return toProtocolValue(context, value, kMaxProtocolDepth, result);
+#if defined(V8_USE_ADDRESS_SANITIZER) && V8_OS_DARWIN
+  // For whatever reason, ASan on MacOS has bigger stack frames.
+  static const int kMaxDepth = 900;
+#else
+  static const int kMaxDepth = 1000;
+#endif
+  return toProtocolValue(context, value, kMaxDepth, result);
 }
 
 namespace {
@@ -430,7 +428,7 @@ class PrimitiveValueMirror final : public ValueMirror {
 
   v8::Local<v8::Value> v8Value() const override { return m_value; }
   Response buildRemoteObject(
-      v8::Local<v8::Context> context, const WrapOptions& wrapOptions,
+      v8::Local<v8::Context> context, WrapMode mode,
       std::unique_ptr<RemoteObject>* result) const override {
     std::unique_ptr<protocol::Value> protocolValue;
     toProtocolValue(context, m_value, &protocolValue);
@@ -470,49 +468,40 @@ class PrimitiveValueMirror final : public ValueMirror {
       (*preview)->setSubtype(RemoteObject::SubtypeEnum::Null);
   }
 
-  Response buildDeepSerializedValue(
-      v8::Local<v8::Context> context, int maxDepth,
-      v8::Local<v8::Object> additionalParameters,
-      V8SerializationDuplicateTracker& duplicateTracker,
-      std::unique_ptr<protocol::DictionaryValue>* result) const override {
+  std::unique_ptr<protocol::Runtime::WebDriverValue> buildWebDriverValue(
+      v8::Local<v8::Context> context, int max_depth) const override {
+    // https://w3c.github.io/webdriver-bidi/#data-types-protocolValue-primitiveProtocolValue-serialization
+
     if (m_value->IsUndefined()) {
-      *result = protocol::DictionaryValue::create();
-      (*result)->setString(
-          "type", protocol::Runtime::DeepSerializedValue::TypeEnum::Undefined);
-      return Response::Success();
+      return protocol::Runtime::WebDriverValue::create()
+          .setType(protocol::Runtime::WebDriverValue::TypeEnum::Undefined)
+          .build();
     }
     if (m_value->IsNull()) {
-      *result = protocol::DictionaryValue::create();
-      (*result)->setString(
-          "type", protocol::Runtime::DeepSerializedValue::TypeEnum::Null);
-      return Response::Success();
+      return protocol::Runtime::WebDriverValue::create()
+          .setType(protocol::Runtime::WebDriverValue::TypeEnum::Null)
+          .build();
     }
     if (m_value->IsString()) {
-      *result = protocol::DictionaryValue::create();
-      (*result)->setString(
-          "type", protocol::Runtime::DeepSerializedValue::TypeEnum::String);
-      (*result)->setString("value", toProtocolString(context->GetIsolate(),
-                                                     m_value.As<v8::String>()));
-      return Response::Success();
+      return protocol::Runtime::WebDriverValue::create()
+          .setType(protocol::Runtime::WebDriverValue::TypeEnum::String)
+          .setValue(protocol::StringValue::create(toProtocolString(
+              context->GetIsolate(), m_value.As<v8::String>())))
+          .build();
     }
     if (m_value->IsBoolean()) {
-      *result = protocol::DictionaryValue::create();
-      (*result)->setString(
-          "type", protocol::Runtime::DeepSerializedValue::TypeEnum::Boolean);
-      (*result)->setBoolean("value", m_value.As<v8::Boolean>()->Value());
-      return Response::Success();
+      return protocol::Runtime::WebDriverValue::create()
+          .setType(protocol::Runtime::WebDriverValue::TypeEnum::Boolean)
+          .setValue(protocol::FundamentalValue::create(
+              m_value.As<v8::Boolean>()->Value()))
+          .build();
     }
 
-    // Fallback in case of unexpected type.
-    bool isKnown;
-    *result = duplicateTracker.LinkExistingOrCreate(m_value, &isKnown);
-    if (isKnown) {
-      return Response::Success();
-    }
-
-    (*result)->setString(
-        "type", protocol::Runtime::DeepSerializedValue::TypeEnum::Object);
-    return Response::Success();
+    DCHECK(false);
+    // Fallback.
+    return protocol::Runtime::WebDriverValue::create()
+        .setType(protocol::Runtime::WebDriverValue::TypeEnum::Object)
+        .build();
   }
 
  private:
@@ -527,7 +516,7 @@ class NumberMirror final : public ValueMirror {
   v8::Local<v8::Value> v8Value() const override { return m_value; }
 
   Response buildRemoteObject(
-      v8::Local<v8::Context> context, const WrapOptions& wrapOptions,
+      v8::Local<v8::Context> context, WrapMode mode,
       std::unique_ptr<RemoteObject>* result) const override {
     bool unserializable = false;
     String16 descriptionValue = description(&unserializable);
@@ -565,25 +554,21 @@ class NumberMirror final : public ValueMirror {
             .build();
   }
 
-  Response buildDeepSerializedValue(
-      v8::Local<v8::Context> context, int maxDepth,
-      v8::Local<v8::Object> additionalParameters,
-      V8SerializationDuplicateTracker& duplicateTracker,
-      std::unique_ptr<protocol::DictionaryValue>* result) const override {
-    *result = protocol::DictionaryValue::create();
-    (*result)->setString(
-        "type", protocol::Runtime::DeepSerializedValue::TypeEnum::Number);
-
+  std::unique_ptr<protocol::Runtime::WebDriverValue> buildWebDriverValue(
+      v8::Local<v8::Context> context, int max_depth) const override {
+    // https://w3c.github.io/webdriver-bidi/#data-types-protocolValue-primitiveProtocolValue-serialization
+    std::unique_ptr<protocol::Runtime::WebDriverValue> result =
+        protocol::Runtime::WebDriverValue::create()
+            .setType(protocol::Runtime::WebDriverValue::TypeEnum::Number)
+            .build();
     bool unserializable = false;
     String16 descriptionValue = description(&unserializable);
     if (unserializable) {
-      (*result)->setValue("value",
-                          protocol::StringValue::create(descriptionValue));
+      result->setValue(protocol::StringValue::create(descriptionValue));
     } else {
-      (*result)->setValue("value",
-                          toProtocolValue(m_value.As<v8::Number>()->Value()));
+      result->setValue(toProtocolValue(m_value.As<v8::Number>()->Value()));
     }
-    return Response::Success();
+    return result;
   }
 
  private:
@@ -607,7 +592,7 @@ class BigIntMirror final : public ValueMirror {
   explicit BigIntMirror(v8::Local<v8::BigInt> value) : m_value(value) {}
 
   Response buildRemoteObject(
-      v8::Local<v8::Context> context, const WrapOptions& wrapOptions,
+      v8::Local<v8::Context> context, WrapMode mode,
       std::unique_ptr<RemoteObject>* result) const override {
     String16 description = descriptionForBigInt(context, m_value);
     *result = RemoteObject::create()
@@ -646,21 +631,18 @@ class BigIntMirror final : public ValueMirror {
 
   v8::Local<v8::Value> v8Value() const override { return m_value; }
 
-  Response buildDeepSerializedValue(
-      v8::Local<v8::Context> context, int maxDepth,
-      v8::Local<v8::Object> additionalParameters,
-      V8SerializationDuplicateTracker& duplicateTracker,
-      std::unique_ptr<protocol::DictionaryValue>* result) const override {
-    v8::Local<v8::String> stringValue =
+  std::unique_ptr<protocol::Runtime::WebDriverValue> buildWebDriverValue(
+      v8::Local<v8::Context> context, int max_depth) const override {
+    // https://w3c.github.io/webdriver-bidi/#data-types-protocolValue-primitiveProtocolValue-serialization
+
+    v8::Local<v8::String> string_value =
         v8::debug::GetBigIntStringValue(context->GetIsolate(), m_value);
 
-    *result = protocol::DictionaryValue::create();
-    (*result)->setString(
-        "type", protocol::Runtime::DeepSerializedValue::TypeEnum::Bigint);
-
-    (*result)->setValue("value", protocol::StringValue::create(toProtocolString(
-                                     context->GetIsolate(), stringValue)));
-    return Response::Success();
+    return protocol::Runtime::WebDriverValue::create()
+        .setType(protocol::Runtime::WebDriverValue::TypeEnum::Bigint)
+        .setValue(protocol::StringValue::create(
+            toProtocolString(context->GetIsolate(), string_value)))
+        .build();
   }
 
  private:
@@ -673,9 +655,9 @@ class SymbolMirror final : public ValueMirror {
       : m_symbol(value.As<v8::Symbol>()) {}
 
   Response buildRemoteObject(
-      v8::Local<v8::Context> context, const WrapOptions& wrapOptions,
+      v8::Local<v8::Context> context, WrapMode mode,
       std::unique_ptr<RemoteObject>* result) const override {
-    if (wrapOptions.mode == WrapMode::kJson) {
+    if (mode == WrapMode::kForceValue) {
       return Response::ServerError("Object couldn't be returned by value");
     }
     *result = RemoteObject::create()
@@ -711,20 +693,12 @@ class SymbolMirror final : public ValueMirror {
 
   v8::Local<v8::Value> v8Value() const override { return m_symbol; }
 
-  Response buildDeepSerializedValue(
-      v8::Local<v8::Context> context, int maxDepth,
-      v8::Local<v8::Object> additionalParameters,
-      V8SerializationDuplicateTracker& duplicateTracker,
-      std::unique_ptr<protocol::DictionaryValue>* result) const override {
-    bool isKnown;
-    *result = duplicateTracker.LinkExistingOrCreate(m_symbol, &isKnown);
-    if (isKnown) {
-      return Response::Success();
-    }
-
-    (*result)->setString(
-        "type", protocol::Runtime::DeepSerializedValue::TypeEnum::Symbol);
-    return Response::Success();
+  std::unique_ptr<protocol::Runtime::WebDriverValue> buildWebDriverValue(
+      v8::Local<v8::Context> context, int max_depth) const override {
+    // https://w3c.github.io/webdriver-bidi/#data-types-protocolValue-RemoteValue-serialization
+    return protocol::Runtime::WebDriverValue::create()
+        .setType(protocol::Runtime::WebDriverValue::TypeEnum::Symbol)
+        .build();
   }
 
  private:
@@ -755,7 +729,7 @@ class LocationMirror final : public ValueMirror {
   }
 
   Response buildRemoteObject(
-      v8::Local<v8::Context> context, const WrapOptions& wrapOptions,
+      v8::Local<v8::Context> context, WrapMode mode,
       std::unique_ptr<RemoteObject>* result) const override {
     auto location = protocol::DictionaryValue::create();
     location->setString("scriptId", String16::fromInteger(m_scriptId));
@@ -771,20 +745,11 @@ class LocationMirror final : public ValueMirror {
   }
   v8::Local<v8::Value> v8Value() const override { return m_value; }
 
-  Response buildDeepSerializedValue(
-      v8::Local<v8::Context> context, int maxDepth,
-      v8::Local<v8::Object> additionalParameters,
-      V8SerializationDuplicateTracker& duplicateTracker,
-      std::unique_ptr<protocol::DictionaryValue>* result) const override {
-    bool isKnown;
-    *result = duplicateTracker.LinkExistingOrCreate(m_value, &isKnown);
-    if (isKnown) {
-      return Response::Success();
-    }
-
-    (*result)->setString(
-        "type", protocol::Runtime::DeepSerializedValue::TypeEnum::Object);
-    return Response::Success();
+  std::unique_ptr<protocol::Runtime::WebDriverValue> buildWebDriverValue(
+      v8::Local<v8::Context> context, int max_depth) const override {
+    return protocol::Runtime::WebDriverValue::create()
+        .setType(protocol::Runtime::WebDriverValue::TypeEnum::Object)
+        .build();
   }
 
  private:
@@ -821,10 +786,10 @@ class FunctionMirror final : public ValueMirror {
   v8::Local<v8::Value> v8Value() const override { return m_value; }
 
   Response buildRemoteObject(
-      v8::Local<v8::Context> context, const WrapOptions& wrapOptions,
+      v8::Local<v8::Context> context, WrapMode mode,
       std::unique_ptr<RemoteObject>* result) const override {
     // TODO(alph): drop this functionality.
-    if (wrapOptions.mode == WrapMode::kJson) {
+    if (mode == WrapMode::kForceValue) {
       std::unique_ptr<protocol::Value> protocolValue;
       Response response = toProtocolValue(context, m_value, &protocolValue);
       if (!response.IsSuccess()) return response;
@@ -864,20 +829,12 @@ class FunctionMirror final : public ValueMirror {
             .build();
   }
 
-  Response buildDeepSerializedValue(
-      v8::Local<v8::Context> context, int maxDepth,
-      v8::Local<v8::Object> additionalParameters,
-      V8SerializationDuplicateTracker& duplicateTracker,
-      std::unique_ptr<protocol::DictionaryValue>* result) const override {
-    bool isKnown;
-    *result = duplicateTracker.LinkExistingOrCreate(m_value, &isKnown);
-    if (isKnown) {
-      return Response::Success();
-    }
-
-    (*result)->setString(
-        "type", protocol::Runtime::DeepSerializedValue::TypeEnum::Function);
-    return Response::Success();
+  std::unique_ptr<protocol::Runtime::WebDriverValue> buildWebDriverValue(
+      v8::Local<v8::Context> context, int max_depth) const override {
+    // https://w3c.github.io/webdriver-bidi/#data-types-protocolValue-RemoteValue-serialization
+    return protocol::Runtime::WebDriverValue::create()
+        .setType(protocol::Runtime::WebDriverValue::TypeEnum::Function)
+        .build();
   }
 
  private:
@@ -1105,9 +1062,9 @@ class ObjectMirror final : public ValueMirror {
   v8::Local<v8::Value> v8Value() const override { return m_value; }
 
   Response buildRemoteObject(
-      v8::Local<v8::Context> context, const WrapOptions& wrapOptions,
+      v8::Local<v8::Context> context, WrapMode mode,
       std::unique_ptr<RemoteObject>* result) const override {
-    if (wrapOptions.mode == WrapMode::kJson) {
+    if (mode == WrapMode::kForceValue) {
       std::unique_ptr<protocol::Value> protocolValue;
       Response response = toProtocolValue(context, m_value, &protocolValue);
       if (!response.IsSuccess()) return response;
@@ -1124,7 +1081,7 @@ class ObjectMirror final : public ValueMirror {
                     .setDescription(m_description)
                     .build();
       if (m_hasSubtype) (*result)->setSubtype(m_subtype);
-      if (wrapOptions.mode == WrapMode::kPreview) {
+      if (mode == WrapMode::kWithPreview) {
         std::unique_ptr<ObjectPreview> previewValue;
         int nameLimit = 5;
         int indexLimit = 100;
@@ -1167,50 +1124,34 @@ class ObjectMirror final : public ValueMirror {
     if (m_hasSubtype) (*result)->setSubtype(m_subtype);
   }
 
-  Response buildDeepSerializedValue(
-      v8::Local<v8::Context> context, int maxDepth,
-      v8::Local<v8::Object> additionalParameters,
-      V8SerializationDuplicateTracker& duplicateTracker,
-      std::unique_ptr<protocol::DictionaryValue>* result) const override {
-    maxDepth = std::min(kMaxProtocolDepth, maxDepth);
-    bool isKnown;
-    *result = duplicateTracker.LinkExistingOrCreate(m_value, &isKnown);
-    if (isKnown) {
-      return Response::Success();
-    }
+  std::unique_ptr<protocol::Runtime::WebDriverValue> buildWebDriverValue(
+      v8::Local<v8::Context> context, int max_depth) const override {
+    // https://w3c.github.io/webdriver-bidi/#data-types-protocolValue-RemoteValue-serialization
 
     // Check if embedder implemented custom serialization.
-    std::unique_ptr<v8_inspector::DeepSerializationResult>
-        embedderDeepSerializedResult = clientFor(context)->deepSerialize(
-            m_value, maxDepth, additionalParameters);
-    if (embedderDeepSerializedResult) {
+    std::unique_ptr<v8_inspector::WebDriverValue> embedder_serialized_result =
+        clientFor(context)->serializeToWebDriverValue(m_value, max_depth);
+
+    if (embedder_serialized_result) {
       // Embedder-implemented serialization.
+      std::unique_ptr<protocol::Runtime::WebDriverValue> result =
+          protocol::Runtime::WebDriverValue::create()
+              .setType(toString16(embedder_serialized_result->type->string()))
+              .build();
 
-      if (!embedderDeepSerializedResult->isSuccess)
-        return Response::ServerError(
-            toString16(embedderDeepSerializedResult->errorMessage->string())
-                .utf8());
-
-      (*result)->setString(
-          "type",
-          toString16(
-              embedderDeepSerializedResult->serializedValue->type->string()));
-      v8::Local<v8::Value> v8Value;
-      if (embedderDeepSerializedResult->serializedValue->value.ToLocal(
-              &v8Value)) {
+      v8::Local<v8::Value> v8_value;
+      if (embedder_serialized_result->value.ToLocal(&v8_value)) {
         // Embedder-implemented serialization has value.
-        std::unique_ptr<protocol::Value> protocolValue;
-        Response response = toProtocolValue(context, v8Value, &protocolValue);
-        if (!response.IsSuccess()) return response;
-        (*result)->setValue("value", std::move(protocolValue));
+        std::unique_ptr<protocol::Value> protocol_value;
+        Response response = toProtocolValue(context, v8_value, &protocol_value);
+        DCHECK(response.IsSuccess());
+        result->setValue(std::move(protocol_value));
       }
-      return Response::Success();
+      return result;
     }
 
     // No embedder-implemented serialization. Serialize as V8 Object.
-    return V8DeepSerializer::serializeV8Value(
-        m_value, context, maxDepth, additionalParameters, duplicateTracker,
-        *(result->get()));
+    return V8WebDriverSerializer::serializeV8Value(m_value, context, max_depth);
   }
 
  private:

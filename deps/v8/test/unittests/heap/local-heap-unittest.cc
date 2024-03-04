@@ -9,7 +9,6 @@
 #include "src/heap/heap.h"
 #include "src/heap/parked-scope.h"
 #include "src/heap/safepoint.h"
-#include "test/unittests/heap/heap-utils.h"
 #include "test/unittests/test-utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -84,7 +83,7 @@ namespace {
 
 class GCEpilogue {
  public:
-  static void Callback(void* data) {
+  static void Callback(LocalIsolate*, GCType, GCCallbackFlags, void* data) {
     reinterpret_cast<GCEpilogue*>(data)->was_invoked_ = true;
   }
 
@@ -171,7 +170,7 @@ TEST_F(LocalHeapTest, GCEpilogue) {
   CHECK(thread2->Start());
   epilogue[1].WaitUntilStarted();
   epilogue[2].WaitUntilStarted();
-  InvokeAtomicMajorGC(i_isolate());
+  PreciseCollectAllGarbage(i_isolate());
   epilogue[1].RequestStop();
   epilogue[2].RequestStop();
   thread1->Join();

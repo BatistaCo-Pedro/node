@@ -41,7 +41,7 @@ class CodeDesc {
 #endif
 
  public:
-  uint8_t* buffer = nullptr;
+  byte* buffer = nullptr;
   int buffer_size = 0;
 
   // The instruction area contains executable code plus inlined metadata.
@@ -88,7 +88,7 @@ class CodeDesc {
 
   // Unwinding information.
 
-  uint8_t* unwinding_info = nullptr;
+  byte* unwinding_info = nullptr;
   int unwinding_info_size = 0;
   int unwinding_info_offset_relative() const {
     // TODO(jgruber,v8:11036): Remove this function once unwinding_info setup

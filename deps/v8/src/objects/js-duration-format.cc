@@ -22,7 +22,6 @@
 #include "src/objects/managed-inl.h"
 #include "src/objects/objects-inl.h"
 #include "src/objects/option-utils.h"
-#include "unicode/dtfmtsym.h"
 #include "unicode/listformatter.h"
 #include "unicode/locid.h"
 #include "unicode/numberformatter.h"
@@ -174,26 +173,6 @@ Maybe<DurationUnitOptions> GetDurationUnitOptions(
   return Just(DurationUnitOptions({style, display}));
 }
 
-JSDurationFormat::Separator GetSeparator(const icu::Locale& l) {
-  UErrorCode status = U_ZERO_ERROR;
-  icu::DateFormatSymbols sym(l, status);
-  if (U_FAILURE(status)) return JSDurationFormat::Separator::kColon;
-  icu::UnicodeString sep;
-  sym.getTimeSeparatorString(sep);
-  if (sep.length() != 1) return JSDurationFormat::Separator::kColon;
-  switch (sep.charAt(0)) {
-    case u'.':
-      return JSDurationFormat::Separator::kFullStop;
-    case u'\uFF1A':
-      return JSDurationFormat::Separator::kFullwidthColon;
-    case u'\u066B':
-      return JSDurationFormat::Separator::kArabicDecimalSeparator;
-    // By default, or if we get anything else, just use ':'.
-    default:
-      return JSDurationFormat::Separator::kColon;
-  }
-}
-
 }  // namespace
 MaybeHandle<JSDurationFormat> JSDurationFormat::New(
     Isolate* isolate, Handle<Map> map, Handle<Object> locales,
@@ -271,7 +250,6 @@ MaybeHandle<JSDurationFormat> JSDurationFormat::New(
     DCHECK(U_SUCCESS(status));
   }
   std::string numbering_system = Intl::GetNumberingSystem(r_locale);
-  Separator separator = GetSeparator(r_locale);
 
   // 13. Let style be ? GetOption(options, "style", "string", « "long", "short",
   // "narrow", "digital" », "long").
@@ -351,7 +329,7 @@ MaybeHandle<JSDurationFormat> JSDurationFormat::New(
   MAYBE_ASSIGN_RETURN_ON_EXCEPTION_VALUE(
       isolate, fractional_digits,
       GetNumberOption(isolate, options, factory->fractionalDigits_string(), 0,
-                      9, kUndefinedFractionalDigits),
+                      9, 0),
       Handle<JSDurationFormat>());
 
   icu::number::LocalizedNumberFormatter fmt =
@@ -384,7 +362,6 @@ MaybeHandle<JSDurationFormat> JSDurationFormat::New(
   duration_format->set_milliseconds_style(milliseconds_option.style);
   duration_format->set_microseconds_style(microseconds_option.style);
   duration_format->set_nanoseconds_style(nanoseconds_option.style);
-  duration_format->set_separator(separator);
 
   duration_format->set_years_display(years_option.display);
   duration_format->set_months_display(months_option.display);
@@ -456,16 +433,19 @@ Handle<JSObject> JSDurationFormat::ResolvedOptions(
   Handle<JSObject> options = factory->NewJSObject(isolate->object_function());
 
   Handle<String> locale = factory->NewStringFromAsciiChecked(
-      Intl::ToLanguageTag(*format->icu_locale()->raw()).FromJust().c_str());
+      Intl::ToLanguageTag(*format->icu_locale().raw()).FromJust().c_str());
   UErrorCode status = U_ZERO_ERROR;
   icu::UnicodeString skeleton =
-      format->icu_number_formatter()->raw()->toSkeleton(status);
+      format->icu_number_formatter().raw()->toSkeleton(status);
   DCHECK(U_SUCCESS(status));
 
   Handle<String> numbering_system;
   CHECK(Intl::ToString(isolate,
                        JSNumberFormat::NumberingSystemFromSkeleton(skeleton))
             .ToHandle(&numbering_system));
+
+  Handle<Smi> fractional_digits =
+      handle(Smi::FromInt(format->fractional_digits()), isolate);
 
   bool created;
 
@@ -499,14 +479,7 @@ Handle<JSObject> JSDurationFormat::ResolvedOptions(
   OUTPUT_STYLE_AND_DISPLAY_PROPERTIES(microseconds);
   OUTPUT_STYLE_AND_DISPLAY_PROPERTIES(nanoseconds);
 
-  int32_t fractional_digits = format->fractional_digits();
-  if (kUndefinedFractionalDigits == fractional_digits) {
-    OUTPUT_PROPERTY(fractionalDigits_string, factory->undefined_value());
-  } else {
-    Handle<Smi> fractional_digits_obj =
-        handle(Smi::FromInt(fractional_digits), isolate);
-    OUTPUT_PROPERTY(fractionalDigits_string, fractional_digits_obj);
-  }
+  OUTPUT_PROPERTY(fractionalDigits_string, fractional_digits);
   OUTPUT_PROPERTY(numberingSystem_string, numbering_system);
 #undef OUTPUT_PROPERTY
 #undef OUTPUT_STYLE_PROPERTY
@@ -531,140 +504,83 @@ UNumberUnitWidth ToUNumberUnitWidth(JSDurationFormat::FieldStyle style) {
   }
 }
 
-struct Part {
-  enum Type { kFormatted, kSeparator };
-  Type part_type;
-  std::string type;
-  icu::number::FormattedNumber formatted;
-};
-
-char16_t SeparatorToChar(JSDurationFormat::Separator separator) {
-  switch (separator) {
-    case JSDurationFormat::Separator::kColon:
-      return u':';
-    case JSDurationFormat::Separator::kFullStop:
-      return u'.';
-    case JSDurationFormat::Separator::kFullwidthColon:
-      return u'\uFF1A';
-    case JSDurationFormat::Separator::kArabicDecimalSeparator:
-      return u'\u066B';
-  }
-}
-
-void Output(const char* type, double value,
-            const icu::number::LocalizedNumberFormatter& fmt, bool addToLast,
-            JSDurationFormat::Separator separator,
-            std::vector<std::vector<Part>>* parts,
-            std::vector<icu::UnicodeString>* strings) {
+void Output(std::vector<icu::UnicodeString>* out, double value,
+            const icu::number::LocalizedNumberFormatter& fmt) {
   UErrorCode status = U_ZERO_ERROR;
-  icu::number::FormattedNumber formatted = fmt.formatDouble(value, status);
-  icu::UnicodeString unit_string = formatted.toString(status);
+  out->push_back(fmt.formatDouble(value, status).toString(status));
   CHECK(U_SUCCESS(status));
-  Part p = {Part::Type::kFormatted, std::string(type), std::move(formatted)};
-  if (addToLast && !strings->empty()) {
-    strings->back().append(SeparatorToChar(separator));
-    strings->back() += unit_string;
-
-    if (parts != nullptr) {
-      icu::number::FormattedNumber dummy;
-      Part s = {Part::Type::kSeparator, std::string(), std::move(dummy)};
-      parts->back().push_back(std::move(s));
-      parts->back().push_back(std::move(p));
-    }
-    return;
-  }
-  strings->push_back(unit_string);
-  if (parts != nullptr) {
-    std::vector<Part> v;
-    v.push_back(std::move(p));
-    parts->push_back(std::move(v));
-  }
 }
 
-void Output3Styles(const char* type, double value,
-                   JSDurationFormat::Display display,
-                   const icu::number::LocalizedNumberFormatter& fmt,
-                   bool addToLast, JSDurationFormat::Separator separator,
-                   std::vector<std::vector<Part>>* parts,
-                   std::vector<icu::UnicodeString>* strings) {
+void Output3Styles(std::vector<icu::UnicodeString>* out,
+                   std::vector<std::string>* types, const char* type,
+                   double value, JSDurationFormat::Display display,
+                   const icu::number::LocalizedNumberFormatter& fmt) {
   if (value == 0 && display == JSDurationFormat::Display::kAuto) return;
-  Output(type, value, fmt, addToLast, separator, parts, strings);
+  types->push_back(type);
+  Output(out, value, fmt);
 }
 
-void Output4Styles(const char* type, double value,
-                   JSDurationFormat::Display display,
+void Output4Styles(std::vector<icu::UnicodeString>* out,
+                   std::vector<std::string>* types, const char* type,
+                   double value, JSDurationFormat::Display display,
                    JSDurationFormat::FieldStyle style,
                    const icu::number::LocalizedNumberFormatter& fmt,
-                   icu::MeasureUnit unit, bool addToLast,
-                   JSDurationFormat::Separator separator,
-                   std::vector<std::vector<Part>>* parts,
-                   std::vector<icu::UnicodeString>* strings) {
+                   icu::MeasureUnit unit) {
   if (value == 0 && display == JSDurationFormat::Display::kAuto) return;
   if (style == JSDurationFormat::FieldStyle::kNumeric) {
-    return Output(type, value, fmt, addToLast, separator, parts, strings);
+    types->push_back(type);
+    return Output(out, value, fmt);
   }
-  Output3Styles(type, value, display,
-                fmt.unit(unit).unitWidth(ToUNumberUnitWidth(style)), addToLast,
-                separator, parts, strings);
+  Output3Styles(out, types, type, value, display,
+                fmt.unit(unit).unitWidth(ToUNumberUnitWidth(style)));
 }
-void Output5Styles(const char* type, double value,
-                   JSDurationFormat::Display display,
+void Output5Styles(std::vector<icu::UnicodeString>* out,
+                   std::vector<std::string>* types, const char* type,
+                   double value, JSDurationFormat::Display display,
                    JSDurationFormat::FieldStyle style,
                    const icu::number::LocalizedNumberFormatter& fmt,
-                   icu::MeasureUnit unit, bool maybeAddToLast,
-                   JSDurationFormat::Separator separator,
-                   std::vector<std::vector<Part>>* parts,
-                   std::vector<icu::UnicodeString>* strings) {
+                   icu::MeasureUnit unit) {
   if (value == 0 && display == JSDurationFormat::Display::kAuto) return;
   if (style == JSDurationFormat::FieldStyle::k2Digit) {
-    return Output(type, value,
-                  fmt.integerWidth(icu::number::IntegerWidth::zeroFillTo(2)),
-                  maybeAddToLast, separator, parts, strings);
+    types->push_back(type);
+    return Output(out, value,
+                  fmt.integerWidth(icu::number::IntegerWidth::zeroFillTo(2)));
   }
-  Output4Styles(
-      type, value, display, style, fmt, unit,
-      (maybeAddToLast && JSDurationFormat::FieldStyle::kNumeric == style),
-      separator, parts, strings);
+  Output4Styles(out, types, type, value, display, style, fmt, unit);
 }
 
-void DurationRecordToListOfFormattedNumber(
+void DurationRecordToListOfStrings(
+    std::vector<icu::UnicodeString>* out, std::vector<std::string>* types,
     Handle<JSDurationFormat> df,
     const icu::number::LocalizedNumberFormatter& fmt,
-    const DurationRecord& record, std::vector<std::vector<Part>>* parts,
-    std::vector<icu::UnicodeString>* strings) {
-  JSDurationFormat::Separator separator = df->separator();
-  Output3Styles("year", record.years, df->years_display(),
+    const DurationRecord& record) {
+  // The handling of "2-digit" or "numeric" style of
+  // step l.i.6.c.i-ii "Let separator be
+  // dataLocaleData.[[digitalFormat]].[[separator]]." and
+  // "Append the new Record { [[Type]]: "literal", [[Value]]: separator} to the
+  // end of result." are not implemented following the spec due to unresolved
+  // issues in
+  // https://github.com/tc39/proposal-intl-duration-format/issues/55
+  Output3Styles(out, types, "years", record.years, df->years_display(),
                 fmt.unit(icu::MeasureUnit::getYear())
-                    .unitWidth(ToUNumberUnitWidth(df->years_style())),
-                false, separator, parts, strings);
-  Output3Styles("month", record.months, df->months_display(),
+                    .unitWidth(ToUNumberUnitWidth(df->years_style())));
+  Output3Styles(out, types, "months", record.months, df->months_display(),
                 fmt.unit(icu::MeasureUnit::getMonth())
-                    .unitWidth(ToUNumberUnitWidth(df->months_style())),
-                false, separator, parts, strings);
-  Output3Styles("week", record.weeks, df->weeks_display(),
+                    .unitWidth(ToUNumberUnitWidth(df->months_style())));
+  Output3Styles(out, types, "weeks", record.weeks, df->weeks_display(),
                 fmt.unit(icu::MeasureUnit::getWeek())
-                    .unitWidth(ToUNumberUnitWidth(df->weeks_style())),
-                false, separator, parts, strings);
-  Output3Styles("day", record.time_duration.days, df->days_display(),
+                    .unitWidth(ToUNumberUnitWidth(df->weeks_style())));
+  Output3Styles(out, types, "days", record.time_duration.days,
+                df->days_display(),
                 fmt.unit(icu::MeasureUnit::getDay())
-                    .unitWidth(ToUNumberUnitWidth(df->days_style())),
-                false, separator, parts, strings);
-  Output5Styles("hour", record.time_duration.hours, df->hours_display(),
-                df->hours_style(), fmt, icu::MeasureUnit::getHour(), false,
-                separator, parts, strings);
-  Output5Styles("minute", record.time_duration.minutes, df->minutes_display(),
-                df->minutes_style(), fmt, icu::MeasureUnit::getMinute(), true,
-                separator, parts, strings);
+                    .unitWidth(ToUNumberUnitWidth(df->days_style())));
+  Output5Styles(out, types, "hours", record.time_duration.hours,
+                df->hours_display(), df->hours_style(), fmt,
+                icu::MeasureUnit::getHour());
+  Output5Styles(out, types, "minutes", record.time_duration.minutes,
+                df->minutes_display(), df->minutes_style(), fmt,
+                icu::MeasureUnit::getMinute());
   int32_t fractional_digits = df->fractional_digits();
-  int32_t maximumFractionDigits =
-      (fractional_digits == JSDurationFormat::kUndefinedFractionalDigits)
-          ? 9
-          : fractional_digits;
-  int32_t minimumFractionDigits =
-      (fractional_digits == JSDurationFormat::kUndefinedFractionalDigits)
-          ? 0
-          : fractional_digits;
-
   if (df->milliseconds_style() == JSDurationFormat::FieldStyle::kNumeric) {
     // a. Set value to value + duration.[[Milliseconds]] / 10^3 +
     // duration.[[Microseconds]] / 10^6 + duration.[[Nanoseconds]] / 10^9.
@@ -672,16 +588,16 @@ void DurationRecordToListOfFormattedNumber(
                    record.time_duration.milliseconds / 1e3 +
                    record.time_duration.microseconds / 1e6 +
                    record.time_duration.nanoseconds / 1e9;
-    Output5Styles("second", value, df->seconds_display(), df->seconds_style(),
+    Output5Styles(out, types, "seconds", value, df->seconds_display(),
+                  df->seconds_style(),
                   fmt.precision(icu::number::Precision::minMaxFraction(
-                      minimumFractionDigits, maximumFractionDigits)),
-                  icu::MeasureUnit::getSecond(), true, separator, parts,
-                  strings);
+                      fractional_digits, fractional_digits)),
+                  icu::MeasureUnit::getSecond());
     return;
   }
-  Output5Styles("second", record.time_duration.seconds, df->seconds_display(),
-                df->seconds_style(), fmt, icu::MeasureUnit::getSecond(), true,
-                separator, parts, strings);
+  Output5Styles(out, types, "seconds", record.time_duration.seconds,
+                df->seconds_display(), df->seconds_style(), fmt,
+                icu::MeasureUnit::getSecond());
 
   if (df->microseconds_style() == JSDurationFormat::FieldStyle::kNumeric) {
     // a. Set value to value + duration.[[Microseconds]] / 10^3 +
@@ -689,62 +605,53 @@ void DurationRecordToListOfFormattedNumber(
     double value = record.time_duration.milliseconds +
                    record.time_duration.microseconds / 1e3 +
                    record.time_duration.nanoseconds / 1e6;
-    Output4Styles("millisecond", value, df->milliseconds_display(),
+    Output4Styles(out, types, "milliseconds", value, df->milliseconds_display(),
                   df->milliseconds_style(),
                   fmt.precision(icu::number::Precision::minMaxFraction(
-                      minimumFractionDigits, maximumFractionDigits)),
-                  icu::MeasureUnit::getMillisecond(), false, separator, parts,
-                  strings);
+                      fractional_digits, fractional_digits)),
+                  icu::MeasureUnit::getMillisecond());
     return;
   }
-  Output4Styles("millisecond", record.time_duration.milliseconds,
+  Output4Styles(out, types, "milliseconds", record.time_duration.milliseconds,
                 df->milliseconds_display(), df->milliseconds_style(), fmt,
-                icu::MeasureUnit::getMillisecond(), false, separator, parts,
-                strings);
+                icu::MeasureUnit::getMillisecond());
 
   if (df->nanoseconds_style() == JSDurationFormat::FieldStyle::kNumeric) {
     // a. Set value to value + duration.[[Nanoseconds]] / 10^3.
     double value = record.time_duration.microseconds +
                    record.time_duration.nanoseconds / 1e3;
-    Output4Styles("microsecond", value, df->microseconds_display(),
+    Output4Styles(out, types, "microseconds", value, df->microseconds_display(),
                   df->microseconds_style(),
                   fmt.precision(icu::number::Precision::minMaxFraction(
-                      minimumFractionDigits, maximumFractionDigits)),
-                  icu::MeasureUnit::getMicrosecond(), false, separator, parts,
-                  strings);
+                      fractional_digits, fractional_digits)),
+                  icu::MeasureUnit::getMicrosecond());
     return;
   }
-  Output4Styles("microsecond", record.time_duration.microseconds,
+  Output4Styles(out, types, "microseconds", record.time_duration.microseconds,
                 df->microseconds_display(), df->microseconds_style(), fmt,
-                icu::MeasureUnit::getMicrosecond(), false, separator, parts,
-                strings);
+                icu::MeasureUnit::getMicrosecond());
 
-  Output4Styles("nanosecond", record.time_duration.nanoseconds,
+  Output4Styles(out, types, "nanoseconds", record.time_duration.nanoseconds,
                 df->nanoseconds_display(), df->nanoseconds_style(), fmt,
-                icu::MeasureUnit::getNanosecond(), false, separator, parts,
-                strings);
+                icu::MeasureUnit::getNanosecond());
 }
 
 UListFormatterWidth StyleToWidth(JSDurationFormat::Style style) {
   switch (style) {
     case JSDurationFormat::Style::kLong:
       return ULISTFMT_WIDTH_WIDE;
-    case JSDurationFormat::Style::kNarrow:
-      return ULISTFMT_WIDTH_NARROW;
     case JSDurationFormat::Style::kShort:
-    case JSDurationFormat::Style::kDigital:
       return ULISTFMT_WIDTH_SHORT;
+    case JSDurationFormat::Style::kNarrow:
+    case JSDurationFormat::Style::kDigital:
+      return ULISTFMT_WIDTH_NARROW;
   }
   UNREACHABLE();
 }
 
-// The last two arguments passed to the  Format function is only needed
-// for Format function to output detail structure and not needed if the
-// Format only needs to output a String.
-template <typename T, bool Details,
+template <typename T,
           MaybeHandle<T> (*Format)(Isolate*, const icu::FormattedValue&,
-                                   const std::vector<std::vector<Part>>*,
-                                   JSDurationFormat::Separator separator)>
+                                   const std::vector<std::string>&)>
 MaybeHandle<T> PartitionDurationFormatPattern(Isolate* isolate,
                                               Handle<JSDurationFormat> df,
                                               const DurationRecord& record,
@@ -760,22 +667,21 @@ MaybeHandle<T> PartitionDurationFormatPattern(Isolate* isolate,
   // 9. Let lf be ! Construct(%ListFormat%, « durationFormat.[[Locale]], lfOpts
   // »).
   UErrorCode status = U_ZERO_ERROR;
-  icu::Locale icu_locale = *df->icu_locale()->raw();
+  icu::Locale icu_locale = *df->icu_locale().raw();
   std::unique_ptr<icu::ListFormatter> formatter(
       icu::ListFormatter::createInstance(icu_locale, type, list_style, status));
   CHECK(U_SUCCESS(status));
 
-  std::vector<std::vector<Part>> list;
-  std::vector<std::vector<Part>>* parts = Details ? &list : nullptr;
-  std::vector<icu::UnicodeString> string_list;
+  std::vector<icu::UnicodeString> list;
+  std::vector<std::string> types;
 
-  DurationRecordToListOfFormattedNumber(
-      df, *(df->icu_number_formatter()->raw()), record, parts, &string_list);
+  DurationRecordToListOfStrings(&list, &types, df,
+                                *(df->icu_number_formatter().raw()), record);
 
   icu::FormattedList formatted = formatter->formatStringsToValue(
-      string_list.data(), static_cast<int32_t>(string_list.size()), status);
+      list.data(), static_cast<int32_t>(list.size()), status);
   CHECK(U_SUCCESS(status));
-  return Format(isolate, formatted, parts, df->separator());
+  return Format(isolate, formatted, types);
 }
 
 // #sec-todurationrecord
@@ -786,7 +692,7 @@ MaybeHandle<T> PartitionDurationFormatPattern(Isolate* isolate,
 Maybe<DurationRecord> ToDurationRecord(Isolate* isolate, Handle<Object> input,
                                        const DurationRecord& default_value) {
   // 1-a. If Type(input) is String, throw a RangeError exception.
-  if (IsString(*input)) {
+  if (input->IsString()) {
     THROW_NEW_ERROR_RETURN_VALUE(
         isolate,
         NewRangeError(MessageTemplate::kInvalid,
@@ -811,10 +717,9 @@ Maybe<DurationRecord> ToDurationRecord(Isolate* isolate, Handle<Object> input,
   return Just(record);
 }
 
-template <typename T, bool Details,
+template <typename T,
           MaybeHandle<T> (*Format)(Isolate*, const icu::FormattedValue&,
-                                   const std::vector<std::vector<Part>>*,
-                                   JSDurationFormat::Separator)>
+                                   const std::vector<std::string>&)>
 MaybeHandle<T> FormatCommon(Isolate* isolate, Handle<JSDurationFormat> df,
                             Handle<Object> duration, const char* method_name) {
   // 1. Let df be this value.
@@ -826,63 +731,42 @@ MaybeHandle<T> FormatCommon(Isolate* isolate, Handle<JSDurationFormat> df,
       ToDurationRecord(isolate, duration, {0, 0, 0, {0, 0, 0, 0, 0, 0, 0}}),
       Handle<T>());
   // 5. Let parts be ! PartitionDurationFormatPattern(df, record).
-  return PartitionDurationFormatPattern<T, Details, Format>(isolate, df, record,
-                                                            method_name);
+  return PartitionDurationFormatPattern<T, Format>(isolate, df, record,
+                                                   method_name);
 }
 
 }  // namespace
 
-MaybeHandle<String> FormattedToString(
-    Isolate* isolate, const icu::FormattedValue& formatted,
-    const std::vector<std::vector<Part>>* parts, JSDurationFormat::Separator) {
-  DCHECK_NULL(parts);
+MaybeHandle<String> FormattedToString(Isolate* isolate,
+                                      const icu::FormattedValue& formatted,
+                                      const std::vector<std::string>&) {
   return Intl::FormattedToString(isolate, formatted);
 }
 
 MaybeHandle<JSArray> FormattedListToJSArray(
     Isolate* isolate, const icu::FormattedValue& formatted,
-    const std::vector<std::vector<Part>>* parts,
-    JSDurationFormat::Separator separator) {
-  DCHECK_NOT_NULL(parts);
+    const std::vector<std::string>& types) {
   Factory* factory = isolate->factory();
   Handle<JSArray> array = factory->NewJSArray(0);
   icu::ConstrainedFieldPosition cfpos;
   cfpos.constrainCategory(UFIELD_CATEGORY_LIST);
   int index = 0;
-  int part_index = 0;
+  int type_index = 0;
   UErrorCode status = U_ZERO_ERROR;
   icu::UnicodeString string = formatted.toString(status);
+  Handle<String> substring;
   while (formatted.nextPosition(cfpos, status) && U_SUCCESS(status)) {
+    ASSIGN_RETURN_ON_EXCEPTION(
+        isolate, substring,
+        Intl::ToString(isolate, string, cfpos.getStart(), cfpos.getLimit()),
+        JSArray);
+    Handle<String> type_string = factory->literal_string();
     if (cfpos.getField() == ULISTFMT_ELEMENT_FIELD) {
-      for (auto& it : parts->at(part_index++)) {
-        switch (it.part_type) {
-          case Part::Type::kSeparator: {
-            icu::UnicodeString sep(SeparatorToChar(separator));
-            Handle<String> separator_string;
-            ASSIGN_RETURN_ON_EXCEPTION(isolate, separator_string,
-                                       Intl::ToString(isolate, sep), JSArray);
-            Intl::AddElement(isolate, array, index++, factory->literal_string(),
-                             separator_string);
-          } break;
-          case Part::Type::kFormatted:
-            Handle<String> type_string =
-                factory->NewStringFromAsciiChecked(it.type.c_str());
-            Maybe<int> index_after_add = Intl::AddNumberElements(
-                isolate, it.formatted, array, index, type_string);
-            MAYBE_RETURN(index_after_add, MaybeHandle<JSArray>());
-            index = index_after_add.FromJust();
-            break;
-        }
-      }
-    } else {
-      Handle<String> substring;
-      ASSIGN_RETURN_ON_EXCEPTION(
-          isolate, substring,
-          Intl::ToString(isolate, string, cfpos.getStart(), cfpos.getLimit()),
-          JSArray);
-      Intl::AddElement(isolate, array, index++, factory->literal_string(),
-                       substring);
+      type_string =
+          factory->NewStringFromAsciiChecked(types[type_index].c_str());
+      type_index++;
     }
+    Intl::AddElement(isolate, array, index++, type_string, substring);
   }
   if (U_FAILURE(status)) {
     THROW_NEW_ERROR(isolate, NewTypeError(MessageTemplate::kIcuError), JSArray);
@@ -895,15 +779,15 @@ MaybeHandle<String> JSDurationFormat::Format(Isolate* isolate,
                                              Handle<JSDurationFormat> df,
                                              Handle<Object> duration) {
   const char* method_name = "Intl.DurationFormat.prototype.format";
-  return FormatCommon<String, false, FormattedToString>(isolate, df, duration,
-                                                        method_name);
+  return FormatCommon<String, FormattedToString>(isolate, df, duration,
+                                                 method_name);
 }
 
 MaybeHandle<JSArray> JSDurationFormat::FormatToParts(
     Isolate* isolate, Handle<JSDurationFormat> df, Handle<Object> duration) {
   const char* method_name = "Intl.DurationFormat.prototype.formatToParts";
-  return FormatCommon<JSArray, true, FormattedListToJSArray>(
-      isolate, df, duration, method_name);
+  return FormatCommon<JSArray, FormattedListToJSArray>(isolate, df, duration,
+                                                       method_name);
 }
 
 const std::set<std::string>& JSDurationFormat::GetAvailableLocales() {

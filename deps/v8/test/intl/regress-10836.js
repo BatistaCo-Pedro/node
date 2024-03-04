@@ -41,5 +41,5 @@ let options = {
 
 df = new Intl.DateTimeFormat("en", options);
 assertEquals(
-    "second:fractionalSecondDigits:timeZoneName",
+    "second:fractionalSecondDigits:second:fractionalSecondDigits:timeZoneName",
     read.join(":"));

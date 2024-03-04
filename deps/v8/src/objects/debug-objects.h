@@ -54,8 +54,8 @@ class DebugInfo : public TorqueGeneratedDebugInfo<DebugInfo, Struct> {
   // and DebugBytecodeArray returns the instrumented bytecode.
   inline bool HasInstrumentedBytecodeArray();
 
-  inline Tagged<BytecodeArray> OriginalBytecodeArray();
-  inline Tagged<BytecodeArray> DebugBytecodeArray();
+  inline BytecodeArray OriginalBytecodeArray();
+  inline BytecodeArray DebugBytecodeArray();
 
   // --- Break points ---
   // --------------------
@@ -137,7 +137,7 @@ class DebugInfo : public TorqueGeneratedDebugInfo<DebugInfo, Struct> {
 
  private:
   // Get the break point info object for a source position.
-  Tagged<Object> GetBreakPointInfo(Isolate* isolate, int source_position);
+  Object GetBreakPointInfo(Isolate* isolate, int source_position);
 
   TQ_OBJECT_CONSTRUCTORS(DebugInfo)
 };
@@ -211,7 +211,7 @@ class StackFrameInfo
   static int GetSourcePosition(Handle<StackFrameInfo> info);
 
   // The script for the stack frame.
-  inline Tagged<Script> script() const;
+  inline Script script() const;
 
   // The bytecode offset or source position for the stack frame.
   DECL_INT_ACCESSORS(bytecode_offset_or_source_position)
@@ -237,9 +237,9 @@ class ErrorStackData
   NEVER_READ_ONLY_SPACE
 
   inline bool HasFormattedStack() const;
-  DECL_ACCESSORS(formatted_stack, Tagged<Object>)
+  DECL_ACCESSORS(formatted_stack, Object)
   inline bool HasCallSiteInfos() const;
-  DECL_ACCESSORS(call_site_infos, Tagged<FixedArray>)
+  DECL_ACCESSORS(call_site_infos, FixedArray)
 
   static void EnsureStackFrameInfos(Isolate* isolate,
                                     Handle<ErrorStackData> error_stack);

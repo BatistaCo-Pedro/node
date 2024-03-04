@@ -6,4 +6,3 @@ Makefile
 *gnutls*
 ngtcp2/**/.gitignore
 ngtcp2/**/.deps
-nghttp3/**/.deps

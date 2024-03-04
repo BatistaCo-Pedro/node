@@ -17,11 +17,6 @@
 #include "src/objects/smi.h"
 #include "src/tasks/task-utils.h"
 
-#if V8_ENABLE_WEBASSEMBLY
-#include "src/wasm/wasm-code-manager.h"
-#include "src/wasm/wasm-engine.h"
-#endif
-
 namespace v8 {
 namespace internal {
 
@@ -44,15 +39,6 @@ class MemoryMeasurementResultBuilder {
   void AddOther(size_t estimate, size_t lower_bound, size_t upper_bound) {
     detailed_ = true;
     other_.push_back(NewResult(estimate, lower_bound, upper_bound));
-  }
-  void AddWasm(size_t code, size_t metadata) {
-    Handle<JSObject> wasm = NewJSObject();
-    AddProperty(wasm, factory_->NewStringFromAsciiChecked("code"),
-                NewNumber(code));
-    AddProperty(wasm, factory_->NewStringFromAsciiChecked("metadata"),
-                NewNumber(metadata));
-    AddProperty(result_, factory_->NewStringFromAsciiChecked("WebAssembly"),
-                wasm);
   }
   Handle<JSObject> Build() {
     if (detailed_) {
@@ -112,7 +98,10 @@ class V8_EXPORT_PRIVATE MeasureMemoryDelegate
 
   // v8::MeasureMemoryDelegate overrides:
   bool ShouldMeasure(v8::Local<v8::Context> context) override;
-  void MeasurementComplete(Result result) override;
+  void MeasurementComplete(
+      const std::vector<std::pair<v8::Local<v8::Context>, size_t>>&
+          context_sizes_in_bytes,
+      size_t unattributed_size_in_bytes) override;
 
  private:
   Isolate* isolate_;
@@ -141,16 +130,16 @@ bool MeasureMemoryDelegate::ShouldMeasure(v8::Local<v8::Context> context) {
   return context_->security_token() == native_context->security_token();
 }
 
-void MeasureMemoryDelegate::MeasurementComplete(Result result) {
-  size_t shared_size = result.unattributed_size_in_bytes;
-  size_t wasm_code = result.wasm_code_size_in_bytes;
-  size_t wasm_metadata = result.wasm_metadata_size_in_bytes;
+void MeasureMemoryDelegate::MeasurementComplete(
+    const std::vector<std::pair<v8::Local<v8::Context>, size_t>>&
+        context_sizes_in_bytes,
+    size_t shared_size) {
   v8::Local<v8::Context> v8_context =
       Utils::Convert<HeapObject, v8::Context>(context_);
   v8::Context::Scope scope(v8_context);
   size_t total_size = 0;
   size_t current_size = 0;
-  for (const auto& context_and_size : result.context_sizes_in_bytes) {
+  for (const auto& context_and_size : context_sizes_in_bytes) {
     total_size += context_and_size.second;
     if (*Utils::OpenHandle(*context_and_size.first) == *context_) {
       current_size = context_and_size.second;
@@ -158,14 +147,11 @@ void MeasureMemoryDelegate::MeasurementComplete(Result result) {
   }
   MemoryMeasurementResultBuilder result_builder(isolate_, isolate_->factory());
   result_builder.AddTotal(total_size, total_size, total_size + shared_size);
-  if (wasm_code > 0 || wasm_metadata > 0) {
-    result_builder.AddWasm(wasm_code, wasm_metadata);
-  }
 
   if (mode_ == v8::MeasureMemoryMode::kDetailed) {
     result_builder.AddCurrent(current_size, current_size,
                               current_size + shared_size);
-    for (const auto& context_and_size : result.context_sizes_in_bytes) {
+    for (const auto& context_and_size : context_sizes_in_bytes) {
       if (*Utils::OpenHandle(*context_and_size.first) != *context_) {
         size_t other_size = context_and_size.second;
         result_builder.AddOther(other_size, other_size,
@@ -174,14 +160,12 @@ void MeasureMemoryDelegate::MeasurementComplete(Result result) {
     }
   }
 
-  Handle<JSObject> jsresult = result_builder.Build();
-  JSPromise::Resolve(promise_, jsresult).ToHandleChecked();
+  Handle<JSObject> result = result_builder.Build();
+  JSPromise::Resolve(promise_, result).ToHandleChecked();
 }
 
 MemoryMeasurement::MemoryMeasurement(Isolate* isolate)
-    : isolate_(isolate),
-      task_runner_(isolate->heap()->GetForegroundTaskRunner()),
-      random_number_generator_() {
+    : isolate_(isolate), random_number_generator_() {
   if (v8_flags.random_seed) {
     random_number_generator_.SetSeed(v8_flags.random_seed);
   }
@@ -199,13 +183,11 @@ bool MemoryMeasurement::EnqueueRequest(
   }
   Handle<WeakFixedArray> global_weak_contexts =
       isolate_->global_handles()->Create(*weak_contexts);
-  Request request = {std::move(delegate),          // delegate
-                     global_weak_contexts,         // contexts
-                     std::vector<size_t>(length),  // sizes
-                     0u,                           // shared
-                     0u,                           // wasm_code
-                     0u,                           // wasm_metadata
-                     {}};                          // timer
+  Request request = {std::move(delegate),
+                     global_weak_contexts,
+                     std::vector<size_t>(length),
+                     0u,
+                     {}};
   request.timer.Start();
   received_.push_back(std::move(request));
   ScheduleGCTask(execution);
@@ -220,7 +202,7 @@ std::vector<Address> MemoryMeasurement::StartProcessing() {
   for (const auto& request : processing_) {
     Handle<WeakFixedArray> contexts = request.contexts;
     for (int i = 0; i < contexts->length(); i++) {
-      Tagged<HeapObject> context;
+      HeapObject context;
       if (contexts->Get(i).GetHeapObject(&context)) {
         unique_contexts.insert(context.ptr());
       }
@@ -232,28 +214,17 @@ std::vector<Address> MemoryMeasurement::StartProcessing() {
 void MemoryMeasurement::FinishProcessing(const NativeContextStats& stats) {
   if (processing_.empty()) return;
 
-  size_t shared = stats.Get(MarkingWorklists::kSharedContext);
-#if V8_ENABLE_WEBASSEMBLY
-  size_t wasm_code = wasm::GetWasmCodeManager()->committed_code_space();
-  size_t wasm_metadata =
-      wasm::GetWasmEngine()->EstimateCurrentMemoryConsumption();
-#endif
-
   while (!processing_.empty()) {
     Request request = std::move(processing_.front());
     processing_.pop_front();
     for (int i = 0; i < static_cast<int>(request.sizes.size()); i++) {
-      Tagged<HeapObject> context;
+      HeapObject context;
       if (!request.contexts->Get(i).GetHeapObject(&context)) {
         continue;
       }
       request.sizes[i] = stats.Get(context.ptr());
     }
-    request.shared = shared;
-#if V8_ENABLE_WEBASSEMBLY
-    request.wasm_code = wasm_code;
-    request.wasm_metadata = wasm_metadata;
-#endif
+    request.shared = stats.Get(MarkingWorklists::kSharedContext);
     done_.push_back(std::move(request));
   }
   ScheduleReportingTask();
@@ -262,7 +233,9 @@ void MemoryMeasurement::FinishProcessing(const NativeContextStats& stats) {
 void MemoryMeasurement::ScheduleReportingTask() {
   if (reporting_task_pending_) return;
   reporting_task_pending_ = true;
-  task_runner_->PostTask(MakeCancelableTask(isolate_, [this] {
+  auto taskrunner = V8::GetCurrentPlatform()->GetForegroundTaskRunner(
+      reinterpret_cast<v8::Isolate*>(isolate_));
+  taskrunner->PostTask(MakeCancelableTask(isolate_, [this] {
     reporting_task_pending_ = false;
     ReportResults();
   }));
@@ -300,13 +273,15 @@ void MemoryMeasurement::ScheduleGCTask(v8::MeasureMemoryExecution execution) {
   if (execution == v8::MeasureMemoryExecution::kLazy) return;
   if (IsGCTaskPending(execution)) return;
   SetGCTaskPending(execution);
+  auto taskrunner = V8::GetCurrentPlatform()->GetForegroundTaskRunner(
+      reinterpret_cast<v8::Isolate*>(isolate_));
   auto task = MakeCancelableTask(isolate_, [this, execution] {
     SetGCTaskDone(execution);
     if (received_.empty()) return;
     Heap* heap = isolate_->heap();
     if (v8_flags.incremental_marking) {
       if (heap->incremental_marking()->IsStopped()) {
-        heap->StartIncrementalMarking(GCFlag::kNoFlags,
+        heap->StartIncrementalMarking(Heap::kNoGCFlags,
                                       GarbageCollectionReason::kMeasureMemory);
       } else {
         if (execution == v8::MeasureMemoryExecution::kEager) {
@@ -320,9 +295,9 @@ void MemoryMeasurement::ScheduleGCTask(v8::MeasureMemoryExecution execution) {
     }
   });
   if (execution == v8::MeasureMemoryExecution::kEager) {
-    task_runner_->PostTask(std::move(task));
+    taskrunner->PostTask(std::move(task));
   } else {
-    task_runner_->PostDelayedTask(std::move(task), NextGCTaskDelayInSeconds());
+    taskrunner->PostDelayedTask(std::move(task), NextGCTaskDelayInSeconds());
   }
 }
 
@@ -340,7 +315,7 @@ void MemoryMeasurement::ReportResults() {
     DCHECK_EQ(request.sizes.size(),
               static_cast<size_t>(request.contexts->length()));
     for (int i = 0; i < request.contexts->length(); i++) {
-      Tagged<HeapObject> raw_context;
+      HeapObject raw_context;
       if (!request.contexts->Get(i).GetHeapObject(&raw_context)) {
         continue;
       }
@@ -348,12 +323,7 @@ void MemoryMeasurement::ReportResults() {
           handle(raw_context, isolate_));
       sizes.push_back(std::make_pair(context, request.sizes[i]));
     }
-    START_ALLOW_USE_DEPRECATED()
-    // Temporarily call both old and new callbacks.
     request.delegate->MeasurementComplete(sizes, request.shared);
-    END_ALLOW_USE_DEPRECATED()
-    request.delegate->MeasurementComplete(
-        {sizes, request.shared, request.wasm_code, request.wasm_metadata});
     isolate_->counters()->measure_memory_delay_ms()->AddSample(
         static_cast<int>(request.timer.Elapsed().InMilliseconds()));
   }
@@ -366,58 +336,54 @@ std::unique_ptr<v8::MeasureMemoryDelegate> MemoryMeasurement::DefaultDelegate(
                                                  mode);
 }
 
-bool NativeContextInferrer::InferForContext(PtrComprCageBase cage_base,
-
-                                            Tagged<Context> context,
+bool NativeContextInferrer::InferForContext(Isolate* isolate, Context context,
                                             Address* native_context) {
-  Tagged<Map> context_map = context->map(cage_base, kAcquireLoad);
-  Tagged<Object> maybe_native_context =
+  PtrComprCageBase cage_base(isolate);
+  Map context_map = context.map(cage_base, kAcquireLoad);
+  Object maybe_native_context =
       TaggedField<Object, Map::kConstructorOrBackPointerOrNativeContextOffset>::
           Acquire_Load(cage_base, context_map);
-  if (IsNativeContext(maybe_native_context, cage_base)) {
+  if (maybe_native_context.IsNativeContext(cage_base)) {
     *native_context = maybe_native_context.ptr();
     return true;
   }
   return false;
 }
 
-bool NativeContextInferrer::InferForJSFunction(PtrComprCageBase cage_base,
-                                               Tagged<JSFunction> function,
+bool NativeContextInferrer::InferForJSFunction(Isolate* isolate,
+                                               JSFunction function,
                                                Address* native_context) {
-  Tagged<Object> maybe_context =
-      TaggedField<Object, JSFunction::kContextOffset>::Acquire_Load(cage_base,
+  Object maybe_context =
+      TaggedField<Object, JSFunction::kContextOffset>::Acquire_Load(isolate,
                                                                     function);
   // The context may be a smi during deserialization.
-  if (IsSmi(maybe_context)) {
+  if (maybe_context.IsSmi()) {
     DCHECK_EQ(maybe_context, Smi::uninitialized_deserialization_value());
     return false;
   }
-  if (!IsContext(maybe_context)) {
+  if (!maybe_context.IsContext()) {
     // The function does not have a context.
     return false;
   }
-  return InferForContext(cage_base, Context::cast(maybe_context),
-                         native_context);
+  return InferForContext(isolate, Context::cast(maybe_context), native_context);
 }
 
-bool NativeContextInferrer::InferForJSObject(PtrComprCageBase cage_base,
-                                             Tagged<Map> map,
-                                             Tagged<JSObject> object,
+bool NativeContextInferrer::InferForJSObject(Isolate* isolate, Map map,
+                                             JSObject object,
                                              Address* native_context) {
-  if (map->instance_type() == JS_GLOBAL_OBJECT_TYPE) {
-    Tagged<Object> maybe_context =
-        JSGlobalObject::cast(object)->native_context_unchecked(cage_base);
-    if (IsNativeContext(maybe_context)) {
+  if (map.instance_type() == JS_GLOBAL_OBJECT_TYPE) {
+    Object maybe_context =
+        JSGlobalObject::cast(object).native_context_unchecked(isolate);
+    if (maybe_context.IsNativeContext()) {
       *native_context = maybe_context.ptr();
       return true;
     }
   }
   // The maximum number of steps to perform when looking for the context.
   const int kMaxSteps = 3;
-  Tagged<Object> maybe_constructor =
-      map->TryGetConstructor(cage_base, kMaxSteps);
-  if (IsJSFunction(maybe_constructor)) {
-    return InferForJSFunction(cage_base, JSFunction::cast(maybe_constructor),
+  Object maybe_constructor = map.TryGetConstructor(isolate, kMaxSteps);
+  if (maybe_constructor.IsJSFunction()) {
+    return InferForJSFunction(isolate, JSFunction::cast(maybe_constructor),
                               native_context);
   }
   return false;
@@ -431,15 +397,15 @@ void NativeContextStats::Merge(const NativeContextStats& other) {
   }
 }
 
-void NativeContextStats::IncrementExternalSize(Address context, Tagged<Map> map,
-                                               Tagged<HeapObject> object) {
-  InstanceType instance_type = map->instance_type();
+void NativeContextStats::IncrementExternalSize(Address context, Map map,
+                                               HeapObject object) {
+  InstanceType instance_type = map.instance_type();
   size_t external_size = 0;
   if (instance_type == JS_ARRAY_BUFFER_TYPE) {
-    external_size = JSArrayBuffer::cast(object)->GetByteLength();
+    external_size = JSArrayBuffer::cast(object).GetByteLength();
   } else {
     DCHECK(InstanceTypeChecker::IsExternalString(instance_type));
-    external_size = ExternalString::cast(object)->ExternalPayloadSize();
+    external_size = ExternalString::cast(object).ExternalPayloadSize();
   }
   size_by_context_[context] += external_size;
 }

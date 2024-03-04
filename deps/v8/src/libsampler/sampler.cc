@@ -5,7 +5,6 @@
 #include "src/libsampler/sampler.h"
 
 #include "include/v8-isolate.h"
-#include "include/v8-platform.h"
 #include "include/v8-unwinder.h"
 
 #ifdef USE_SIGNALS
@@ -381,7 +380,6 @@ bool SignalHandler::signal_handler_installed_ = false;
 
 void SignalHandler::HandleProfilerSignal(int signal, siginfo_t* info,
                                          void* context) {
-  v8::ThreadIsolatedAllocator::SetDefaultPermissionsForSignalHandler();
   USE(info);
   if (signal != SIGPROF) return;
   v8::RegisterState state;

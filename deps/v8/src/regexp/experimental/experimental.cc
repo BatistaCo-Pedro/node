@@ -123,21 +123,20 @@ bool ExperimentalRegExp::Compile(Isolate* isolate, Handle<JSRegExp> re) {
   return true;
 }
 
-base::Vector<RegExpInstruction> AsInstructionSequence(
-    Tagged<ByteArray> raw_bytes) {
+base::Vector<RegExpInstruction> AsInstructionSequence(ByteArray raw_bytes) {
   RegExpInstruction* inst_begin =
-      reinterpret_cast<RegExpInstruction*>(raw_bytes->GetDataStartAddress());
-  int inst_num = raw_bytes->length() / sizeof(RegExpInstruction);
-  DCHECK_EQ(sizeof(RegExpInstruction) * inst_num, raw_bytes->length());
+      reinterpret_cast<RegExpInstruction*>(raw_bytes.GetDataStartAddress());
+  int inst_num = raw_bytes.length() / sizeof(RegExpInstruction);
+  DCHECK_EQ(sizeof(RegExpInstruction) * inst_num, raw_bytes.length());
   return base::Vector<RegExpInstruction>(inst_begin, inst_num);
 }
 
 namespace {
 
 int32_t ExecRawImpl(Isolate* isolate, RegExp::CallOrigin call_origin,
-                    Tagged<ByteArray> bytecode, Tagged<String> subject,
-                    int capture_count, int32_t* output_registers,
-                    int32_t output_register_count, int32_t subject_index) {
+                    ByteArray bytecode, String subject, int capture_count,
+                    int32_t* output_registers, int32_t output_register_count,
+                    int32_t subject_index) {
   DisallowGarbageCollection no_gc;
   // TODO(cbruni): remove once gcmole is fixed.
   DisableGCMole no_gc_mole;
@@ -146,34 +145,39 @@ int32_t ExecRawImpl(Isolate* isolate, RegExp::CallOrigin call_origin,
       JSRegExp::RegistersForCaptureCount(capture_count);
 
   int32_t result;
-  DCHECK(subject->IsFlat());
-  Zone zone(isolate->allocator(), ZONE_NAME);
-  result = ExperimentalRegExpInterpreter::FindMatches(
-      isolate, call_origin, bytecode, register_count_per_match, subject,
-      subject_index, output_registers, output_register_count, &zone);
+  do {
+    DCHECK(subject.IsFlat());
+    Zone zone(isolate->allocator(), ZONE_NAME);
+    result = ExperimentalRegExpInterpreter::FindMatches(
+        isolate, call_origin, bytecode, register_count_per_match, subject,
+        subject_index, output_registers, output_register_count, &zone);
+  } while (result == RegExp::kInternalRegExpRetry &&
+           call_origin == RegExp::kFromRuntime);
   return result;
 }
 
 }  // namespace
 
 // Returns the number of matches.
-int32_t ExperimentalRegExp::ExecRaw(
-    Isolate* isolate, RegExp::CallOrigin call_origin, Tagged<JSRegExp> regexp,
-    Tagged<String> subject, int32_t* output_registers,
-    int32_t output_register_count, int32_t subject_index) {
+int32_t ExperimentalRegExp::ExecRaw(Isolate* isolate,
+                                    RegExp::CallOrigin call_origin,
+                                    JSRegExp regexp, String subject,
+                                    int32_t* output_registers,
+                                    int32_t output_register_count,
+                                    int32_t subject_index) {
   DCHECK(v8_flags.enable_experimental_regexp_engine);
   DisallowGarbageCollection no_gc;
 
   if (v8_flags.trace_experimental_regexp_engine) {
-    StdoutStream{} << "Executing experimental regexp " << regexp->source()
+    StdoutStream{} << "Executing experimental regexp " << regexp.source()
                    << std::endl;
   }
 
   static constexpr bool kIsLatin1 = true;
-  Tagged<ByteArray> bytecode = ByteArray::cast(regexp->bytecode(kIsLatin1));
+  ByteArray bytecode = ByteArray::cast(regexp.bytecode(kIsLatin1));
 
   return ExecRawImpl(isolate, call_origin, bytecode, subject,
-                     regexp->capture_count(), output_registers,
+                     regexp.capture_count(), output_registers,
                      output_register_count, subject_index);
 }
 
@@ -191,9 +195,9 @@ int32_t ExperimentalRegExp::MatchForCallFromJs(
   DisallowHandleAllocation no_handles;
   DisallowHandleDereference no_deref;
 
-  Tagged<String> subject_string = String::cast(Tagged<Object>(subject));
+  String subject_string = String::cast(Object(subject));
 
-  Tagged<JSRegExp> regexp_obj = JSRegExp::cast(Tagged<Object>(regexp));
+  JSRegExp regexp_obj = JSRegExp::cast(Object(regexp));
 
   return ExecRaw(isolate, RegExp::kFromJs, regexp_obj, subject_string,
                  output_registers, output_register_count, start_position);
@@ -230,33 +234,26 @@ MaybeHandle<Object> ExperimentalRegExp::Exec(
     output_registers_release.reset(output_registers);
   }
 
-  do {
-    int num_matches =
-        ExecRaw(isolate, RegExp::kFromRuntime, *regexp, *subject,
-                output_registers, output_register_count, subject_index);
+  int num_matches =
+      ExecRaw(isolate, RegExp::kFromRuntime, *regexp, *subject,
+              output_registers, output_register_count, subject_index);
 
-    if (num_matches > 0) {
-      DCHECK_EQ(num_matches, 1);
-      if (exec_quirks == RegExp::ExecQuirks::kTreatMatchAtEndAsFailure) {
-        if (output_registers[0] >= subject->length()) {
-          return isolate->factory()->null_value();
-        }
+  if (num_matches > 0) {
+    DCHECK_EQ(num_matches, 1);
+    if (exec_quirks == RegExp::ExecQuirks::kTreatMatchAtEndAsFailure) {
+      if (output_registers[0] >= subject->length()) {
+        return isolate->factory()->null_value();
       }
-      return RegExp::SetLastMatchInfo(isolate, last_match_info, subject,
-                                      capture_count, output_registers);
-    } else if (num_matches == 0) {
-      return isolate->factory()->null_value();
-    } else {
-      DCHECK_LT(num_matches, 0);
-      if (num_matches == RegExp::kInternalRegExpRetry) {
-        // Re-run execution.
-        continue;
-      }
-      DCHECK(isolate->has_pending_exception());
-      return MaybeHandle<Object>();
     }
-  } while (true);
-  UNREACHABLE();
+    return RegExp::SetLastMatchInfo(isolate, last_match_info, subject,
+                                    capture_count, output_registers);
+  } else if (num_matches == 0) {
+    return isolate->factory()->null_value();
+  } else {
+    DCHECK_LT(num_matches, 0);
+    DCHECK(isolate->has_pending_exception());
+    return MaybeHandle<Object>();
+  }
 }
 
 int32_t ExperimentalRegExp::OneshotExecRaw(Isolate* isolate,
@@ -302,32 +299,25 @@ MaybeHandle<Object> ExperimentalRegExp::OneshotExec(
     output_registers_release.reset(output_registers);
   }
 
-  do {
-    int num_matches = OneshotExecRaw(isolate, regexp, subject, output_registers,
-                                     output_register_count, subject_index);
+  int num_matches = OneshotExecRaw(isolate, regexp, subject, output_registers,
+                                   output_register_count, subject_index);
 
-    if (num_matches > 0) {
-      DCHECK_EQ(num_matches, 1);
-      if (exec_quirks == RegExp::ExecQuirks::kTreatMatchAtEndAsFailure) {
-        if (output_registers[0] >= subject->length()) {
-          return isolate->factory()->null_value();
-        }
+  if (num_matches > 0) {
+    DCHECK_EQ(num_matches, 1);
+    if (exec_quirks == RegExp::ExecQuirks::kTreatMatchAtEndAsFailure) {
+      if (output_registers[0] >= subject->length()) {
+        return isolate->factory()->null_value();
       }
-      return RegExp::SetLastMatchInfo(isolate, last_match_info, subject,
-                                      capture_count, output_registers);
-    } else if (num_matches == 0) {
-      return isolate->factory()->null_value();
-    } else {
-      DCHECK_LT(num_matches, 0);
-      if (num_matches == RegExp::kInternalRegExpRetry) {
-        // Re-run execution.
-        continue;
-      }
-      DCHECK(isolate->has_pending_exception());
-      return MaybeHandle<Object>();
     }
-  } while (true);
-  UNREACHABLE();
+    return RegExp::SetLastMatchInfo(isolate, last_match_info, subject,
+                                    capture_count, output_registers);
+  } else if (num_matches == 0) {
+    return isolate->factory()->null_value();
+  } else {
+    DCHECK_LT(num_matches, 0);
+    DCHECK(isolate->has_pending_exception());
+    return MaybeHandle<Object>();
+  }
 }
 
 }  // namespace internal

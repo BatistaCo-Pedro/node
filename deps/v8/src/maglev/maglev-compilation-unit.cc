@@ -4,7 +4,6 @@
 
 #include "src/maglev/maglev-compilation-unit.h"
 
-#include "src/compiler/heap-refs.h"
 #include "src/compiler/js-heap-broker.h"
 #include "src/maglev/maglev-compilation-info.h"
 #include "src/maglev/maglev-graph-labeller.h"
@@ -18,31 +17,20 @@ MaglevCompilationUnit::MaglevCompilationUnit(MaglevCompilationInfo* info,
                                              Handle<JSFunction> function)
     : MaglevCompilationUnit(
           info, nullptr,
-          MakeRef(info->broker(), info->broker()->CanonicalPersistentHandle(
-                                      function->shared())),
-          MakeRef(info->broker(), info->broker()->CanonicalPersistentHandle(
-                                      function->feedback_vector()))) {}
+          MakeRef(info->broker(),
+                  info->broker()->CanonicalPersistentHandle(function))) {}
 
 MaglevCompilationUnit::MaglevCompilationUnit(
     MaglevCompilationInfo* info, const MaglevCompilationUnit* caller,
-    compiler::SharedFunctionInfoRef shared_function_info,
-    compiler::FeedbackVectorRef feedback_vector)
+    compiler::JSFunctionRef function)
     : info_(info),
       caller_(caller),
-      shared_function_info_(shared_function_info),
-      bytecode_(shared_function_info.GetBytecodeArray(broker())),
-      feedback_(feedback_vector),
-      register_count_(bytecode_->register_count()),
-      parameter_count_(bytecode_->parameter_count()),
-      inlining_depth_(caller == nullptr ? 0 : caller->inlining_depth_ + 1) {}
-
-MaglevCompilationUnit::MaglevCompilationUnit(
-    MaglevCompilationInfo* info, const MaglevCompilationUnit* caller,
-    int register_count, int parameter_count)
-    : info_(info),
-      caller_(caller),
-      register_count_(register_count),
-      parameter_count_(parameter_count),
+      function_(function),
+      shared_function_info_(function_.shared(broker())),
+      bytecode_(shared_function_info_.GetBytecodeArray(broker())),
+      feedback_(function_.feedback_vector(info_->broker()).value()),
+      register_count_(bytecode_.register_count()),
+      parameter_count_(bytecode_.parameter_count()),
       inlining_depth_(caller == nullptr ? 0 : caller->inlining_depth_ + 1) {}
 
 compiler::JSHeapBroker* MaglevCompilationUnit::broker() const {
@@ -64,14 +52,6 @@ void MaglevCompilationUnit::RegisterNodeInGraphLabeller(const Node* node) {
   if (has_graph_labeller()) {
     graph_labeller()->RegisterNode(node);
   }
-}
-
-bool MaglevCompilationUnit::is_osr() const {
-  return inlining_depth_ == 0 && info_->toplevel_is_osr();
-}
-
-BytecodeOffset MaglevCompilationUnit::osr_offset() const {
-  return is_osr() ? info_->toplevel_osr_offset() : BytecodeOffset::None();
 }
 
 }  // namespace maglev

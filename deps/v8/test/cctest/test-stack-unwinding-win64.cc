@@ -2,11 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <windows.h>
-
-// This has to come after windows.h.
-#include <versionhelpers.h>  // For IsWindows8OrGreater().
-
 #include "include/v8-external.h"
 #include "include/v8-function.h"
 #include "include/v8-isolate.h"
@@ -15,15 +10,16 @@
 #include "src/base/macros.h"
 #include "test/cctest/cctest.h"
 
-#if defined(V8_OS_WIN_X64)  // Native x64 compilation
+#if defined(V8_OS_WIN_X64)
 #define CONTEXT_PC(context) (context.Rip)
 #elif defined(V8_OS_WIN_ARM64)
-#if defined(V8_HOST_ARCH_ARM64)  // Native ARM64 compilation
 #define CONTEXT_PC(context) (context.Pc)
-#else  // x64 to ARM64 cross-compilation
-#define CONTEXT_PC(context) (context.Rip)
 #endif
-#endif
+
+#include <windows.h>
+
+// This has to come after windows.h.
+#include <versionhelpers.h>  // For IsWindows8OrGreater().
 
 class UnwindingWin64Callbacks {
  public:

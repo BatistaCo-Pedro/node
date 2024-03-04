@@ -6,7 +6,7 @@
 
 const kSize = 4294967296;
 // Skip this test on 32-bit platforms.
-if (%ArrayBufferMaxByteLength() >= kSize) {
+if (%TypedArrayMaxLength() >= kSize) {
   const array = new Uint8Array(kSize);
 
   function f() {

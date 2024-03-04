@@ -257,9 +257,8 @@ namespace interpreter {
     OperandType::kRegList, OperandType::kRegCount, OperandType::kIdx)          \
   V(CallRuntime, ImplicitRegisterUse::kWriteAccumulator,                       \
     OperandType::kRuntimeId, OperandType::kRegList, OperandType::kRegCount)    \
-  V(CallRuntimeForPair, ImplicitRegisterUse::kClobberAccumulator,              \
-    OperandType::kRuntimeId, OperandType::kRegList, OperandType::kRegCount,    \
-    OperandType::kRegOutPair)                                                  \
+  V(CallRuntimeForPair, ImplicitRegisterUse::kNone, OperandType::kRuntimeId,   \
+    OperandType::kRegList, OperandType::kRegCount, OperandType::kRegOutPair)   \
   V(CallJSRuntime, ImplicitRegisterUse::kWriteAccumulator,                     \
     OperandType::kNativeContextIndex, OperandType::kRegList,                   \
     OperandType::kRegCount)                                                    \
@@ -294,12 +293,11 @@ namespace interpreter {
     OperandType::kIdx)                                                         \
                                                                                \
   /* Cast operators */                                                         \
-  V(ToName, ImplicitRegisterUse::kReadWriteAccumulator)                        \
+  V(ToName, ImplicitRegisterUse::kReadAccumulator, OperandType::kRegOut)       \
   V(ToNumber, ImplicitRegisterUse::kReadWriteAccumulator, OperandType::kIdx)   \
   V(ToNumeric, ImplicitRegisterUse::kReadWriteAccumulator, OperandType::kIdx)  \
   V(ToObject, ImplicitRegisterUse::kReadAccumulator, OperandType::kRegOut)     \
   V(ToString, ImplicitRegisterUse::kReadWriteAccumulator)                      \
-  V(ToBoolean, ImplicitRegisterUse::kReadWriteAccumulator)                     \
                                                                                \
   /* Literals */                                                               \
   V(CreateRegExpLiteral, ImplicitRegisterUse::kWriteAccumulator,               \
@@ -342,7 +340,7 @@ namespace interpreter {
                                                                                \
   /* Control Flow -- carefully ordered for efficient checks */                 \
   /* - [Unconditional jumps] */                                                \
-  V(JumpLoop, ImplicitRegisterUse::kClobberAccumulator, OperandType::kUImm,    \
+  V(JumpLoop, ImplicitRegisterUse::kNone, OperandType::kUImm,                  \
     OperandType::kImm, OperandType::kIdx)                                      \
   /* - [Forward jumps] */                                                      \
   V(Jump, ImplicitRegisterUse::kNone, OperandType::kUImm)                      \
@@ -432,7 +430,7 @@ namespace interpreter {
     OperandType::kIdx, OperandType::kIdx)                                      \
                                                                                \
   /* Debugger */                                                               \
-  V(Debugger, ImplicitRegisterUse::kClobberAccumulator)                        \
+  V(Debugger, ImplicitRegisterUse::kNone)                                      \
                                                                                \
   /* Block Coverage */                                                         \
   V(IncBlockCounter, ImplicitRegisterUse::kNone, OperandType::kIdx)            \

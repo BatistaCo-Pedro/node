@@ -16,52 +16,10 @@ Array [
     name:          test-package
     version:       1.0.0
     filename:      test-package-1.0.0.tgz
-    package size:  {size}
+    package size:  136 B
     unpacked size: 41 B
-    shasum:        {sha}
-    integrity:     {integrity}
-    total files:   1
-  ),
-  "",
-]
-`
-
-exports[`test/lib/commands/pack.js TAP foreground-scripts can still be set to false > logs pack contents 1`] = `
-Array [
-  undefined,
-  "package: test-fg-scripts@0.0.0",
-  undefined,
-  "110B package.json",
-  undefined,
-  String(
-    name:          test-fg-scripts
-    version:       0.0.0
-    filename:      test-fg-scripts-0.0.0.tgz
-    package size:  {size}
-    unpacked size: 110 B
-    shasum:        {sha}
-    integrity:     {integrity}
-    total files:   1
-  ),
-  "",
-]
-`
-
-exports[`test/lib/commands/pack.js TAP foreground-scripts defaults to true > logs pack contents 1`] = `
-Array [
-  undefined,
-  "package: test-fg-scripts@0.0.0",
-  undefined,
-  "110B package.json",
-  undefined,
-  String(
-    name:          test-fg-scripts
-    version:       0.0.0
-    filename:      test-fg-scripts-0.0.0.tgz
-    package size:  {size}
-    unpacked size: 110 B
-    shasum:        {sha}
-    integrity:     {integrity}
+    shasum:        a92a0679a70a450f14f98a468756948a679e4107
+    integrity:     sha512-Gka9ZV/Bryxky[...]LgMJ+0F+FhXMA==
     total files:   1
   ),
   "",
@@ -83,14 +41,14 @@ Array [
         Object {
           "mode": 420,
           "path": "package.json",
-          "size": "{size}",
+          "size": 41,
         },
       ],
       "id": "test-package@1.0.0",
-      "integrity": "{integrity}",
+      "integrity": "sha512-Gka9ZV/BryxkypfvMpTvLfaJE1AUi7PK1EAbYqnVzqtucf6QvUK4CFsLVzagY1GwZVx2T1jwWLgMJ+0F+FhXMA==",
       "name": "test-package",
-      "shasum": "{sha}",
-      "size": "{size}",
+      "shasum": "a92a0679a70a450f14f98a468756948a679e4107",
+      "size": 136,
       "unpackedSize": 41,
       "version": "1.0.0",
     },
@@ -113,14 +71,14 @@ Array [
         Object {
           "mode": 420,
           "path": "package.json",
-          "size": "{size}",
+          "size": 50,
         },
       ],
       "id": "@myscope/test-package@1.0.0",
-      "integrity": "{integrity}",
+      "integrity": "sha512-bUu8iTm2E5DZMrwKeyx963K6ViEmaFocXh75EujgI+FHSaJeqvObcdk1KFwdx8CbOgsfNHEvWNQw/bONAJsoNw==",
       "name": "@myscope/test-package",
-      "shasum": "{sha}",
-      "size": "{size}",
+      "shasum": "7e6eb2e1ca46bed6b8fa8e144e0fcd1b22fe2d98",
+      "size": 145,
       "unpackedSize": 50,
       "version": "1.0.0",
     },
@@ -139,10 +97,10 @@ Array [
     name:          test-package
     version:       1.0.0
     filename:      test-package-1.0.0.tgz
-    package size:  {size}
+    package size:  136 B
     unpacked size: 41 B
-    shasum:        {sha}
-    integrity:     {integrity}
+    shasum:        a92a0679a70a450f14f98a468756948a679e4107
+    integrity:     sha512-Gka9ZV/Bryxky[...]LgMJ+0F+FhXMA==
     total files:   1
   ),
   "",

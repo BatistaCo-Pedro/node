@@ -299,6 +299,7 @@ d8.file.execute("test/mjsunit/wasm/wasm-module-builder.js");
   builder.addFunction("get_struct_val", makeSig([], [kWasmI32]))
   .addBody([
     kExprGlobalGet, 0,
+    kGCPrefix, kExprRefAsStruct,
     kGCPrefix, kExprRefCast, struct_type,
     kGCPrefix, kExprStructGet, struct_type, 0,
   ])
@@ -306,6 +307,7 @@ d8.file.execute("test/mjsunit/wasm/wasm-module-builder.js");
   builder.addFunction("get_array_val", makeSig([], [kWasmI32]))
   .addBody([
     kExprGlobalGet, 0,
+    kGCPrefix, kExprRefAsArray,
     kGCPrefix, kExprRefCast, array_type,
     kExprI32Const, 0,
     kGCPrefix, kExprArrayGet, array_type,
@@ -365,6 +367,7 @@ d8.file.execute("test/mjsunit/wasm/wasm-module-builder.js");
   builder.addFunction("get_struct_val", makeSig([], [kWasmI32]))
   .addBody([
     kExprGlobalGet, 0,
+    kGCPrefix, kExprRefAsStruct,
     kGCPrefix, kExprRefCast, struct_type,
     kGCPrefix, kExprStructGet, struct_type, 0,
   ])
@@ -372,6 +375,7 @@ d8.file.execute("test/mjsunit/wasm/wasm-module-builder.js");
   builder.addFunction("get_array_val", makeSig([], [kWasmI32]))
   .addBody([
     kExprGlobalGet, 0,
+    kGCPrefix, kExprRefAsArray,
     kGCPrefix, kExprRefCast, array_type,
     kExprI32Const, 0,
     kGCPrefix, kExprArrayGet, array_type,
@@ -422,6 +426,7 @@ d8.file.execute("test/mjsunit/wasm/wasm-module-builder.js");
   builder.addFunction("get_struct_val", makeSig([], [kWasmI32]))
   .addBody([
     kExprGlobalGet, 0,
+    kGCPrefix, kExprRefAsStruct,
     kGCPrefix, kExprRefCast, struct_type,
     kGCPrefix, kExprStructGet, struct_type, 0,
   ])
@@ -466,6 +471,7 @@ d8.file.execute("test/mjsunit/wasm/wasm-module-builder.js");
   builder.addFunction("get_array_val", makeSig([], [kWasmI32]))
   .addBody([
     kExprGlobalGet, 0,
+    kGCPrefix, kExprRefAsArray,
     kGCPrefix, kExprRefCast, array_type,
     kExprI32Const, 0,
     kGCPrefix, kExprArrayGet, array_type,

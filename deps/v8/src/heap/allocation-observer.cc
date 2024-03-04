@@ -92,6 +92,7 @@ void AllocationCounter::InvokeAllocationObservers(Address soon_object,
   DCHECK(pending_removed_.empty());
 
   for (AllocationObserverCounter& aoc : observers_) {
+    DCHECK_LT(current_counter_, aoc.next_counter_);
     if (aoc.next_counter_ - current_counter_ <= aligned_object_size) {
       {
         DisallowGarbageCollection no_gc;
@@ -158,13 +159,18 @@ void AllocationCounter::InvokeAllocationObservers(Address soon_object,
 PauseAllocationObserversScope::PauseAllocationObserversScope(Heap* heap)
     : heap_(heap) {
   DCHECK_EQ(heap->gc_state(), Heap::NOT_IN_GC);
-  heap->allocator()->PauseAllocationObservers();
+  for (SpaceIterator it(heap_); it.HasNext();) {
+    it.Next()->PauseAllocationObservers();
+  }
+
   heap_->pause_allocation_observers_depth_++;
 }
 
 PauseAllocationObserversScope::~PauseAllocationObserversScope() {
   heap_->pause_allocation_observers_depth_--;
-  heap_->allocator()->ResumeAllocationObservers();
+  for (SpaceIterator it(heap_); it.HasNext();) {
+    it.Next()->ResumeAllocationObservers();
+  }
 }
 
 }  // namespace internal

@@ -9,14 +9,14 @@
 #include "src/common/globals.h"
 #include "src/heap/base/active-system-pages.h"
 #include "src/heap/list.h"
-#include "src/heap/marking.h"
 #include "src/heap/progress-bar.h"
 #include "src/heap/slot-set.h"
 
 namespace v8 {
 namespace internal {
 
-class MarkingBitmap;
+class Bitmap;
+class CodeObjectRegistry;
 class FreeListCategory;
 class Heap;
 class TypedSlotsSet;
@@ -24,7 +24,6 @@ class SlotSet;
 
 enum RememberedSetType {
   OLD_TO_NEW,
-  OLD_TO_NEW_BACKGROUND,
   OLD_TO_OLD,
   OLD_TO_SHARED,
   OLD_TO_CODE,
@@ -36,8 +35,7 @@ using ActiveSystemPages = ::heap::base::ActiveSystemPages;
 class V8_EXPORT_PRIVATE MemoryChunkLayout {
  public:
   static constexpr int kNumSets = NUMBER_OF_REMEMBERED_SET_TYPES;
-  static constexpr int kNumTypes =
-      static_cast<int>(ExternalBackingStoreType::kNumValues);
+  static constexpr int kNumTypes = ExternalBackingStoreType::kNumTypes;
   static constexpr int kMemoryChunkAlignment = sizeof(size_t);
 #define FIELD(Type, Name) \
   k##Name##Offset, k##Name##End = k##Name##Offset + sizeof(Type) - 1
@@ -55,34 +53,34 @@ class V8_EXPORT_PRIVATE MemoryChunkLayout {
     FIELD(VirtualMemory, Reservation),
     // MemoryChunk fields:
     FIELD(SlotSet* [kNumSets], SlotSet),
-    FIELD(TypedSlotsSet* [kNumSets], TypedSlotSet),
     FIELD(ProgressBar, ProgressBar),
     FIELD(std::atomic<intptr_t>, LiveByteCount),
+    FIELD(TypedSlotsSet* [kNumSets], TypedSlotSet),
+    FIELD(void* [kNumSets], InvalidatedSlots),
     FIELD(base::Mutex*, Mutex),
     FIELD(base::SharedMutex*, SharedMutex),
-    FIELD(base::Mutex*, PageProtectionChangeMutex),
     FIELD(std::atomic<intptr_t>, ConcurrentSweeping),
+    FIELD(base::Mutex*, PageProtectionChangeMutex),
+    FIELD(uintptr_t, WriteUnprotectCounter),
     FIELD(std::atomic<size_t>[kNumTypes], ExternalBackingStoreBytes),
     FIELD(heap::ListNode<MemoryChunk>, ListNode),
     FIELD(FreeListCategory**, Categories),
+    FIELD(CodeObjectRegistry*, CodeObjectRegistry),
     FIELD(PossiblyEmptyBuckets, PossiblyEmptyBuckets),
     FIELD(ActiveSystemPages*, ActiveSystemPages),
-    FIELD(size_t, AllocatedLabSize),
-    FIELD(size_t, AgeInNewSpace),
-    FIELD(MarkingBitmap, MarkingBitmap),
-    kEndOfMarkingBitmap,
+    FIELD(size_t, WasUsedForAllocation),
+    kMarkingBitmapOffset,
     kMemoryChunkHeaderSize =
-        kEndOfMarkingBitmap +
-        ((kEndOfMarkingBitmap % kMemoryChunkAlignment) == 0
+        kMarkingBitmapOffset +
+        ((kMarkingBitmapOffset % kMemoryChunkAlignment) == 0
              ? 0
              : kMemoryChunkAlignment -
-                   (kEndOfMarkingBitmap % kMemoryChunkAlignment)),
+                   (kMarkingBitmapOffset % kMemoryChunkAlignment)),
     kMemoryChunkHeaderStart = kSlotSetOffset,
     kBasicMemoryChunkHeaderSize = kMemoryChunkHeaderStart,
     kBasicMemoryChunkHeaderStart = 0,
   };
 #undef FIELD
-
   static size_t CodePageGuardStartOffset();
   static size_t CodePageGuardSize();
   // Code pages have padding on the first page for code alignment, so the

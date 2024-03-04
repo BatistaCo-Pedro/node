@@ -25,24 +25,23 @@ namespace internal {
 class JSArray : public TorqueGeneratedJSArray<JSArray, JSObject> {
  public:
   // [length]: The length property.
-  DECL_ACCESSORS(length, Tagged<Object>)
-  DECL_RELAXED_GETTER(length, Tagged<Object>)
+  DECL_ACCESSORS(length, Object)
+  DECL_RELAXED_GETTER(length, Object)
 
   // Acquire/release semantics on this field are explicitly forbidden to avoid
   // confusion, since the default setter uses relaxed semantics. If
   // acquire/release semantics ever become necessary, the default setter should
   // be reverted to non-atomic behavior, and setters with explicit tags
   // introduced and used when required.
-  Tagged<Object> length(PtrComprCageBase cage_base,
-                        AcquireLoadTag tag) const = delete;
-  void set_length(Tagged<Object> value, ReleaseStoreTag tag,
+  Object length(PtrComprCageBase cage_base, AcquireLoadTag tag) const = delete;
+  void set_length(Object value, ReleaseStoreTag tag,
                   WriteBarrierMode mode = UPDATE_WRITE_BARRIER) = delete;
 
   // Overload the length setter to skip write barrier when the length
   // is set to a smi. This matches the set function on FixedArray.
-  inline void set_length(Tagged<Smi> length);
+  inline void set_length(Smi length);
 
-  static bool MayHaveReadOnlyLength(Tagged<Map> js_array_map);
+  static bool MayHaveReadOnlyLength(Map js_array_map);
   static bool HasReadOnlyLength(Handle<JSArray> array);
   static bool WouldChangeReadOnlyLength(Handle<JSArray> array, uint32_t index);
 

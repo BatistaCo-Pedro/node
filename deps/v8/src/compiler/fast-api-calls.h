@@ -41,7 +41,8 @@ struct OverloadsResolutionResult {
 ElementsKind GetTypedArrayElementsKind(CTypeInfo::Type type);
 
 OverloadsResolutionResult ResolveOverloads(
-    const FastApiCallFunctionVector& candidates, unsigned int arg_count);
+    Zone* zone, const FastApiCallFunctionVector& candidates,
+    unsigned int arg_count);
 
 bool CanOptimizeFastSignature(const CFunctionInfo* c_signature);
 

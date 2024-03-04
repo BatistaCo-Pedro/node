@@ -10,6 +10,8 @@ import subprocess
 import sys
 from threading import Event, Timer
 
+import v8_fuzz_config
+
 PYTHON3 = sys.version_info >= (3, 0)
 
 # List of default flags passed to each d8 run.
@@ -21,7 +23,6 @@ DEFAULT_FLAGS = [
     '--invoke-weak-callbacks',
     '--omit-quit',
     '--harmony',
-    '--js-staging',
     '--wasm-staging',
     '--no-wasm-async-compilation',
     # Limit wasm memory to just below 2GiB, to avoid differences between 32-bit
@@ -106,19 +107,10 @@ class Command(object):
 
 
 class Output(object):
-  def __init__(self, exit_code, stdout_bytes, pid):
+  def __init__(self, exit_code, stdout, pid):
     self.exit_code = exit_code
-    self.stdout_bytes = stdout_bytes
+    self.stdout = stdout
     self.pid = pid
-
-  @property
-  def stdout(self):
-    if PYTHON3:
-      try:
-        return self.stdout_bytes.decode('utf-8')
-      except UnicodeDecodeError:
-        return self.stdout_bytes.decode('latin-1')
-    return self.stdout_bytes
 
   def HasCrashed(self):
     return self.exit_code < 0
@@ -126,12 +118,16 @@ class Output(object):
 
 def Execute(args, cwd, timeout=None):
   popen_args = [c for c in args if c != ""]
+  kwargs = {}
+  if PYTHON3:
+    kwargs['encoding'] = 'utf-8'
   try:
     process = subprocess.Popen(
       args=popen_args,
       stdout=subprocess.PIPE,
       stderr=subprocess.PIPE,
       cwd=cwd,
+      **kwargs
     )
   except Exception as e:
     sys.stderr.write("Error executing: %s\n" % popen_args)
@@ -148,7 +144,7 @@ def Execute(args, cwd, timeout=None):
 
   timer = Timer(timeout, kill_process)
   timer.start()
-  stdout_bytes, _ = process.communicate()
+  stdout, _ = process.communicate()
   timer.cancel()
 
   if timeout_event.is_set():
@@ -156,6 +152,6 @@ def Execute(args, cwd, timeout=None):
 
   return Output(
       process.returncode,
-      stdout_bytes,
+      stdout,
       process.pid,
   )

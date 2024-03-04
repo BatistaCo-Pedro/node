@@ -49,12 +49,16 @@ class TestCase(testcase.D8TestCase):
   def __init__(self, *args, **kwargs):
     super(TestCase, self).__init__(*args, **kwargs)
 
+    # get_source() relies on this being set.
+    self._base_path = os.path.join(self.suite.root, self.path)
     source = self.get_source()
     self._source_files = self._parse_source_files(source)
     self._source_flags = self._parse_source_flags(source)
 
   def _parse_source_files(self, source):
-    return [self._get_source_path()]
+    files = []
+    files.append(self._get_source_path())
+    return files
 
   def _expected_fail(self):
     path = self.path
@@ -79,10 +83,9 @@ class TestCase(testcase.D8TestCase):
     # Try .js first, and fall back to .mjs.
     # TODO(v8:9406): clean this up by never separating the path from
     # the extension in the first place.
-    js_path = self.suite.root / self.path_js
-    if js_path.exists():
-      return js_path
-    return self.suite.root / self.path_mjs
+    if os.path.exists(self._base_path + self._get_suffix()):
+      return self._base_path + self._get_suffix()
+    return self._base_path + '.mjs'
 
   def skip_predictable(self):
     # Message tests expected to fail don't print allocation output for
@@ -92,7 +95,7 @@ class TestCase(testcase.D8TestCase):
   @property
   def output_proc(self):
     return message.OutProc(self.expected_outcomes,
-                           self.suite.root / self.path,
+                           self._base_path,
                            self._expected_fail(),
-                           self.suite.root / self.path_and_suffix('.out'),
+                           self._base_path + '.out',
                            self.test_config.regenerate_expected_files)

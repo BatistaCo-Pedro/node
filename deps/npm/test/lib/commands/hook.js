@@ -1,6 +1,5 @@
 const t = require('tap')
 const mockNpm = require('../../fixtures/mock-npm')
-const { stripVTControlCharacters } = require('node:util')
 
 const mockHook = async (t, { hookResponse, ...npmOpts } = {}) => {
   const now = Date.now()
@@ -244,7 +243,7 @@ t.test('npm hook ls', async t => {
     'received the correct arguments'
   )
   t.equal(outputs[0][0], 'You have 3 hooks configured.', 'prints the correct header')
-  const out = stripVTControlCharacters(outputs[1][0])
+  const out = require('../../../lib/utils/ansi-trim')(outputs[1][0])
   t.match(out, /semver.*https:\/\/google.com.*\n.*\n.*never triggered/, 'prints package hook')
   t.match(out, /@npmcli.*https:\/\/google.com.*\n.*\n.*triggered just now/, 'prints scope hook')
   t.match(out, /~npm.*https:\/\/google.com.*\n.*\n.*never triggered/, 'prints owner hook')
@@ -293,7 +292,7 @@ t.test('npm hook ls, single result', async t => {
     'received the correct arguments'
   )
   t.equal(outputs[0][0], 'You have one hook configured.', 'prints the correct header')
-  const out = stripVTControlCharacters(outputs[1][0])
+  const out = require('../../../lib/utils/ansi-trim')(outputs[1][0])
   t.match(out, /semver.*https:\/\/google.com.*\n.*\n.*never triggered/, 'prints package hook')
 })
 

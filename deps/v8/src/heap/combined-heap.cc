@@ -13,8 +13,8 @@ CombinedHeapObjectIterator::CombinedHeapObjectIterator(
     : heap_iterator_(heap, filtering),
       ro_heap_iterator_(heap->isolate()->read_only_heap()) {}
 
-Tagged<HeapObject> CombinedHeapObjectIterator::Next() {
-  Tagged<HeapObject> object = ro_heap_iterator_.Next();
+HeapObject CombinedHeapObjectIterator::Next() {
+  HeapObject object = ro_heap_iterator_.Next();
   if (!object.is_null()) {
     return object;
   }

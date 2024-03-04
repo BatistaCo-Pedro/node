@@ -30,12 +30,12 @@ Address MacroAssemblerBase::BuiltinEntry(Builtin builtin) {
   DCHECK(Builtins::IsBuiltinId(builtin));
   if (isolate_ != nullptr) {
     Address entry = isolate_->builtin_entry_table()[Builtins::ToInt(builtin)];
-    DCHECK_EQ(entry,
-              EmbeddedData::FromBlob(isolate_).InstructionStartOf(builtin));
+    DCHECK_EQ(entry, EmbeddedData::FromBlob(isolate_).InstructionStartOfBuiltin(
+                         builtin));
     return entry;
   }
   EmbeddedData d = EmbeddedData::FromBlob();
-  return d.InstructionStartOf(builtin);
+  return d.InstructionStartOfBuiltin(builtin);
 }
 
 void MacroAssemblerBase::IndirectLoadConstant(Register destination,
@@ -130,8 +130,8 @@ bool MacroAssemblerBase::IsAddressableThroughRootRegister(
 Tagged_t MacroAssemblerBase::ReadOnlyRootPtr(RootIndex index,
                                              Isolate* isolate) {
   DCHECK(CanBeImmediate(index));
-  Tagged<Object> obj = isolate->root(index);
-  CHECK(IsHeapObject(obj));
+  Object obj = isolate->root(index);
+  CHECK(obj.IsHeapObject());
   return V8HeapCompressionScheme::CompressObject(obj.ptr());
 }
 

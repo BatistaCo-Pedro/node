@@ -8,7 +8,6 @@
 #include "src/base/strings.h"
 #include "src/base/vector.h"
 #include "src/execution/isolate.h"
-#include "src/objects/string.h"
 
 namespace v8 {
 namespace internal {

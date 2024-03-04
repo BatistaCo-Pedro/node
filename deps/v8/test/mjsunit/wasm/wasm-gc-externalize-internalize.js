@@ -43,6 +43,7 @@ let instance = (() => {
       kExprBlock, kWasmVoid,
         kExprLocalGet, 0,
         kExprBrOnNull, 0,
+        kGCPrefix, kExprRefAsStruct,
         kGCPrefix, kExprRefCast, struct,
         kGCPrefix, kExprStructGet, struct, 0, // value
         kExprI32Const, 0, // isNull
@@ -63,6 +64,7 @@ let instance = (() => {
         kExprLocalGet, 0,
         kGCPrefix, kExprExternInternalize,
         kExprBrOnNull, 0,
+        kGCPrefix, kExprRefAsStruct,
         kGCPrefix, kExprRefCast, struct,
         kGCPrefix, kExprStructGet, struct, 0, // value
         kExprI32Const, 0, // isNull
@@ -77,14 +79,14 @@ let instance = (() => {
     builder.addFunction('i31_producer', makeSig([kWasmI32], [kWasmEqRef]))
     .addBody([
       kExprLocalGet, 0,
-      kGCPrefix, kExprRefI31])
+      kGCPrefix, kExprI31New])
     .exportFunc();
 
     builder.addFunction('i31_externalize',
                         makeSig([kWasmI32], [kWasmExternRef]))
     .addBody([
       kExprLocalGet, 0,
-      kGCPrefix, kExprRefI31,
+      kGCPrefix, kExprI31New,
       kGCPrefix, kExprExternExternalize,
     ])
     .exportFunc();
@@ -97,7 +99,7 @@ let instance = (() => {
       kExprBlock, kWasmVoid,
         kExprLocalGet, 0,
         kExprBrOnNull, 0,
-        kGCPrefix, kExprRefCast, kI31RefCode,
+        kGCPrefix, kExprRefAsI31,
         kGCPrefix, kExprI31GetS, // value
         kExprI32Const, 0, // isNull
         kExprReturn,
@@ -117,7 +119,7 @@ let instance = (() => {
         kExprLocalGet, 0,
         kGCPrefix, kExprExternInternalize,
         kExprBrOnNull, 0,
-        kGCPrefix, kExprRefCast, kI31RefCode,
+        kGCPrefix, kExprRefAsI31,
         kGCPrefix, kExprI31GetS, // value
         kExprI32Const, 0, // isNull
         kExprReturn,
@@ -153,6 +155,7 @@ let instance = (() => {
       kExprBlock, kWasmVoid,
         kExprLocalGet, 0,
         kExprBrOnNull, 0,
+        kGCPrefix, kExprRefAsArray,
         kGCPrefix, kExprRefCast, array,
         kExprI32Const, 0,
         kGCPrefix, kExprArrayGet, array, // value
@@ -174,6 +177,7 @@ let instance = (() => {
         kExprLocalGet, 0,
         kGCPrefix, kExprExternInternalize,
         kExprBrOnNull, 0,
+        kGCPrefix, kExprRefAsArray,
         kGCPrefix, kExprRefCast, array,
         kExprI32Const, 0,
         kGCPrefix, kExprArrayGet, array, // value

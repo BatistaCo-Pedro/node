@@ -74,8 +74,7 @@ class SamplingTestHelper {
   }
 
  private:
-  static void CollectSample(const v8::FunctionCallbackInfo<v8::Value>& info) {
-    CHECK(i::ValidateCallbackInfo(info));
+  static void CollectSample(const v8::FunctionCallbackInfo<v8::Value>& args) {
     instance_->DoCollectSample();
   }
 

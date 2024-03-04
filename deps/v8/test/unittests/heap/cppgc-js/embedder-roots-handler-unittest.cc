@@ -100,7 +100,7 @@ TEST_F(EmbedderRootsHandlerTest,
   SetupOptimizedAndNonOptimizedHandle(v8_isolate(), kClassIdToOptimize,
                                       optimized_handle, non_optimized_handle);
   EXPECT_EQ(initial_count + 2, traced_handles->used_node_count());
-  InvokeMinorGC();
+  YoungGC();
   EXPECT_EQ(initial_count + 1, traced_handles->used_node_count());
   EXPECT_TRUE(optimized_handle->IsEmpty());
   delete optimized_handle;
@@ -186,7 +186,7 @@ TEST_F(EmbedderRootsHandlerTest,
   TemporaryEmbedderRootsHandleScope roots_handler_scope(v8_isolate(), &handler);
   TracedReferenceTest(
       v8_isolate(), ConstructJSObject,
-      [](const TracedReference<v8::Object>&) {}, [this]() { InvokeMajorGC(); },
+      [](const TracedReference<v8::Object>&) {}, [this]() { FullGC(); },
       SurvivalMode::kDies);
 }
 
@@ -208,7 +208,7 @@ TEST_F(
             v8::Global<v8::Object>(v8_isolate(), handle.Get(v8_isolate()));
       },
       [this, &strong_global]() {
-        InvokeMajorGC();
+        FullGC();
         strong_global.Reset();
       },
       SurvivalMode::kDies);
@@ -224,7 +224,7 @@ TEST_F(EmbedderRootsHandlerTest,
   TemporaryEmbedderRootsHandleScope roots_handler_scope(v8_isolate(), &handler);
   TracedReferenceTest(
       v8_isolate(), ConstructJSObject,
-      [](const TracedReference<v8::Object>&) {}, [this]() { InvokeMinorGC(); },
+      [](const TracedReference<v8::Object>&) {}, [this]() { YoungGC(); },
       SurvivalMode::kSurvives);
 }
 
@@ -243,7 +243,7 @@ TEST_F(
       [](TracedReference<v8::Object>& handle) {
         handle.SetWrapperClassId(kClassIdToOptimize);
       },
-      [this]() { InvokeMinorGC(); }, SurvivalMode::kSurvives);
+      [this]() { YoungGC(); }, SurvivalMode::kSurvives);
 }
 
 // EmbedderRootsHandler does not affect API objects for handles that have
@@ -257,7 +257,7 @@ TEST_F(EmbedderRootsHandlerTest,
   TemporaryEmbedderRootsHandleScope roots_handler_scope(v8_isolate(), &handler);
   TracedReferenceTest(
       v8_isolate(), ConstructJSApiObject<TracedReference<v8::Object>>,
-      [](const TracedReference<v8::Object>&) {}, [this]() { InvokeMinorGC(); },
+      [](const TracedReference<v8::Object>&) {}, [this]() { YoungGC(); },
       SurvivalMode::kSurvives);
 }
 
@@ -281,7 +281,7 @@ TEST_F(
           local->SetAlignedPointerInInternalField(0, &handle);
         }
       },
-      [this]() { InvokeMinorGC(); }, SurvivalMode::kDies);
+      [this]() { YoungGC(); }, SurvivalMode::kDies);
 }
 
 }  // namespace v8::internal

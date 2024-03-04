@@ -22,11 +22,11 @@ std::string DisassembleFunction(const char* function) {
 
   Isolate* isolate = CcTest::i_isolate();
   Handle<Code> code(f->code(), isolate);
-  Address begin = code->instruction_start();
-  Address end = code->instruction_end();
+  Address begin = code->InstructionStart();
+  Address end = code->InstructionEnd();
   std::ostringstream os;
-  Disassembler::Decode(isolate, os, reinterpret_cast<uint8_t*>(begin),
-                       reinterpret_cast<uint8_t*>(end), CodeReference(code));
+  Disassembler::Decode(isolate, os, reinterpret_cast<byte*>(begin),
+                       reinterpret_cast<byte*>(end), CodeReference(code));
   return os.str();
 }
 

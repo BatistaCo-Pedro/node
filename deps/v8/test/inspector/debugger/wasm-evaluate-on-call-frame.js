@@ -248,8 +248,7 @@ InspectorTest.runAsyncTestSuite([
 
   async function testMemories() {
     const builder = new WasmModuleBuilder();
-    builder.addMemory(1, 1);
-    builder.exportMemoryAs('foo');
+    builder.addMemory(1, 1).exportMemoryAs('foo');
     const main = builder.addFunction('main', kSig_v_v)
                         .addBody([kExprNop]).exportFunc();
     const KEYS = [0, '$foo'];

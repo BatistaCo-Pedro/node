@@ -53,14 +53,14 @@ class ArrayBufferSweeper final {
   ~ArrayBufferSweeper();
 
   void RequestSweep(SweepingType sweeping_type,
-                    TreatAllYoungAsPromoted treat_all_young_as_promoted);
+                    TreatAllYoungAsPromoted treat_young_as_promoted);
   void EnsureFinished();
 
   // Track the given ArrayBufferExtension for the given JSArrayBuffer.
-  void Append(Tagged<JSArrayBuffer> object, ArrayBufferExtension* extension);
+  void Append(JSArrayBuffer object, ArrayBufferExtension* extension);
 
   // Detaches an ArrayBufferExtension from a JSArrayBuffer.
-  void Detach(Tagged<JSArrayBuffer> object, ArrayBufferExtension* extension);
+  void Detach(JSArrayBuffer object, ArrayBufferExtension* extension);
 
   const ArrayBufferList& young() const { return young_; }
   const ArrayBufferList& old() const { return old_; }
@@ -70,9 +70,10 @@ class ArrayBufferSweeper final {
   // Bytes accounted in the old generation. Rebuilt during sweeping.
   size_t OldBytes() const { return old().ApproximateBytes(); }
 
-  bool sweeping_in_progress() const { return job_.get(); }
-
-  uint64_t GetTraceIdForFlowEvent(GCTracer::Scope::ScopeId scope_id) const;
+  bool sweeping_in_progress() const {
+    DCHECK_IMPLIES(!job_, local_sweeper_.IsEmpty());
+    return job_.get();
+  }
 
  private:
   struct SweepingJob;

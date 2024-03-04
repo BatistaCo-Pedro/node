@@ -13,7 +13,10 @@
 namespace v8 {
 namespace internal {
 
+template <typename T>
+class Handle;
 class HandlerTable;
+class Isolate;
 
 namespace interpreter {
 

@@ -15,7 +15,7 @@ namespace compiler {
 // constructed/deconstructed.
 class FrameElider {
  public:
-  explicit FrameElider(InstructionSequence* code, bool has_dummy_end_block);
+  explicit FrameElider(InstructionSequence* code);
   void Run();
 
  private:
@@ -30,7 +30,6 @@ class FrameElider {
   Instruction* InstructionAt(int index) const;
 
   InstructionSequence* const code_;
-  const bool has_dummy_end_block_;
 };
 
 }  // namespace compiler

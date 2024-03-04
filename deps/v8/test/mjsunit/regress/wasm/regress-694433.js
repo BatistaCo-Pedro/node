@@ -7,12 +7,8 @@
 var size = Math.floor(0xFFFFFFFF / 4) + 1;
 (function() {
   // Note: On 32 bit, this throws in the Uint16Array constructor (size does not
-  // fit in a Smi). On 64 bit, WebAssembly.validate returns false, because the
+  // fit in a Smi). On 64 bit, it throws in WebAssembly.validate, because the
   // size exceeds the internal module size limit.
-  try {
-    assertFalse(WebAssembly.validate(new Uint16Array(size)));
-  } catch {
-    assertThrows(() => new Uint16Array(size), RangeError);
-  }
+  assertThrows(() => WebAssembly.validate(new Uint16Array(size)), RangeError);
 })();
 gc();

@@ -300,7 +300,7 @@ void KeyedStoreGenericAssembler::TryRewriteElements(
   BIND(&perform_transition);
   {
     if (IsDoubleElementsKind(from_kind) != IsDoubleElementsKind(to_kind)) {
-      TNode<IntPtrT> capacity = LoadAndUntagFixedArrayBaseLength(elements);
+      TNode<IntPtrT> capacity = SmiUntag(LoadFixedArrayBaseLength(elements));
       GrowElementsCapacity(receiver, elements, from_kind, to_kind, capacity,
                            capacity, bailout);
     }
@@ -591,15 +591,14 @@ void KeyedStoreGenericAssembler::EmitGenericElementStore(
   Label if_array(this);
   GotoIf(IsJSArrayInstanceType(instance_type), &if_array);
   {
-    TNode<IntPtrT> capacity = LoadAndUntagFixedArrayBaseLength(elements);
+    TNode<IntPtrT> capacity = SmiUntag(LoadFixedArrayBaseLength(elements));
     Branch(UintPtrLessThan(index, capacity), &if_in_bounds, &if_grow);
   }
   BIND(&if_array);
   {
-    TNode<IntPtrT> length =
-        PositiveSmiUntag(LoadFastJSArrayLength(CAST(receiver)));
+    TNode<IntPtrT> length = SmiUntag(LoadFastJSArrayLength(CAST(receiver)));
     GotoIf(UintPtrLessThan(index, length), &if_in_bounds);
-    TNode<IntPtrT> capacity = LoadAndUntagFixedArrayBaseLength(elements);
+    TNode<IntPtrT> capacity = SmiUntag(LoadFixedArrayBaseLength(elements));
     GotoIf(UintPtrGreaterThanOrEqual(index, capacity), &if_grow);
     Branch(WordEqual(index, length), &if_increment_length_by_one,
            &if_bump_length_with_gap);
@@ -1018,9 +1017,9 @@ void KeyedStoreGenericAssembler::EmitGenericPropertyStore(
       }
       Label add_dictionary_property_slow(this);
       InvalidateValidityCellIfPrototype(receiver_map, bitfield3);
-      UpdateMayHaveInterestingProperty(properties, name);
-      AddToDictionary<PropertyDictionary>(properties, name, p->value(),
-                                          &add_dictionary_property_slow);
+      UpdateMayHaveInterestingSymbol(properties, name);
+      Add<PropertyDictionary>(properties, name, p->value(),
+                              &add_dictionary_property_slow);
       exit_point->Return(p->value());
 
       BIND(&add_dictionary_property_slow);

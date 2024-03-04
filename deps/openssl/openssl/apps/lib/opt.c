@@ -696,12 +696,7 @@ int opt_verify(int opt, X509_VERIFY_PARAM *vpm)
             opt_printf_stderr("%s: Invalid Policy %s\n", prog, opt_arg());
             return 0;
         }
-        if (!X509_VERIFY_PARAM_add0_policy(vpm, otmp)) {
-            ASN1_OBJECT_free(otmp);
-            opt_printf_stderr("%s: Internal error adding Policy %s\n",
-                              prog, opt_arg());
-            return 0;
-        }
+        X509_VERIFY_PARAM_add0_policy(vpm, otmp);
         break;
     case OPT_V_PURPOSE:
         /* purpose name -> purpose index */

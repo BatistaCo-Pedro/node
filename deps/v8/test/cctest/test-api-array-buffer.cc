@@ -5,7 +5,6 @@
 #include "src/api/api-inl.h"
 #include "src/base/strings.h"
 #include "src/objects/js-array-buffer-inl.h"
-#include "test/cctest/heap/heap-utils.h"
 #include "test/cctest/test-api.h"
 #include "test/common/flag-utils.h"
 
@@ -68,7 +67,7 @@ THREADED_TEST(ArrayBuffer_ApiInternalToExternal) {
   Local<v8::ArrayBuffer> ab = v8::ArrayBuffer::New(isolate, 1024);
   CheckInternalFieldsAreZero(ab);
   CHECK_EQ(1024, ab->ByteLength());
-  i::heap::InvokeMajorGC(CcTest::heap());
+  CcTest::CollectAllGarbage();
 
   std::shared_ptr<v8::BackingStore> backing_store = Externalize(ab);
   CHECK_EQ(1024, backing_store->ByteLength());
@@ -300,6 +299,7 @@ THREADED_TEST(ArrayBuffer_ExternalizeEmpty) {
 }
 
 THREADED_TEST(SharedArrayBuffer_ApiInternalToExternal) {
+  i::v8_flags.harmony_sharedarraybuffer = true;
   LocalContext env;
   v8::Isolate* isolate = env->GetIsolate();
   v8::HandleScope handle_scope(isolate);
@@ -307,7 +307,7 @@ THREADED_TEST(SharedArrayBuffer_ApiInternalToExternal) {
   Local<v8::SharedArrayBuffer> ab = v8::SharedArrayBuffer::New(isolate, 1024);
   CheckInternalFieldsAreZero(ab);
   CHECK_EQ(1024, ab->ByteLength());
-  i::heap::InvokeMajorGC(CcTest::heap());
+  CcTest::CollectAllGarbage();
 
   std::shared_ptr<v8::BackingStore> backing_store = Externalize(ab);
 
@@ -334,6 +334,7 @@ THREADED_TEST(SharedArrayBuffer_ApiInternalToExternal) {
 }
 
 THREADED_TEST(SharedArrayBuffer_JSInternalToExternal) {
+  i::v8_flags.harmony_sharedarraybuffer = true;
   LocalContext env;
   v8::Isolate* isolate = env->GetIsolate();
   v8::HandleScope handle_scope(isolate);
@@ -390,9 +391,10 @@ THREADED_TEST(SkipArrayBufferBackingStoreDuringGC) {
       v8::ArrayBuffer::New(isolate, std::move(backing_store));
 
   // Should not crash
-  i::heap::EmptyNewSpaceUsingGC(CcTest::heap());
-  i::heap::InvokeMajorGC(CcTest::heap());
-  i::heap::InvokeMajorGC(CcTest::heap());
+  CcTest::CollectGarbage(i::NEW_SPACE);  // in survivor space now
+  CcTest::CollectGarbage(i::NEW_SPACE);  // in old gen now
+  CcTest::CollectAllGarbage();
+  CcTest::CollectAllGarbage();
 
   // Should not move the pointer
   CHECK_EQ(ab->GetBackingStore()->Data(), store_ptr);
@@ -413,7 +415,8 @@ THREADED_TEST(SkipArrayBufferDuringScavenge) {
   auto backing_store = v8::ArrayBuffer::NewBackingStore(
       store_ptr, 8, [](void*, size_t, void*) {}, nullptr);
 
-  i::heap::InvokeMinorGC(CcTest::heap());
+  // Make `store_ptr` point to from space
+  CcTest::CollectGarbage(i::NEW_SPACE);
 
   // Create ArrayBuffer with pointer-that-cannot-be-visited in the backing store
   Local<v8::ArrayBuffer> ab =
@@ -421,7 +424,8 @@ THREADED_TEST(SkipArrayBufferDuringScavenge) {
 
   // Should not crash,
   // i.e. backing store pointer should not be treated as a heap object pointer
-  i::heap::EmptyNewSpaceUsingGC(CcTest::heap());
+  CcTest::CollectGarbage(i::NEW_SPACE);  // in survivor space now
+  CcTest::CollectGarbage(i::NEW_SPACE);  // in old gen now
 
   CHECK_EQ(ab->GetBackingStore()->Data(), store_ptr);
   CHECK_EQ(ab->Data(), store_ptr);

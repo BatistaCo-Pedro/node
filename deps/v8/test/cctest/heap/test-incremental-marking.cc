@@ -125,8 +125,8 @@ TEST_WITH_PLATFORM(IncrementalMarkingUsingTasks, MockPlatform) {
       marking->Start(GarbageCollector::MARK_COMPACTOR,
                      i::GarbageCollectionReason::kTesting);
     }
-    CHECK(marking->IsMajorMarking());
-    while (marking->IsMajorMarking()) {
+    CHECK(platform.PendingTask());
+    while (platform.PendingTask()) {
       platform.PerformTask();
     }
     CHECK(marking->IsStopped());

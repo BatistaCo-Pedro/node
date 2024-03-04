@@ -123,10 +123,8 @@ void IntlBuiltinsAssembler::ToLowerCaseImpl(
     Label fast(this), check_locale(this);
     // Check for fast locales.
     GotoIf(IsUndefined(maybe_locales), &fast);
-    // Passing a Smi as locales requires performing a ToObject conversion
-    // followed by reading the length property and the "indexed" properties of
-    // it until a valid locale is found.
-    GotoIf(TaggedIsSmi(maybe_locales), &runtime);
+    // Passing a smi here is equivalent to passing an empty list of locales.
+    GotoIf(TaggedIsSmi(maybe_locales), &fast);
     GotoIfNot(IsString(CAST(maybe_locales)), &runtime);
     GotoIfNot(IsSeqOneByteString(CAST(maybe_locales)), &runtime);
     TNode<SeqOneByteString> locale = CAST(maybe_locales);

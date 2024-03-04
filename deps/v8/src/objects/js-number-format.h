@@ -93,20 +93,21 @@ class JSNumberFormat
 
   static icu::number::UnlocalizedNumberFormatter SetDigitOptionsToFormatter(
       const icu::number::UnlocalizedNumberFormatter& settings,
-      const Intl::NumberFormatDigitOptions& digit_options);
+      const Intl::NumberFormatDigitOptions& digit_options,
+      int rounding_increment, ShowTrailingZeros show);
 
   static const icu::UnicodeString NumberingSystemFromSkeleton(
       const icu::UnicodeString& skeleton);
 
   V8_WARN_UNUSED_RESULT static Maybe<icu::number::LocalizedNumberRangeFormatter>
   GetRangeFormatter(
-      Isolate* isolate, Tagged<String> locale,
+      Isolate* isolate, String locale,
       const icu::number::LocalizedNumberFormatter& number_formatter);
 
   DECL_PRINTER(JSNumberFormat)
 
   DECL_ACCESSORS(icu_number_formatter,
-                 Tagged<Managed<icu::number::LocalizedNumberFormatter>>)
+                 Managed<icu::number::LocalizedNumberFormatter>)
 
   TQ_OBJECT_CONSTRUCTORS(JSNumberFormat)
 };

@@ -24,7 +24,6 @@ const updateCheck = async (npm, spec, version, current) => {
     // always prefer latest, even if doing --tag=whatever on the cmd
     defaultTag: 'latest',
     ...npm.flatOptions,
-    cache: false,
   }).catch(() => null)
 
   // if pacote failed, give up
@@ -98,16 +97,11 @@ const updateNotifier = async (npm, spec = 'latest') => {
     return null
   }
 
-  // intentional.  do not await this.  it's a best-effort update.  if this
-  // fails, it's ok.  might be using /dev/null as the cache or something weird
-  // like that.
-  writeFile(lastCheckedFile(npm), '').catch(() => {})
-
   return updateCheck(npm, spec, version, current)
 }
 
 // only update the notification timeout if we actually finished checking
-module.exports = npm => {
+module.exports = async npm => {
   if (
     // opted out
     !npm.config.get('update-notifier')
@@ -118,8 +112,14 @@ module.exports = npm => {
     // CI
     || ciInfo.isCI
   ) {
-    return Promise.resolve(null)
+    return null
   }
 
-  return updateNotifier(npm)
+  const notification = await updateNotifier(npm)
+
+  // intentional.  do not await this.  it's a best-effort update.  if this
+  // fails, it's ok.  might be using /dev/null as the cache or something weird
+  // like that.
+  writeFile(lastCheckedFile(npm), '').catch(() => {})
+  return notification
 }

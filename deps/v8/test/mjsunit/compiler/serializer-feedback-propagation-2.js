@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// Flags: --allow-natives-syntax --turboshaft-enable-debug-features
+// Flags: --allow-natives-syntax
 
 var obj = Object.create(Object.create({blu: 42}));
 obj.bla = 1;

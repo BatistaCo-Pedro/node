@@ -45,14 +45,12 @@ inline uintptr_t PointerToIndexHashMap<Address>::Key(Address value) {
 }
 
 template <>
-inline uintptr_t PointerToIndexHashMap<Tagged<HeapObject>>::Key(
-    Tagged<HeapObject> value) {
+inline uintptr_t PointerToIndexHashMap<HeapObject>::Key(HeapObject value) {
   return value.ptr();
 }
 
 class AddressToIndexHashMap : public PointerToIndexHashMap<Address> {};
-class HeapObjectToIndexHashMap
-    : public PointerToIndexHashMap<Tagged<HeapObject>> {};
+class HeapObjectToIndexHashMap : public PointerToIndexHashMap<HeapObject> {};
 
 class RootIndexMap {
  public:
@@ -61,8 +59,7 @@ class RootIndexMap {
   RootIndexMap& operator=(const RootIndexMap&) = delete;
 
   // Returns true on successful lookup and sets *|out_root_list|.
-  V8_EXPORT_PRIVATE bool Lookup(Tagged<HeapObject> obj,
-                                RootIndex* out_root_list) const {
+  bool Lookup(HeapObject obj, RootIndex* out_root_list) const {
     Maybe<uint32_t> maybe_index = map_->Get(obj);
     if (maybe_index.IsJust()) {
       *out_root_list = static_cast<RootIndex>(maybe_index.FromJust());
@@ -70,7 +67,7 @@ class RootIndexMap {
     }
     return false;
   }
-  V8_EXPORT_PRIVATE bool Lookup(Address obj, RootIndex* out_root_list) const;
+  bool Lookup(Address obj, RootIndex* out_root_list) const;
 
  private:
   HeapObjectToIndexHashMap* map_;

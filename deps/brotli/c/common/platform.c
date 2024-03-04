@@ -6,9 +6,8 @@
 
 #include <stdlib.h>
 
+#include "./platform.h"
 #include <brotli/types.h>
-
-#include "platform.h"
 
 /* Default brotli_alloc_func */
 void* BrotliDefaultAllocFunc(void* opaque, size_t size) {

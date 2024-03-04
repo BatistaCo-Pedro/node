@@ -69,7 +69,7 @@ class SharedEngineIsolate {
   }
 
   SharedModule ExportInstance(Handle<WasmInstanceObject> instance) {
-    return instance->module_object()->shared_native_module();
+    return instance->module_object().shared_native_module();
   }
 
   int32_t Run(Handle<WasmInstanceObject> instance) {
@@ -106,7 +106,7 @@ ZoneBuffer* BuildReturnConstantModule(Zone* zone, int constant) {
   WasmModuleBuilder* builder = zone->New<WasmModuleBuilder>(zone);
   WasmFunctionBuilder* f = builder->AddFunction(sigs.i_v());
   f->builder()->AddExport(base::CStrVector("main"), f);
-  uint8_t code[] = {WASM_I32V_2(constant)};
+  byte code[] = {WASM_I32V_2(constant)};
   f->EmitCode(code, sizeof(code));
   f->Emit(kExprEnd);
   builder->WriteTo(buffer);
@@ -164,7 +164,7 @@ Handle<WasmInstanceObject> CompileAndInstantiateAsync(
       isolate->isolate(), enabled_features,
       std::make_unique<MockCompilationResolver>(isolate, &maybe_instance),
       ModuleWireBytes(buffer->begin(), buffer->end()), true, kAPIMethodName);
-  while (!IsWasmInstanceObject(*maybe_instance)) PumpMessageLoop(isolate);
+  while (!maybe_instance->IsWasmInstanceObject()) PumpMessageLoop(isolate);
   Handle<WasmInstanceObject> instance =
       Handle<WasmInstanceObject>::cast(maybe_instance);
   return instance;

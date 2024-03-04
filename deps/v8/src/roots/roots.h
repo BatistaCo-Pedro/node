@@ -13,21 +13,26 @@
 #include "src/objects/objects-definitions.h"
 #include "src/objects/objects.h"
 #include "src/objects/slots.h"
-#include "src/objects/tagged.h"
 
 namespace v8 {
 namespace internal {
 
 // Forward declarations.
-class Boolean;
 enum ElementsKind : uint8_t;
+template <typename T>
+class Handle;
+class Heap;
+class Isolate;
 class Factory;
 template <typename Impl>
 class FactoryBase;
 class LocalFactory;
+class Map;
 class PropertyCell;
 class ReadOnlyHeap;
 class RootVisitor;
+class String;
+class Symbol;
 
 #define STRONG_READ_ONLY_HEAP_NUMBER_ROOT_LIST(V)         \
   /* Special numbers */                                   \
@@ -59,11 +64,11 @@ class RootVisitor;
   V(Map, one_pointer_filler_map, OnePointerFillerMap)                          \
   V(Map, two_pointer_filler_map, TwoPointerFillerMap)                          \
   V(Oddball, uninitialized_value, UninitializedValue)                          \
-  V(Undefined, undefined_value, UndefinedValue)                                \
-  V(Hole, the_hole_value, TheHoleValue)                                        \
-  V(Null, null_value, NullValue)                                               \
-  V(True, true_value, TrueValue)                                               \
-  V(False, false_value, FalseValue)                                            \
+  V(Oddball, undefined_value, UndefinedValue)                                  \
+  V(Oddball, the_hole_value, TheHoleValue)                                     \
+  V(Oddball, null_value, NullValue)                                            \
+  V(Oddball, true_value, TrueValue)                                            \
+  V(Oddball, false_value, FalseValue)                                          \
   EXTRA_IMPORTANT_INTERNALIZED_STRING_ROOT_LIST(V)                             \
   V(Map, meta_map, MetaMap)                                                    \
   V(Map, byte_array_map, ByteArrayMap)                                         \
@@ -72,8 +77,8 @@ class RootVisitor;
   V(Map, fixed_double_array_map, FixedDoubleArrayMap)                          \
   V(Map, hash_table_map, HashTableMap)                                         \
   V(Map, symbol_map, SymbolMap)                                                \
-  V(Map, seq_one_byte_string_map, SeqOneByteStringMap)                         \
-  V(Map, internalized_one_byte_string_map, InternalizedOneByteStringMap)       \
+  V(Map, one_byte_string_map, OneByteStringMap)                                \
+  V(Map, one_byte_internalized_string_map, OneByteInternalizedStringMap)       \
   V(Map, scope_info_map, ScopeInfoMap)                                         \
   V(Map, shared_function_info_map, SharedFunctionInfoMap)                      \
   V(Map, instruction_stream_map, InstructionStreamMap)                         \
@@ -95,9 +100,6 @@ class RootVisitor;
   V(Oddball, termination_exception, TerminationException)                      \
   V(Oddball, optimized_out, OptimizedOut)                                      \
   V(Oddball, stale_register, StaleRegister)                                    \
-  /* Holes */                                                                  \
-  V(Hole, property_cell_hole_value, PropertyCellHoleValue)                     \
-  V(Hole, hash_table_hole_value, HashTableHoleValue)                           \
   /* Maps */                                                                   \
   V(Map, script_context_table_map, ScriptContextTableMap)                      \
   V(Map, closure_feedback_cell_array_map, ClosureFeedbackCellArrayMap)         \
@@ -127,6 +129,8 @@ class RootVisitor;
   V(Map, side_effect_call_handler_info_map, SideEffectCallHandlerInfoMap)      \
   V(Map, side_effect_free_call_handler_info_map,                               \
     SideEffectFreeCallHandlerInfoMap)                                          \
+  V(Map, next_call_side_effect_free_call_handler_info_map,                     \
+    NextCallSideEffectFreeCallHandlerInfoMap)                                  \
   V(Map, simple_number_dictionary_map, SimpleNumberDictionaryMap)              \
   V(Map, small_ordered_hash_map_map, SmallOrderedHashMapMap)                   \
   V(Map, small_ordered_hash_set_map, SmallOrderedHashSetMap)                   \
@@ -149,41 +153,36 @@ class RootVisitor;
   V(Map, ephemeron_hash_table_map, EphemeronHashTableMap)                      \
   V(Map, embedder_data_array_map, EmbedderDataArrayMap)                        \
   V(Map, weak_cell_map, WeakCellMap)                                           \
-  V(Map, external_pointer_array_map, ExternalPointerArrayMap)                  \
   /* String maps */                                                            \
-  V(Map, seq_two_byte_string_map, SeqTwoByteStringMap)                         \
-  V(Map, cons_two_byte_string_map, ConsTwoByteStringMap)                       \
+  V(Map, string_map, StringMap)                                                \
   V(Map, cons_one_byte_string_map, ConsOneByteStringMap)                       \
-  V(Map, thin_two_byte_string_map, ThinTwoByteStringMap)                       \
-  V(Map, thin_one_byte_string_map, ThinOneByteStringMap)                       \
-  V(Map, sliced_two_byte_string_map, SlicedTwoByteStringMap)                   \
+  V(Map, cons_string_map, ConsStringMap)                                       \
+  V(Map, thin_string_map, ThinStringMap)                                       \
+  V(Map, sliced_string_map, SlicedStringMap)                                   \
   V(Map, sliced_one_byte_string_map, SlicedOneByteStringMap)                   \
-  V(Map, external_two_byte_string_map, ExternalTwoByteStringMap)               \
+  V(Map, external_string_map, ExternalStringMap)                               \
   V(Map, external_one_byte_string_map, ExternalOneByteStringMap)               \
-  V(Map, internalized_two_byte_string_map, InternalizedTwoByteStringMap)       \
-  V(Map, external_internalized_two_byte_string_map,                            \
-    ExternalInternalizedTwoByteStringMap)                                      \
-  V(Map, external_internalized_one_byte_string_map,                            \
-    ExternalInternalizedOneByteStringMap)                                      \
-  V(Map, uncached_external_internalized_two_byte_string_map,                   \
-    UncachedExternalInternalizedTwoByteStringMap)                              \
-  V(Map, uncached_external_internalized_one_byte_string_map,                   \
-    UncachedExternalInternalizedOneByteStringMap)                              \
-  V(Map, uncached_external_two_byte_string_map,                                \
-    UncachedExternalTwoByteStringMap)                                          \
+  V(Map, uncached_external_string_map, UncachedExternalStringMap)              \
+  V(Map, internalized_string_map, InternalizedStringMap)                       \
+  V(Map, external_internalized_string_map, ExternalInternalizedStringMap)      \
+  V(Map, external_one_byte_internalized_string_map,                            \
+    ExternalOneByteInternalizedStringMap)                                      \
+  V(Map, uncached_external_internalized_string_map,                            \
+    UncachedExternalInternalizedStringMap)                                     \
+  V(Map, uncached_external_one_byte_internalized_string_map,                   \
+    UncachedExternalOneByteInternalizedStringMap)                              \
   V(Map, uncached_external_one_byte_string_map,                                \
     UncachedExternalOneByteStringMap)                                          \
-  V(Map, shared_seq_one_byte_string_map, SharedSeqOneByteStringMap)            \
-  V(Map, shared_seq_two_byte_string_map, SharedSeqTwoByteStringMap)            \
+  V(Map, shared_one_byte_string_map, SharedOneByteStringMap)                   \
+  V(Map, shared_string_map, SharedStringMap)                                   \
   V(Map, shared_external_one_byte_string_map, SharedExternalOneByteStringMap)  \
-  V(Map, shared_external_two_byte_string_map, SharedExternalTwoByteStringMap)  \
+  V(Map, shared_external_string_map, SharedExternalStringMap)                  \
   V(Map, shared_uncached_external_one_byte_string_map,                         \
     SharedUncachedExternalOneByteStringMap)                                    \
-  V(Map, shared_uncached_external_two_byte_string_map,                         \
-    SharedUncachedExternalTwoByteStringMap)                                    \
+  V(Map, shared_uncached_external_string_map, SharedUncachedExternalStringMap) \
   /* Oddball maps */                                                           \
   V(Map, undefined_map, UndefinedMap)                                          \
-  V(Map, hole_map, HoleMap)                                                    \
+  V(Map, the_hole_map, TheHoleMap)                                             \
   V(Map, null_map, NullMap)                                                    \
   V(Map, boolean_map, BooleanMap)                                              \
   V(Map, uninitialized_map, UninitializedMap)                                  \
@@ -194,16 +193,10 @@ class RootVisitor;
   V(Map, stale_register_map, StaleRegisterMap)                                 \
   V(Map, self_reference_marker_map, SelfReferenceMarkerMap)                    \
   V(Map, basic_block_counters_marker_map, BasicBlockCountersMarkerMap)         \
-  /* Shared space object maps */                                               \
-  V(Map, js_shared_array_map, JSSharedArrayMap)                                \
-  V(Map, js_atomics_mutex_map, JSAtomicsMutexMap)                              \
-  V(Map, js_atomics_condition_map, JSAtomicsConditionMap)                      \
   /* Canonical empty values */                                                 \
   V(EnumCache, empty_enum_cache, EmptyEnumCache)                               \
   V(PropertyArray, empty_property_array, EmptyPropertyArray)                   \
   V(ByteArray, empty_byte_array, EmptyByteArray)                               \
-  V(ExternalPointerArray, empty_external_pointer_array,                        \
-    EmptyExternalPointerArray)                                                 \
   V(ObjectBoilerplateDescription, empty_object_boilerplate_description,        \
     EmptyObjectBoilerplateDescription)                                         \
   V(ArrayBoilerplateDescription, empty_array_boilerplate_description,          \
@@ -240,7 +233,6 @@ class RootVisitor;
   V(RegisteredSymbolTable, empty_symbol_table, EmptySymbolTable)               \
   /* Hash seed */                                                              \
   V(ByteArray, hash_seed, HashSeed)                                            \
-  IF_WASM(V, HeapObject, wasm_null_padding, WasmNullPadding)                   \
   IF_WASM(V, WasmNull, wasm_null, WasmNull)
 
 // Mutable roots that are known to be immortal immovable, for which we can
@@ -257,7 +249,6 @@ class RootVisitor;
   V(PropertyCell, array_constructor_protector, ArrayConstructorProtector)      \
   V(PropertyCell, no_elements_protector, NoElementsProtector)                  \
   V(PropertyCell, mega_dom_protector, MegaDOMProtector)                        \
-  V(PropertyCell, no_profiling_protector, NoProfilingProtector)                \
   V(PropertyCell, is_concat_spreadable_protector, IsConcatSpreadableProtector) \
   V(PropertyCell, array_species_protector, ArraySpeciesProtector)              \
   V(PropertyCell, typed_array_species_protector, TypedArraySpeciesProtector)   \
@@ -273,8 +264,8 @@ class RootVisitor;
   V(PropertyCell, promise_then_protector, PromiseThenProtector)                \
   V(PropertyCell, set_iterator_protector, SetIteratorProtector)                \
   V(PropertyCell, string_iterator_protector, StringIteratorProtector)          \
-  V(PropertyCell, number_string_not_regexp_like_protector,                     \
-    NumberStringNotRegexpLikeProtector)                                        \
+  V(PropertyCell, number_string_prototype_no_replace_protector,                \
+    NumberStringPrototypeNoReplaceProtector)                                   \
   /* Caches */                                                                 \
   V(FixedArray, string_split_cache, StringSplitCache)                          \
   V(FixedArray, regexp_multiple_cache, RegExpMultipleCache)                    \
@@ -327,11 +318,7 @@ class RootVisitor;
   V(SharedFunctionInfo, source_text_module_execute_async_module_fulfilled_sfi, \
     SourceTextModuleExecuteAsyncModuleFulfilledSFI)                            \
   V(SharedFunctionInfo, source_text_module_execute_async_module_rejected_sfi,  \
-    SourceTextModuleExecuteAsyncModuleRejectedSFI)                             \
-  V(SharedFunctionInfo, array_from_async_on_fulfilled_shared_fun,              \
-    ArrayFromAsyncOnFulfilledSharedFun)                                        \
-  V(SharedFunctionInfo, array_from_async_on_rejected_shared_fun,               \
-    ArrayFromAsyncOnRejectedSharedFun)
+    SourceTextModuleExecuteAsyncModuleRejectedSFI)
 
 // These root references can be updated by the mutator.
 #define STRONG_MUTABLE_MOVABLE_ROOT_LIST(V)                                 \
@@ -350,7 +337,7 @@ class RootVisitor;
     FeedbackVectorsForProfilingTools)                                       \
   V(FixedArray, serialized_objects, SerializedObjects)                      \
   V(FixedArray, serialized_global_proxy_sizes, SerializedGlobalProxySizes)  \
-  V(ArrayList, message_listeners, MessageListeners)                         \
+  V(TemplateList, message_listeners, MessageListeners)                      \
   /* Support for async stack traces */                                      \
   V(HeapObject, current_microtask, CurrentMicrotask)                        \
   /* KeepDuringJob set for JS WeakRefs */                                   \
@@ -364,12 +351,7 @@ class RootVisitor;
   IF_WASM(V, HeapObject, active_continuation, ActiveContinuation)           \
   IF_WASM(V, HeapObject, active_suspender, ActiveSuspender)                 \
   IF_WASM(V, WeakArrayList, js_to_wasm_wrappers, JSToWasmWrappers)          \
-  IF_WASM(V, WeakArrayList, wasm_canonical_rtts, WasmCanonicalRtts)         \
-  /* Internal SharedFunctionInfos */                                        \
-  V(FunctionTemplateInfo, error_stack_getter_fun_template,                  \
-    ErrorStackGetterSharedFun)                                              \
-  V(FunctionTemplateInfo, error_stack_setter_fun_template,                  \
-    ErrorStackSetterSharedFun)
+  IF_WASM(V, WeakArrayList, wasm_canonical_rtts, WasmCanonicalRtts)
 
 // Entries in this list are limited to Smis and are not visited during GC.
 #define SMI_ROOT_LIST(V)                                                       \
@@ -430,9 +412,9 @@ class RootVisitor;
   NAME_FOR_PROTECTOR_ROOT_LIST(V)  \
   DATA_HANDLER_MAPS_LIST(V)
 
-#define MUTABLE_ROOT_LIST(V)            \
-  STRONG_MUTABLE_IMMOVABLE_ROOT_LIST(V) \
-  STRONG_MUTABLE_MOVABLE_ROOT_LIST(V)   \
+#define MUTABLE_ROOT_LIST(V)                \
+  STRONG_MUTABLE_IMMOVABLE_ROOT_LIST(V)     \
+  STRONG_MUTABLE_MOVABLE_ROOT_LIST(V)       \
   SMI_ROOT_LIST(V)
 
 #define ROOT_LIST(V)     \
@@ -462,10 +444,6 @@ enum class RootIndex : uint16_t {
 
   kFirstHeapNumberRoot = kNanValue,
   kLastHeapNumberRoot = kSmiMaxValuePlusOne,
-
-  // Keep this in sync with the first map allocated by
-  // Heap::CreateLateReadOnlyJSReceiverMaps.
-  kFirstJSReceiverMapRoot = kJSSharedArrayMap,
 
   // Use for fast protector update checks
   kFirstNameForProtector = kconstructor_string,
@@ -629,10 +607,6 @@ class RootsTable {
   friend class SoleReadOnlyHeap;
 };
 
-#define ROOT_TYPE_FWD_DECL(Type, name, CamelName) class Type;
-READ_ONLY_ROOT_LIST(ROOT_TYPE_FWD_DECL)
-#undef ROOT_TYPE_FWD_DECL
-
 class ReadOnlyRoots {
  public:
   static constexpr size_t kEntriesCount =
@@ -646,29 +620,26 @@ class ReadOnlyRoots {
   // map-word instead of a tagged heap pointer.
   MapWord one_pointer_filler_map_word();
 
-#define ROOT_ACCESSOR(Type, name, CamelName)       \
-  V8_INLINE Tagged<Type> name() const;             \
-  V8_INLINE Tagged<Type> unchecked_##name() const; \
+#define ROOT_ACCESSOR(Type, name, CamelName)     \
+  V8_INLINE class Type name() const;             \
+  V8_INLINE class Type unchecked_##name() const; \
   V8_INLINE Handle<Type> name##_handle() const;
 
   READ_ONLY_ROOT_LIST(ROOT_ACCESSOR)
 #undef ROOT_ACCESSOR
 
-  V8_INLINE bool IsNameForProtector(Tagged<HeapObject> object) const;
+  V8_INLINE bool IsNameForProtector(HeapObject object) const;
   V8_INLINE void VerifyNameForProtectorsPages() const;
 #ifdef DEBUG
   void VerifyNameForProtectors();
 #endif
-
-  V8_INLINE Tagged<Boolean> boolean_value(bool value) const;
-  V8_INLINE Handle<Boolean> boolean_value_handle(bool value) const;
 
   // Returns heap number with identical value if it already exists or the empty
   // handle otherwise.
   Handle<HeapNumber> FindHeapNumber(double value);
 
   V8_INLINE Address address_at(RootIndex root_index) const;
-  V8_INLINE Tagged<Object> object_at(RootIndex root_index) const;
+  V8_INLINE Object object_at(RootIndex root_index) const;
   V8_INLINE Handle<Object> handle_at(RootIndex root_index) const;
 
   // Check if a slot is initialized yet. Should only be neccessary for code
@@ -704,7 +675,6 @@ class ReadOnlyRoots {
 
   friend class ReadOnlyHeap;
   friend class DeserializerAllocator;
-  friend class ReadOnlyHeapImageDeserializer;
 };
 
 }  // namespace internal

@@ -68,9 +68,6 @@ void BaselineAssembler::RegisterFrameAddress(
 MemOperand BaselineAssembler::FeedbackVectorOperand() {
   return MemOperand(ebp, BaselineFrameConstants::kFeedbackVectorFromFp);
 }
-MemOperand BaselineAssembler::FeedbackCellOperand() {
-  return MemOperand(ebp, BaselineFrameConstants::kFeedbackCellFromFp);
-}
 
 void BaselineAssembler::Bind(Label* label) { __ bind(label); }
 
@@ -161,7 +158,7 @@ void BaselineAssembler::JumpIfPointer(Condition cc, Register value,
                                       Label::Distance distance) {
   JumpIf(cc, value, operand, target, distance);
 }
-void BaselineAssembler::JumpIfSmi(Condition cc, Register value, Tagged<Smi> smi,
+void BaselineAssembler::JumpIfSmi(Condition cc, Register value, Smi smi,
                                   Label* target, Label::Distance distance) {
   if (smi.value() == 0) {
     __ test(value, value);
@@ -197,7 +194,7 @@ void BaselineAssembler::JumpIfByte(Condition cc, Register value, int32_t byte,
 void BaselineAssembler::Move(interpreter::Register output, Register source) {
   return __ mov(RegisterFrameOperand(output), source);
 }
-void BaselineAssembler::Move(Register output, Tagged<TaggedIndex> value) {
+void BaselineAssembler::Move(Register output, TaggedIndex value) {
   __ Move(output, Immediate(value.ptr()));
 }
 void BaselineAssembler::Move(MemOperand output, Register source) {
@@ -224,12 +221,10 @@ inline void PushSingle(MacroAssembler* masm, RootIndex source) {
   masm->PushRoot(source);
 }
 inline void PushSingle(MacroAssembler* masm, Register reg) { masm->Push(reg); }
-inline void PushSingle(MacroAssembler* masm, Tagged<TaggedIndex> value) {
+inline void PushSingle(MacroAssembler* masm, TaggedIndex value) {
   masm->Push(Immediate(value.ptr()));
 }
-inline void PushSingle(MacroAssembler* masm, Tagged<Smi> value) {
-  masm->Push(value);
-}
+inline void PushSingle(MacroAssembler* masm, Smi value) { masm->Push(value); }
 inline void PushSingle(MacroAssembler* masm, Handle<HeapObject> object) {
   masm->Push(object);
 }
@@ -336,7 +331,7 @@ void BaselineAssembler::LoadWord8Field(Register output, Register source,
 }
 
 void BaselineAssembler::StoreTaggedSignedField(Register target, int offset,
-                                               Tagged<Smi> value) {
+                                               Smi value) {
   __ mov(FieldOperand(target, offset), Immediate(value));
 }
 
@@ -387,7 +382,9 @@ void BaselineAssembler::AddToInterruptBudgetAndJumpIfNotExceeded(
   ASM_CODE_COMMENT(masm_);
   ScratchRegisterScope scratch_scope(this);
   Register feedback_cell = scratch_scope.AcquireScratch();
-  LoadFeedbackCell(feedback_cell);
+  LoadFunction(feedback_cell);
+  LoadTaggedField(feedback_cell, feedback_cell,
+                  JSFunction::kFeedbackCellOffset);
   __ add(FieldOperand(feedback_cell, FeedbackCell::kInterruptBudgetOffset),
          Immediate(weight));
   if (skip_interrupt_label) {
@@ -402,7 +399,9 @@ void BaselineAssembler::AddToInterruptBudgetAndJumpIfNotExceeded(
   ScratchRegisterScope scratch_scope(this);
   Register feedback_cell = scratch_scope.AcquireScratch();
   DCHECK(!AreAliased(feedback_cell, weight));
-  LoadFeedbackCell(feedback_cell);
+  LoadFunction(feedback_cell);
+  LoadTaggedField(feedback_cell, feedback_cell,
+                  JSFunction::kFeedbackCellOffset);
   __ add(FieldOperand(feedback_cell, FeedbackCell::kInterruptBudgetOffset),
          weight);
   if (skip_interrupt_label) __ j(greater_equal, skip_interrupt_label);
@@ -459,7 +458,7 @@ void BaselineAssembler::StaModuleVariable(Register context, Register value,
   StoreTaggedFieldWithWriteBarrier(context, Cell::kValueOffset, value);
 }
 
-void BaselineAssembler::AddSmi(Register lhs, Tagged<Smi> rhs) {
+void BaselineAssembler::AddSmi(Register lhs, Smi rhs) {
   if (rhs.value() == 0) return;
   __ add(lhs, Immediate(rhs));
 }

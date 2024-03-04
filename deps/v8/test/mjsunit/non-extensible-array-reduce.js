@@ -717,11 +717,10 @@ assertEquals(undefined, Object.preventExtensions(arr).reduceRight(function(val) 
   g(); g();
   let total = g();
   %OptimizeFunctionOnNextCall(g);
-  var turbofan = willBeTurbofanned(g);
   g();
   g();
   assertEquals(total, g());
-  if (turbofan) assertOptimized(g);
+  assertOptimized(g);
 })();
 
 (function ReduceThrow() {
@@ -1085,11 +1084,10 @@ assertEquals(undefined, Object.preventExtensions(arr).reduceRight(function(val) 
   g(); g();
   let total = g();
   %OptimizeFunctionOnNextCall(g);
-  var turbofan = willBeTurbofanned(g);
   g();
   g();
   assertEquals(total, g());
-  if (turbofan) assertOptimized(g);
+  assertOptimized(g);
 })();
 
 (function ReduceThrow() {

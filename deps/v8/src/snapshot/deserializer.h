@@ -49,7 +49,7 @@ class Deserializer : public SerializerDeserializer {
 
  protected:
   // Create a deserializer from a snapshot byte source.
-  Deserializer(IsolateT* isolate, base::Vector<const uint8_t> payload,
+  Deserializer(IsolateT* isolate, base::Vector<const byte> payload,
                uint32_t magic_number, bool deserializing_user_code,
                bool can_rehash);
 
@@ -57,7 +57,7 @@ class Deserializer : public SerializerDeserializer {
 
   // Create Log events for newly deserialized objects.
   void LogNewObjectEvents();
-  void LogScriptEvents(Tagged<Script> script);
+  void LogScriptEvents(Script script);
   void LogNewMapEvents();
 
   // Descriptor arrays are deserialized as "strong", so that there is no risk of
@@ -113,6 +113,7 @@ class Deserializer : public SerializerDeserializer {
   Handle<HeapObject> ReadObject();
 
  private:
+  friend class DeserializerRelocInfoVisitor;
   // A circular queue of hot objects. This is added to in the same order as in
   // Serializer::HotObjectsList, but this stores the objects as a vector of
   // existing handles. This allows us to add Handles to the queue without having
@@ -142,28 +143,16 @@ class Deserializer : public SerializerDeserializer {
     int index_ = 0;
   };
 
-  struct ReferenceDescriptor {
-    HeapObjectReferenceType type;
-    bool is_indirect_pointer;
-  };
-
   void VisitRootPointers(Root root, const char* description,
                          FullObjectSlot start, FullObjectSlot end) override;
 
   void Synchronize(VisitorSynchronization::SyncTag tag) override;
 
-  template <typename SlotAccessor>
-  int WriteHeapPointer(SlotAccessor slot_accessor,
-                       Tagged<HeapObject> heap_object,
-                       ReferenceDescriptor descr);
-  template <typename SlotAccessor>
-  int WriteHeapPointer(SlotAccessor slot_accessor,
-                       Handle<HeapObject> heap_object,
-                       ReferenceDescriptor descr);
+  template <typename TSlot>
+  inline int WriteAddress(TSlot dest, Address value);
 
-  inline int WriteExternalPointer(ExternalPointerSlot dest, Address value);
-  inline int WriteIndirectPointer(IndirectPointerSlot dest,
-                                  Tagged<HeapObject> value);
+  inline int WriteExternalPointer(ExternalPointerSlot dest, Address value,
+                                  ExternalPointerTag tag);
 
   // Fills in a heap object's data from start to end (exclusive). Start and end
   // are slot indices within the object.
@@ -178,54 +167,56 @@ class Deserializer : public SerializerDeserializer {
   // data into the given slot. May fill in zero or multiple slots, so it returns
   // the number of slots filled.
   template <typename SlotAccessor>
-  int ReadSingleBytecodeData(uint8_t data, SlotAccessor slot_accessor);
+  int ReadSingleBytecodeData(byte data, SlotAccessor slot_accessor);
 
   template <typename SlotAccessor>
-  int ReadNewObject(uint8_t data, SlotAccessor slot_accessor);
+  int ReadNewObject(byte data, SlotAccessor slot_accessor);
   template <typename SlotAccessor>
-  int ReadBackref(uint8_t data, SlotAccessor slot_accessor);
+  int ReadBackref(byte data, SlotAccessor slot_accessor);
   template <typename SlotAccessor>
-  int ReadReadOnlyHeapRef(uint8_t data, SlotAccessor slot_accessor);
+  int ReadReadOnlyHeapRef(byte data, SlotAccessor slot_accessor);
   template <typename SlotAccessor>
-  int ReadRootArray(uint8_t data, SlotAccessor slot_accessor);
+  int ReadRootArray(byte data, SlotAccessor slot_accessor);
   template <typename SlotAccessor>
-  int ReadStartupObjectCache(uint8_t data, SlotAccessor slot_accessor);
+  int ReadStartupObjectCache(byte data, SlotAccessor slot_accessor);
   template <typename SlotAccessor>
-  int ReadSharedHeapObjectCache(uint8_t data, SlotAccessor slot_accessor);
+  int ReadReadOnlyObjectCache(byte data, SlotAccessor slot_accessor);
   template <typename SlotAccessor>
-  int ReadNewMetaMap(uint8_t data, SlotAccessor slot_accessor);
+  int ReadSharedHeapObjectCache(byte data, SlotAccessor slot_accessor);
   template <typename SlotAccessor>
-  int ReadExternalReference(uint8_t data, SlotAccessor slot_accessor);
+  int ReadNewMetaMap(byte data, SlotAccessor slot_accessor);
   template <typename SlotAccessor>
-  int ReadRawExternalReference(uint8_t data, SlotAccessor slot_accessor);
+  int ReadExternalReference(byte data, SlotAccessor slot_accessor);
   template <typename SlotAccessor>
-  int ReadAttachedReference(uint8_t data, SlotAccessor slot_accessor);
+  int ReadRawExternalReference(byte data, SlotAccessor slot_accessor);
   template <typename SlotAccessor>
-  int ReadRegisterPendingForwardRef(uint8_t data, SlotAccessor slot_accessor);
+  int ReadAttachedReference(byte data, SlotAccessor slot_accessor);
   template <typename SlotAccessor>
-  int ReadResolvePendingForwardRef(uint8_t data, SlotAccessor slot_accessor);
+  int ReadRegisterPendingForwardRef(byte data, SlotAccessor slot_accessor);
   template <typename SlotAccessor>
-  int ReadVariableRawData(uint8_t data, SlotAccessor slot_accessor);
+  int ReadResolvePendingForwardRef(byte data, SlotAccessor slot_accessor);
   template <typename SlotAccessor>
-  int ReadVariableRepeat(uint8_t data, SlotAccessor slot_accessor);
+  int ReadVariableRawData(byte data, SlotAccessor slot_accessor);
   template <typename SlotAccessor>
-  int ReadOffHeapBackingStore(uint8_t data, SlotAccessor slot_accessor);
+  int ReadCodeBody(byte data, SlotAccessor slot_accessor);
   template <typename SlotAccessor>
-  int ReadApiReference(uint8_t data, SlotAccessor slot_accessor);
+  int ReadVariableRepeat(byte data, SlotAccessor slot_accessor);
   template <typename SlotAccessor>
-  int ReadClearedWeakReference(uint8_t data, SlotAccessor slot_accessor);
+  int ReadOffHeapBackingStore(byte data, SlotAccessor slot_accessor);
   template <typename SlotAccessor>
-  int ReadWeakPrefix(uint8_t data, SlotAccessor slot_accessor);
+  int ReadApiReference(byte data, SlotAccessor slot_accessor);
   template <typename SlotAccessor>
-  int ReadIndirectPointerPrefix(uint8_t data, SlotAccessor slot_accessor);
+  int ReadClearedWeakReference(byte data, SlotAccessor slot_accessor);
   template <typename SlotAccessor>
-  int ReadRootArrayConstants(uint8_t data, SlotAccessor slot_accessor);
+  int ReadWeakPrefix(byte data, SlotAccessor slot_accessor);
   template <typename SlotAccessor>
-  int ReadHotObject(uint8_t data, SlotAccessor slot_accessor);
+  int ReadRootArrayConstants(byte data, SlotAccessor slot_accessor);
   template <typename SlotAccessor>
-  int ReadFixedRawData(uint8_t data, SlotAccessor slot_accessor);
+  int ReadHotObject(byte data, SlotAccessor slot_accessor);
   template <typename SlotAccessor>
-  int ReadFixedRepeat(uint8_t data, SlotAccessor slot_accessor);
+  int ReadFixedRawData(byte data, SlotAccessor slot_accessor);
+  template <typename SlotAccessor>
+  int ReadFixedRepeat(byte data, SlotAccessor slot_accessor);
 
   // A helper function for ReadData for reading external references.
   inline Address ReadExternalReferenceCase();
@@ -236,7 +227,7 @@ class Deserializer : public SerializerDeserializer {
   Handle<HeapObject> ReadObject(SnapshotSpace space_number);
   Handle<HeapObject> ReadMetaMap();
 
-  ReferenceDescriptor GetAndResetNextReferenceDescriptor();
+  HeapObjectReferenceType GetAndResetNextReferenceType();
 
   template <typename SlotGetter>
   int ReadRepeatedObject(SlotGetter slot_getter, int repeat_count);
@@ -244,12 +235,12 @@ class Deserializer : public SerializerDeserializer {
   // Special handling for serialized code like hooking up internalized strings.
   void PostProcessNewObject(Handle<Map> map, Handle<HeapObject> obj,
                             SnapshotSpace space);
-  void PostProcessNewJSReceiver(Tagged<Map> map, Handle<JSReceiver> obj,
+  void PostProcessNewJSReceiver(Map map, Handle<JSReceiver> obj,
                                 InstanceType instance_type,
                                 SnapshotSpace space);
 
-  Tagged<HeapObject> Allocate(AllocationType allocation, int size,
-                              AllocationAlignment alignment);
+  HeapObject Allocate(AllocationType allocation, int size,
+                      AllocationAlignment alignment);
 
   // Cached current isolate.
   IsolateT* isolate_;
@@ -297,7 +288,6 @@ class Deserializer : public SerializerDeserializer {
   const bool deserializing_user_code_;
 
   bool next_reference_is_weak_ = false;
-  bool next_reference_is_indirect_pointer_ = false;
 
   // TODO(6593): generalize rehashing, and remove this flag.
   const bool should_rehash_;
@@ -343,7 +333,7 @@ class StringTableInsertionKey final : public StringTableKey {
       DeserializingUserCodeOption deserializing_user_code);
 
   template <typename IsolateT>
-  bool IsMatch(IsolateT* isolate, Tagged<String> string);
+  bool IsMatch(IsolateT* isolate, String string);
 
   void PrepareForInsertion(Isolate* isolate) {
     // When sharing the string table, all string table lookups during snapshot

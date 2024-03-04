@@ -44,9 +44,9 @@ template <int N>
 void CheckExceptionInfos(v8::internal::Isolate* isolate, Handle<Object> exc,
                          const ExceptionInfo (&excInfos)[N]) {
   // Check that it's indeed an Error object.
-  CHECK(IsJSError(*exc));
+  CHECK(exc->IsJSError());
 
-  Print(*exc);
+  exc->Print();
   // Extract stack frame from the exception.
   auto stack = isolate->GetSimpleStackTrace(Handle<JSObject>::cast(exc));
   CHECK_EQ(N, stack->length());
@@ -68,7 +68,8 @@ void CheckExceptionInfos(v8::internal::Isolate* isolate, Handle<Object> exc,
 // Trigger a trap for executing unreachable.
 WASM_COMPILED_EXEC_TEST(Unreachable) {
   // Create a WasmRunner with stack checks and traps enabled.
-  WasmRunner<void> r(execution_tier, kWasmOrigin, nullptr, "main");
+  WasmRunner<void> r(execution_tier, kWasmOrigin, nullptr, "main",
+                     kRuntimeExceptionSupport);
   TestSignatures sigs;
 
   r.Build({WASM_UNREACHABLE});
@@ -83,7 +84,7 @@ WASM_COMPILED_EXEC_TEST(Unreachable) {
   Isolate* isolate = js_wasm_wrapper->GetIsolate();
   isolate->SetCaptureStackTraceForUncaughtExceptions(true, 10,
                                                      v8::StackTrace::kOverview);
-  Handle<Object> global(isolate->context()->global_object(), isolate);
+  Handle<Object> global(isolate->context().global_object(), isolate);
   MaybeHandle<Object> maybe_exc;
   Handle<Object> args[] = {js_wasm_wrapper};
   MaybeHandle<Object> returnObjMaybe =
@@ -101,7 +102,8 @@ WASM_COMPILED_EXEC_TEST(Unreachable) {
 
 // Trigger a trap for loading from out-of-bounds.
 WASM_COMPILED_EXEC_TEST(IllegalLoad) {
-  WasmRunner<void> r(execution_tier, kWasmOrigin, nullptr, "main");
+  WasmRunner<void> r(execution_tier, kWasmOrigin, nullptr, "main",
+                     kRuntimeExceptionSupport);
   TestSignatures sigs;
 
   r.builder().AddMemory(0L);
@@ -125,7 +127,7 @@ WASM_COMPILED_EXEC_TEST(IllegalLoad) {
   Isolate* isolate = js_wasm_wrapper->GetIsolate();
   isolate->SetCaptureStackTraceForUncaughtExceptions(true, 10,
                                                      v8::StackTrace::kOverview);
-  Handle<Object> global(isolate->context()->global_object(), isolate);
+  Handle<Object> global(isolate->context().global_object(), isolate);
   MaybeHandle<Object> maybe_exc;
   Handle<Object> args[] = {js_wasm_wrapper};
   MaybeHandle<Object> returnObjMaybe =

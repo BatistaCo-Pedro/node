@@ -18,7 +18,7 @@ var instance4;
 (function CompiledModuleInstancesInitialize1to3() {
   var builder = new WasmModuleBuilder();
 
-  builder.addMemory(1, 1);
+  builder.addMemory(1,1, true);
   builder.addImport("", "getValue", kSig_i_v);
   builder.addFunction("f", kSig_i_v)
     .addBody([

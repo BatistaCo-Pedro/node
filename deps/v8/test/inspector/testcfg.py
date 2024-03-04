@@ -42,15 +42,15 @@ class TestCase(testcase.TestCase):
 
   def _get_files_params(self):
     return [
-      self.suite.root / PROTOCOL_TEST_JS,
-      self.suite.root / self.path_js,
+      os.path.join(self.suite.root, PROTOCOL_TEST_JS),
+      os.path.join(self.suite.root, self.path + self._get_suffix()),
     ]
 
   def _get_source_flags(self):
     return self._source_flags
 
   def _get_source_path(self):
-    return self.suite.root / self.path_js
+    return os.path.join(self.suite.root, self.path + self._get_suffix())
 
   def get_shell(self):
     return 'inspector-test'
@@ -58,13 +58,14 @@ class TestCase(testcase.TestCase):
   def get_android_resources(self):
     super_resources = super().get_android_resources()
     return super_resources + [
-        self.suite.root /'debugger' /'resources' /'break-locations.js',
-        self.suite.root / WASM_INSPECTOR_JS,
+        os.path.join('test', 'inspector', 'debugger', 'resources',
+                     'break-locations.js'),
+        os.path.join('test', 'inspector', WASM_INSPECTOR_JS),
     ]
 
   @property
   def output_proc(self):
     return outproc.ExpectedOutProc(
         self.expected_outcomes,
-        self.suite.root / self.path_and_suffix(EXPECTED_SUFFIX),
+        os.path.join(self.suite.root, self.path) + EXPECTED_SUFFIX,
         self.test_config.regenerate_expected_files)

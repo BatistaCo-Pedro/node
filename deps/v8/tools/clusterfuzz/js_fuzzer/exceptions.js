@@ -105,7 +105,6 @@ const DISALLOWED_FLAGS = [
     '--allow-natives-syntax',
     '--debug-code',
     '--harmony',
-    '--js-staging',
     '--wasm-staging',
     '--expose-gc',
     '--expose_gc',

@@ -9,14 +9,11 @@
 #include "src/common/assert-scope.h"
 #include "src/common/globals.h"
 #include "src/sandbox/external-pointer-table.h"
-#include "src/sandbox/indirect-pointer-tag.h"
 
 namespace v8 {
 namespace internal {
 
 class Object;
-class ExposedTrustedObject;
-using TaggedBase = TaggedImpl<HeapObjectReferenceType::STRONG, Address>;
 
 template <typename Subclass, typename Data,
           size_t SlotDataAlignment = sizeof(Data)>
@@ -95,7 +92,7 @@ class SlotBase {
 // The slot's contents can be read and written using operator* and store().
 class FullObjectSlot : public SlotBase<FullObjectSlot, Address> {
  public:
-  using TObject = Tagged<Object>;
+  using TObject = Object;
   using THeapObjectSlot = FullHeapObjectSlot;
 
   // Tagged value stored in this slot is guaranteed to never be a weak pointer.
@@ -105,33 +102,31 @@ class FullObjectSlot : public SlotBase<FullObjectSlot, Address> {
   explicit FullObjectSlot(Address ptr) : SlotBase(ptr) {}
   explicit FullObjectSlot(const Address* ptr)
       : SlotBase(reinterpret_cast<Address>(ptr)) {}
-  inline explicit FullObjectSlot(TaggedBase* object);
+  inline explicit FullObjectSlot(Object* object);
   template <typename T>
   explicit FullObjectSlot(SlotBase<T, TData, kSlotDataAlignment> slot)
       : SlotBase(slot.address()) {}
 
   // Compares memory representation of a value stored in the slot with given
   // raw value.
+  inline bool contains_value(Address raw_value) const;
   inline bool contains_map_value(Address raw_value) const;
-  inline bool Relaxed_ContainsMapValue(Address raw_value) const;
 
-  inline Tagged<Object> operator*() const;
-  inline Tagged<Object> load(PtrComprCageBase cage_base) const;
-  inline void store(Tagged<Object> value) const;
-  inline void store_map(Tagged<Map> map) const;
+  inline Object operator*() const;
+  inline Object load(PtrComprCageBase cage_base) const;
+  inline void store(Object value) const;
+  inline void store_map(Map map) const;
 
-  inline Tagged<Map> load_map() const;
+  inline Map load_map() const;
 
-  inline Tagged<Object> Acquire_Load() const;
-  inline Tagged<Object> Acquire_Load(PtrComprCageBase cage_base) const;
-  inline Tagged<Object> Relaxed_Load() const;
-  inline Tagged<Object> Relaxed_Load(PtrComprCageBase cage_base) const;
-  inline void Relaxed_Store(Tagged<Object> value) const;
-  inline void Release_Store(Tagged<Object> value) const;
-  inline Tagged<Object> Relaxed_CompareAndSwap(Tagged<Object> old,
-                                               Tagged<Object> target) const;
-  inline Tagged<Object> Release_CompareAndSwap(Tagged<Object> old,
-                                               Tagged<Object> target) const;
+  inline Object Acquire_Load() const;
+  inline Object Acquire_Load(PtrComprCageBase cage_base) const;
+  inline Object Relaxed_Load() const;
+  inline Object Relaxed_Load(PtrComprCageBase cage_base) const;
+  inline void Relaxed_Store(Object value) const;
+  inline void Release_Store(Object value) const;
+  inline Object Relaxed_CompareAndSwap(Object old, Object target) const;
+  inline Object Release_CompareAndSwap(Object old, Object target) const;
 };
 
 // A FullMaybeObjectSlot instance describes a kSystemPointerSize-sized field
@@ -149,7 +144,7 @@ class FullMaybeObjectSlot
 
   FullMaybeObjectSlot() : SlotBase(kNullAddress) {}
   explicit FullMaybeObjectSlot(Address ptr) : SlotBase(ptr) {}
-  explicit FullMaybeObjectSlot(TaggedBase* ptr)
+  explicit FullMaybeObjectSlot(Object* ptr)
       : SlotBase(reinterpret_cast<Address>(ptr)) {}
   explicit FullMaybeObjectSlot(MaybeObject* ptr)
       : SlotBase(reinterpret_cast<Address>(ptr)) {}
@@ -178,7 +173,7 @@ class FullHeapObjectSlot : public SlotBase<FullHeapObjectSlot, Address> {
  public:
   FullHeapObjectSlot() : SlotBase(kNullAddress) {}
   explicit FullHeapObjectSlot(Address ptr) : SlotBase(ptr) {}
-  explicit FullHeapObjectSlot(TaggedBase* ptr)
+  explicit FullHeapObjectSlot(Object* ptr)
       : SlotBase(reinterpret_cast<Address>(ptr)) {}
   template <typename T>
   explicit FullHeapObjectSlot(SlotBase<T, TData, kSlotDataAlignment> slot)
@@ -188,9 +183,9 @@ class FullHeapObjectSlot : public SlotBase<FullHeapObjectSlot, Address> {
   inline HeapObjectReference load(PtrComprCageBase cage_base) const;
   inline void store(HeapObjectReference value) const;
 
-  inline Tagged<HeapObject> ToHeapObject() const;
+  inline HeapObject ToHeapObject() const;
 
-  inline void StoreHeapObject(Tagged<HeapObject> value) const;
+  inline void StoreHeapObject(HeapObject value) const;
 };
 
 // TODO(ishell, v8:8875): When pointer compression is enabled the [u]intptr_t
@@ -279,10 +274,10 @@ class OffHeapFullObjectSlot : public FullObjectSlot {
   explicit OffHeapFullObjectSlot(Address ptr) : FullObjectSlot(ptr) {}
   explicit OffHeapFullObjectSlot(const Address* ptr) : FullObjectSlot(ptr) {}
 
-  inline Tagged<Object> operator*() const = delete;
+  inline Object operator*() const = delete;
 
   using FullObjectSlot::Relaxed_Load;
-  inline Tagged<Object> Relaxed_Load() const = delete;
+  inline Object Relaxed_Load() const = delete;
 };
 
 // An ExternalPointerSlot instance describes a kExternalPointerSlotSize-sized
@@ -295,25 +290,10 @@ class ExternalPointerSlot
     : public SlotBase<ExternalPointerSlot, ExternalPointer_t,
                       kTaggedSize /* slot alignment */> {
  public:
-  ExternalPointerSlot()
-      : SlotBase(kNullAddress)
-#ifdef V8_ENABLE_SANDBOX
-        ,
-        tag_(kExternalPointerNullTag)
-#endif
-  {
-  }
+  ExternalPointerSlot() : SlotBase(kNullAddress) {}
+  explicit ExternalPointerSlot(Address ptr) : SlotBase(ptr) {}
 
-  explicit ExternalPointerSlot(Address ptr, ExternalPointerTag tag)
-      : SlotBase(ptr)
-#ifdef V8_ENABLE_SANDBOX
-        ,
-        tag_(tag)
-#endif
-  {
-  }
-
-  inline void init(Isolate* isolate, Address value);
+  inline void init(Isolate* isolate, Address value, ExternalPointerTag tag);
 
 #ifdef V8_ENABLE_SANDBOX
   // When the external pointer is sandboxed, its slot stores a handle to an
@@ -327,8 +307,8 @@ class ExternalPointerSlot
   inline void Release_StoreHandle(ExternalPointerHandle handle) const;
 #endif  // V8_ENABLE_SANDBOX
 
-  inline Address load(const Isolate* isolate);
-  inline void store(Isolate* isolate, Address value);
+  inline Address load(const Isolate* isolate, ExternalPointerTag tag);
+  inline void store(Isolate* isolate, Address value, ExternalPointerTag tag);
 
   // ExternalPointerSlot serialization support.
   // These methods can be used to clear an external pointer slot prior to
@@ -343,94 +323,14 @@ class ExternalPointerSlot
       const DisallowGarbageCollection& no_gc);
   inline void RestoreContentAfterSerialization(
       RawContent content, const DisallowGarbageCollection& no_gc);
-  // The ReadOnlySerializer replaces the RawContent in-place.
-  inline void ReplaceContentWithIndexForSerialization(
-      const DisallowGarbageCollection& no_gc, uint32_t index);
-  inline uint32_t GetContentAsIndexAfterDeserialization(
-      const DisallowGarbageCollection& no_gc);
-
-#ifdef V8_ENABLE_SANDBOX
-  ExternalPointerTag tag() const { return tag_; }
-#else
-  ExternalPointerTag tag() const { return kExternalPointerNullTag; }
-#endif
 
  private:
 #ifdef V8_ENABLE_SANDBOX
-  // The tag associated with this slot.
-  ExternalPointerTag tag_;
-
-  inline const ExternalPointerTable& GetExternalPointerTable(
-      const Isolate* isolate);
-  inline ExternalPointerTable& GetExternalPointerTable(Isolate* isolate);
-  inline ExternalPointerTable::Space* GetDefaultExternalPointerSpace(
-      Isolate* isolate);
+  inline const ExternalPointerTable& GetExternalPointerTableForTag(
+      const Isolate* isolate, ExternalPointerTag tag);
+  inline ExternalPointerTable& GetExternalPointerTableForTag(
+      Isolate* isolate, ExternalPointerTag tag);
 #endif  // V8_ENABLE_SANDBOX
-};
-
-// An IndirectPointerSlot instance describes a 32-bit field ("slot") containing
-// an IndirectPointerHandle, i.e. an index to an entry in a pointer table which
-// contains the "real" pointer to the referenced HeapObject. These slots are
-// used when the sandbox is enabled to securely reference HeapObjects outside
-// of the sandbox.
-class IndirectPointerSlot
-    : public SlotBase<IndirectPointerSlot, IndirectPointerHandle,
-                      kTaggedSize /* slot alignment */> {
- public:
-  IndirectPointerSlot()
-      : SlotBase(kNullAddress)
-#ifdef V8_ENABLE_SANDBOX
-        ,
-        tag_(kIndirectPointerNullTag)
-#endif
-  {
-  }
-
-  explicit IndirectPointerSlot(Address ptr, IndirectPointerTag tag)
-      : SlotBase(ptr)
-#ifdef V8_ENABLE_SANDBOX
-        ,
-        tag_(tag)
-#endif
-  {
-  }
-
-  // Even though only HeapObjects can be stored into an IndirectPointerSlot,
-  // these slots can be empty (containing kNullIndirectPointerHandle), in which
-  // case load() will return Smi::zero().
-  inline Tagged<Object> load(const Isolate* isolate) const;
-  inline void store(Tagged<ExposedTrustedObject> value) const;
-
-  // Load the value of this slot.
-  // The isolate parameter is required unless using the kCodeTag tag, as these
-  // object use a different pointer table.
-  inline Tagged<Object> Relaxed_Load(const Isolate* isolate) const;
-  inline Tagged<Object> Acquire_Load(const Isolate* isolate) const;
-
-  // Store a reference to the given object into this slot. The object must be
-  // indirectly refereceable.
-  inline void Relaxed_Store(Tagged<ExposedTrustedObject> value) const;
-  inline void Release_Store(Tagged<ExposedTrustedObject> value) const;
-
-  inline IndirectPointerHandle Relaxed_LoadHandle() const;
-  inline IndirectPointerHandle Acquire_LoadHandle() const;
-  inline void Relaxed_StoreHandle(IndirectPointerHandle handle) const;
-  inline void Release_StoreHandle(IndirectPointerHandle handle) const;
-
-#ifdef V8_ENABLE_SANDBOX
-  IndirectPointerTag tag() const { return tag_; }
-#else
-  IndirectPointerTag tag() const { return kIndirectPointerNullTag; }
-#endif
-
- private:
-#ifdef V8_ENABLE_SANDBOX
-  // The tag associated with this slot.
-  IndirectPointerTag tag_;
-#endif  // V8_ENABLE_SANDBOX
-
-  inline Tagged<Object> ResolveHandle(IndirectPointerHandle handle,
-                                      const Isolate* isolate) const;
 };
 
 }  // namespace internal

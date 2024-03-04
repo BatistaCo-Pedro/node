@@ -133,8 +133,7 @@ void PreparseDataBuilder::ByteData::Start(std::vector<uint8_t>* buffer) {
 struct RawPreparseData {};
 
 void PreparseDataBuilder::ByteData::Finalize(Zone* zone) {
-  uint8_t* raw_zone_data =
-      zone->AllocateArray<uint8_t, RawPreparseData>(index_);
+  uint8_t* raw_zone_data = zone->NewArray<uint8_t, RawPreparseData>(index_);
   memcpy(raw_zone_data, byte_data_->data(), index_);
   byte_data_->resize(0);
   zone_byte_data_ = base::Vector<uint8_t>(raw_zone_data, index_);
@@ -402,10 +401,10 @@ void PreparseDataBuilder::SaveDataForVariable(Variable* var) {
   }
 #endif
 
-  uint8_t variable_data = VariableMaybeAssignedField::encode(
-                              var->maybe_assigned() == kMaybeAssigned) |
-                          VariableContextAllocatedField::encode(
-                              var->has_forced_context_allocation());
+  byte variable_data = VariableMaybeAssignedField::encode(
+                           var->maybe_assigned() == kMaybeAssigned) |
+                       VariableContextAllocatedField::encode(
+                           var->has_forced_context_allocation());
   byte_data_.Reserve(kUint8Size);
   byte_data_.WriteQuarter(variable_data);
 }
@@ -524,12 +523,12 @@ class OnHeapProducedPreparseData final : public ProducedPreparseData {
       : data_(data) {}
 
   Handle<PreparseData> Serialize(Isolate* isolate) final {
-    DCHECK(!data_.is_null());
+    DCHECK(!data_->is_null());
     return data_;
   }
 
   Handle<PreparseData> Serialize(LocalIsolate* isolate) final {
-    DCHECK(!data_.is_null());
+    DCHECK(!data_->is_null());
     DCHECK_IMPLIES(!isolate->is_main_thread(),
                    isolate->heap()->ContainsLocalHandle(data_.location()));
     return data_;
@@ -762,9 +761,7 @@ bool BaseConsumedPreparseData<Data>::VerifyDataStart() {
 }
 #endif
 
-Tagged<PreparseData> OnHeapConsumedPreparseData::GetScopeData() {
-  return *data_;
-}
+PreparseData OnHeapConsumedPreparseData::GetScopeData() { return *data_; }
 
 ProducedPreparseData* OnHeapConsumedPreparseData::GetChildData(Zone* zone,
                                                                int index) {
@@ -775,11 +772,9 @@ ProducedPreparseData* OnHeapConsumedPreparseData::GetChildData(Zone* zone,
 
 OnHeapConsumedPreparseData::OnHeapConsumedPreparseData(
     LocalIsolate* isolate, Handle<PreparseData> data)
-    : BaseConsumedPreparseData<Tagged<PreparseData>>(),
-      isolate_(isolate),
-      data_(data) {
+    : BaseConsumedPreparseData<PreparseData>(), isolate_(isolate), data_(data) {
   DCHECK_NOT_NULL(isolate);
-  DCHECK(IsPreparseData(*data));
+  DCHECK(data->IsPreparseData());
   DCHECK(VerifyDataStart());
 }
 

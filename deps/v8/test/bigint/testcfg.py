@@ -2,7 +2,13 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+# for py2/py3 compatibility
+from __future__ import print_function
+
+import os
+
 from testrunner.local import command
+from testrunner.local import utils
 from testrunner.local import testsuite
 from testrunner.objects import testcase
 
@@ -15,11 +21,14 @@ class VariantsGenerator(testsuite.VariantsGenerator):
 
 class TestLoader(testsuite.TestLoader):
   def _list_test_filenames(self):
-    args = ['--list'] + self.test_config.extra_flags
+    shell = os.path.abspath(
+      os.path.join(self.test_config.shell_dir, SHELL))
+    if utils.IsWindows():
+      shell += ".exe"
     cmd = self.ctx.command(
         cmd_prefix=self.test_config.command_prefix,
-        shell=self.ctx.platform_shell(SHELL, args, self.test_config.shell_dir),
-        args=args)
+        shell=shell,
+        args=['--list'] + self.test_config.extra_flags)
     output = cmd.execute()
 
     if output.exit_code != 0:
@@ -44,7 +53,7 @@ class TestSuite(testsuite.TestSuite):
 
 class TestCase(testcase.TestCase):
   def _get_files_params(self):
-    return [self.name]
+    return [self.path]
 
   def get_shell(self):
     return SHELL

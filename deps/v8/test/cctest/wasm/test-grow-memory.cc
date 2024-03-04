@@ -44,8 +44,7 @@ TEST(GrowMemDetaches) {
     Isolate* isolate = CcTest::InitIsolateOnce();
     HandleScope scope(isolate);
     Handle<WasmMemoryObject> memory_object =
-        WasmMemoryObject::New(isolate, 16, 100, SharedFlag::kNotShared,
-                              WasmMemoryFlag::kWasmMemory32)
+        WasmMemoryObject::New(isolate, 16, 100, SharedFlag::kNotShared)
             .ToHandleChecked();
     Handle<JSArrayBuffer> buffer(memory_object->array_buffer(), isolate);
     int32_t result = WasmMemoryObject::Grow(isolate, memory_object, 0);
@@ -61,8 +60,7 @@ TEST(Externalized_GrowMemMemSize) {
     Isolate* isolate = CcTest::InitIsolateOnce();
     HandleScope scope(isolate);
     Handle<WasmMemoryObject> memory_object =
-        WasmMemoryObject::New(isolate, 16, 100, SharedFlag::kNotShared,
-                              WasmMemoryFlag::kWasmMemory32)
+        WasmMemoryObject::New(isolate, 16, 100, SharedFlag::kNotShared)
             .ToHandleChecked();
     ManuallyExternalizedBuffer external(
         handle(memory_object->array_buffer(), isolate));
@@ -85,8 +83,8 @@ TEST(Run_WasmModule_Buffer_Externalized_GrowMem) {
     WasmModuleBuilder* builder = zone.New<WasmModuleBuilder>(&zone);
     WasmFunctionBuilder* f = builder->AddFunction(sigs.i_v());
     ExportAsMain(f);
-    uint8_t code[] = {WASM_MEMORY_GROW(WASM_I32V_1(6)), WASM_DROP,
-                      WASM_MEMORY_SIZE};
+    byte code[] = {WASM_MEMORY_GROW(WASM_I32V_1(6)), WASM_DROP,
+                   WASM_MEMORY_SIZE};
     EMIT_CODE_WITH_END(f, code);
 
     ZoneBuffer buffer(&zone);
@@ -97,7 +95,7 @@ TEST(Run_WasmModule_Buffer_Externalized_GrowMem) {
         CompileAndInstantiateForTesting(
             isolate, &thrower, ModuleWireBytes(buffer.begin(), buffer.end()))
             .ToHandleChecked();
-    Handle<WasmMemoryObject> memory_object{instance->memory_object(0), isolate};
+    Handle<WasmMemoryObject> memory_object(instance->memory_object(), isolate);
 
     // Fake the Embedder flow by externalizing the array buffer.
     ManuallyExternalizedBuffer external1(

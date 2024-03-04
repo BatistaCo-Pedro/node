@@ -1,7 +1,7 @@
 'use strict'
 
-const { AsyncResource } = require('node:async_hooks')
 const { InvalidArgumentError, RequestAbortedError, SocketError } = require('../core/errors')
+const { AsyncResource } = require('async_hooks')
 const util = require('../core/util')
 const { addSignal, removeSignal } = require('./abort-signal')
 
@@ -50,13 +50,7 @@ class ConnectHandler extends AsyncResource {
     removeSignal(this)
 
     this.callback = null
-
-    let headers = rawHeaders
-    // Indicates is an HTTP2Session
-    if (headers != null) {
-      headers = this.responseHeaders === 'raw' ? util.parseRawHeaders(rawHeaders) : util.parseHeaders(rawHeaders)
-    }
-
+    const headers = this.responseHeaders === 'raw' ? util.parseRawHeaders(rawHeaders) : util.parseHeaders(rawHeaders)
     this.runInAsyncScope(callback, null, null, {
       statusCode,
       headers,
@@ -96,7 +90,7 @@ function connect (opts, callback) {
     if (typeof callback !== 'function') {
       throw err
     }
-    const opaque = opts?.opaque
+    const opaque = opts && opts.opaque
     queueMicrotask(() => callback(err, { opaque }))
   }
 }

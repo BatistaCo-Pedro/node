@@ -63,5 +63,4 @@ verbose exit 1
 timing npm Completed in {TIME}ms
 verbose code 1
 error  A complete log of this run can be found in: {CWD}/cache/_logs/{DATE}-debug-0.log
-silly logfile done cleaning log files
 `

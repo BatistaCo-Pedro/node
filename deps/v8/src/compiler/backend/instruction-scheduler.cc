@@ -7,7 +7,6 @@
 #include "src/base/iterator.h"
 #include "src/base/optional.h"
 #include "src/base/utils/random-number-generator.h"
-#include "src/compiler/backend/instruction-codes.h"
 
 namespace v8 {
 namespace internal {
@@ -302,12 +301,6 @@ int InstructionScheduler::GetInstructionFlags(const Instruction* instr) const {
       // effects.
       return kIsLoadOperation;
 
-    case kArchStackPointer:
-    case kArchSetStackPointer:
-      // Instructions that load or set the stack pointer must not be reordered
-      // with instructions with side effects or with each other.
-      return kHasSideEffect;
-
     case kArchPrepareCallCFunction:
     case kArchPrepareTailCall:
     case kArchTailCallCodeObject:
@@ -340,7 +333,6 @@ int InstructionScheduler::GetInstructionFlags(const Instruction* instr) const {
 
     case kArchStoreWithWriteBarrier:
     case kArchAtomicStoreWithWriteBarrier:
-    case kArchStoreIndirectWithWriteBarrier:
       return kHasSideEffect;
 
     case kAtomicLoadInt8:

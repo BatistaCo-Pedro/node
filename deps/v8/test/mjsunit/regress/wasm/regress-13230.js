@@ -8,7 +8,7 @@ d8.file.execute("test/mjsunit/wasm/wasm-module-builder.js");
 
 let builder = new WasmModuleBuilder();
 
-builder.addMemory(1, 2);
+builder.addMemory(1, 2, false, false);
 
 let callee = builder.addFunction('callee', kSig_v_v).addBody([kExprNop]);
 

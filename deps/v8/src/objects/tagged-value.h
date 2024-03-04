@@ -21,10 +21,9 @@ class StrongTaggedValue
  public:
   constexpr StrongTaggedValue() : TaggedImpl() {}
   explicit constexpr StrongTaggedValue(Tagged_t ptr) : TaggedImpl(ptr) {}
-  explicit StrongTaggedValue(Tagged<Object> o);
+  explicit StrongTaggedValue(Object o);
 
-  inline static Tagged<Object> ToObject(Isolate* isolate,
-                                        StrongTaggedValue object);
+  inline static Object ToObject(Isolate* isolate, StrongTaggedValue object);
 };
 
 // Almost same as MaybeObject but this one deals with in-heap and potentially

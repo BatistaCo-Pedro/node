@@ -48,7 +48,7 @@ namespace internal {
 
 bool CpuFeatures::SupportsOptimizer() { return true; }
 
-void WritableRelocInfo::apply(intptr_t delta) {
+void RelocInfo::apply(intptr_t delta) {
   // absolute code pointer inside code object moves with the code object.
   if (IsInternalReference(rmode_)) {
     // Jump table entry
@@ -145,16 +145,15 @@ Handle<Object> Assembler::code_target_object_handle_at(Address pc,
   return GetCodeTarget(index);
 }
 
-Tagged<HeapObject> RelocInfo::target_object(PtrComprCageBase cage_base) {
+HeapObject RelocInfo::target_object(PtrComprCageBase cage_base) {
   DCHECK(IsCodeTarget(rmode_) || IsEmbeddedObjectMode(rmode_));
   if (IsCompressedEmbeddedObject(rmode_)) {
-    return HeapObject::cast(
-        Tagged<Object>(V8HeapCompressionScheme::DecompressTagged(
-            cage_base,
-            Assembler::target_compressed_address_at(pc_, constant_pool_))));
+    return HeapObject::cast(Object(V8HeapCompressionScheme::DecompressTagged(
+        cage_base,
+        Assembler::target_compressed_address_at(pc_, constant_pool_))));
   } else {
     return HeapObject::cast(
-        Tagged<Object>(Assembler::target_address_at(pc_, constant_pool_)));
+        Object(Assembler::target_address_at(pc_, constant_pool_)));
   }
 }
 
@@ -177,8 +176,9 @@ Handle<HeapObject> RelocInfo::target_object_handle(Assembler* origin) {
   }
 }
 
-void WritableRelocInfo::set_target_object(Tagged<HeapObject> target,
-                                          ICacheFlushMode icache_flush_mode) {
+void RelocInfo::set_target_object(Heap* heap, HeapObject target,
+                                  WriteBarrierMode write_barrier_mode,
+                                  ICacheFlushMode icache_flush_mode) {
   DCHECK(IsCodeTarget(rmode_) || IsEmbeddedObjectMode(rmode_));
   if (IsCompressedEmbeddedObject(rmode_)) {
     Assembler::set_target_compressed_address_at(
@@ -190,6 +190,9 @@ void WritableRelocInfo::set_target_object(Tagged<HeapObject> target,
     Assembler::set_target_address_at(pc_, constant_pool_, target.ptr(),
                                      icache_flush_mode);
   }
+  if (!instruction_stream().is_null() && !v8_flags.disable_write_barriers) {
+    WriteBarrierForCode(instruction_stream(), this, target, write_barrier_mode);
+  }
 }
 
 Address RelocInfo::target_external_reference() {
@@ -197,7 +200,7 @@ Address RelocInfo::target_external_reference() {
   return Assembler::target_address_at(pc_, constant_pool_);
 }
 
-void WritableRelocInfo::set_target_external_reference(
+void RelocInfo::set_target_external_reference(
     Address target, ICacheFlushMode icache_flush_mode) {
   DCHECK(rmode_ == RelocInfo::EXTERNAL_REFERENCE);
   Assembler::set_target_address_at(pc_, constant_pool_, target,
@@ -209,6 +212,26 @@ Builtin RelocInfo::target_builtin_at(Assembler* origin) { UNREACHABLE(); }
 Address RelocInfo::target_off_heap_target() {
   DCHECK(IsOffHeapTarget(rmode_));
   return Assembler::target_address_at(pc_, constant_pool_);
+}
+
+void RelocInfo::WipeOut() {
+  DCHECK(IsEmbeddedObjectMode(rmode_) || IsCodeTarget(rmode_) ||
+         IsExternalReference(rmode_) || IsInternalReference(rmode_) ||
+         IsInternalReferenceEncoded(rmode_) || IsOffHeapTarget(rmode_));
+  if (IsInternalReference(rmode_)) {
+    // Jump table entry
+    Memory<Address>(pc_) = kNullAddress;
+  } else if (IsCompressedEmbeddedObject(rmode_)) {
+    Assembler::set_target_compressed_address_at(pc_, constant_pool_,
+                                                kNullAddress);
+  } else if (IsInternalReferenceEncoded(rmode_) || IsOffHeapTarget(rmode_)) {
+    // mov sequence
+    // Currently used only by deserializer, no need to flush.
+    Assembler::set_target_address_at(pc_, constant_pool_, kNullAddress,
+                                     SKIP_ICACHE_FLUSH);
+  } else {
+    Assembler::set_target_address_at(pc_, constant_pool_, kNullAddress);
+  }
 }
 
 Operand::Operand(Register rm) : rm_(rm), rmode_(RelocInfo::NO_INFO) {}
@@ -378,9 +401,9 @@ Address Assembler::target_constant_pool_address_at(
 // has already deserialized the mov instructions etc.
 // There is a FIXED_SEQUENCE assumption here
 void Assembler::deserialization_set_special_target_at(
-    Address instruction_payload, Tagged<Code> code, Address target) {
+    Address instruction_payload, Code code, Address target) {
   set_target_address_at(instruction_payload,
-                        !code.is_null() ? code->constant_pool() : kNullAddress,
+                        !code.is_null() ? code.constant_pool() : kNullAddress,
                         target);
 }
 

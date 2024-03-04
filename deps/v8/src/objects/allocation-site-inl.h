@@ -8,7 +8,6 @@
 #include "src/common/globals.h"
 #include "src/heap/heap-write-barrier-inl.h"
 #include "src/objects/allocation-site.h"
-#include "src/objects/dependent-code-inl.h"
 #include "src/objects/js-objects-inl.h"
 
 // Has to be the last include (doesn't have include guards):
@@ -26,33 +25,30 @@ NEVER_READ_ONLY_SPACE_IMPL(AllocationSite)
 
 CAST_ACCESSOR(AllocationSite)
 
-ACCESSORS(AllocationSite, transition_info_or_boilerplate, Tagged<Object>,
+ACCESSORS(AllocationSite, transition_info_or_boilerplate, Object,
           kTransitionInfoOrBoilerplateOffset)
 RELEASE_ACQUIRE_ACCESSORS(AllocationSite, transition_info_or_boilerplate,
-                          Tagged<Object>, kTransitionInfoOrBoilerplateOffset)
-ACCESSORS(AllocationSite, nested_site, Tagged<Object>, kNestedSiteOffset)
+                          Object, kTransitionInfoOrBoilerplateOffset)
+ACCESSORS(AllocationSite, nested_site, Object, kNestedSiteOffset)
 RELAXED_INT32_ACCESSORS(AllocationSite, pretenure_data, kPretenureDataOffset)
 INT32_ACCESSORS(AllocationSite, pretenure_create_count,
                 kPretenureCreateCountOffset)
-ACCESSORS(AllocationSite, dependent_code, Tagged<DependentCode>,
-          kDependentCodeOffset)
-ACCESSORS_CHECKED(AllocationSite, weak_next, Tagged<Object>, kWeakNextOffset,
+ACCESSORS(AllocationSite, dependent_code, DependentCode, kDependentCodeOffset)
+ACCESSORS_CHECKED(AllocationSite, weak_next, Object, kWeakNextOffset,
                   HasWeakNext())
-ACCESSORS(AllocationMemento, allocation_site, Tagged<Object>,
-          kAllocationSiteOffset)
+ACCESSORS(AllocationMemento, allocation_site, Object, kAllocationSiteOffset)
 
-Tagged<JSObject> AllocationSite::boilerplate() const {
+JSObject AllocationSite::boilerplate() const {
   DCHECK(PointsToLiteral());
   return JSObject::cast(transition_info_or_boilerplate());
 }
 
-Tagged<JSObject> AllocationSite::boilerplate(AcquireLoadTag tag) const {
+JSObject AllocationSite::boilerplate(AcquireLoadTag tag) const {
   DCHECK(PointsToLiteral());
   return JSObject::cast(transition_info_or_boilerplate(tag));
 }
 
-void AllocationSite::set_boilerplate(Tagged<JSObject> value,
-                                     ReleaseStoreTag tag,
+void AllocationSite::set_boilerplate(JSObject value, ReleaseStoreTag tag,
                                      WriteBarrierMode mode) {
   set_transition_info_or_boilerplate(value, tag, mode);
 }
@@ -117,9 +113,10 @@ void AllocationSite::SetDoNotInlineCall() {
 }
 
 bool AllocationSite::PointsToLiteral() const {
-  Tagged<Object> raw_value = transition_info_or_boilerplate(kAcquireLoad);
-  DCHECK_EQ(!IsSmi(raw_value), IsJSArray(raw_value) || IsJSObject(raw_value));
-  return !IsSmi(raw_value);
+  Object raw_value = transition_info_or_boilerplate(kAcquireLoad);
+  DCHECK_EQ(!raw_value.IsSmi(),
+            raw_value.IsJSArray() || raw_value.IsJSObject());
+  return !raw_value.IsSmi();
 }
 
 // Heuristic: We only need to create allocation site info if the boilerplate
@@ -183,12 +180,12 @@ void AllocationSite::set_memento_create_count(int count) {
   set_pretenure_create_count(count);
 }
 
-int AllocationSite::IncrementMementoFoundCount(int increment) {
-  DCHECK(!IsZombie());
+bool AllocationSite::IncrementMementoFoundCount(int increment) {
+  if (IsZombie()) return false;
 
-  int new_value = memento_found_count() + increment;
-  set_memento_found_count(new_value);
-  return new_value;
+  int value = memento_found_count();
+  set_memento_found_count(value + increment);
+  return memento_found_count() >= kPretenureMinimumCreated;
 }
 
 inline void AllocationSite::IncrementMementoCreateCount() {
@@ -198,11 +195,11 @@ inline void AllocationSite::IncrementMementoCreateCount() {
 }
 
 bool AllocationMemento::IsValid() const {
-  return IsAllocationSite(allocation_site()) &&
-         !AllocationSite::cast(allocation_site())->IsZombie();
+  return allocation_site().IsAllocationSite() &&
+         !AllocationSite::cast(allocation_site()).IsZombie();
 }
 
-Tagged<AllocationSite> AllocationMemento::GetAllocationSite() const {
+AllocationSite AllocationMemento::GetAllocationSite() const {
   DCHECK(IsValid());
   return AllocationSite::cast(allocation_site());
 }
@@ -217,7 +214,7 @@ bool AllocationSite::DigestTransitionFeedback(Handle<AllocationSite> site,
   Isolate* isolate = site->GetIsolate();
   bool result = false;
 
-  if (site->PointsToLiteral() && IsJSArray(site->boilerplate())) {
+  if (site->PointsToLiteral() && site->boilerplate().IsJSArray()) {
     Handle<JSArray> boilerplate(JSArray::cast(site->boilerplate()), isolate);
     ElementsKind kind = boilerplate->GetElementsKind();
     // if kind is holey ensure that to_kind is as well.
@@ -228,7 +225,7 @@ bool AllocationSite::DigestTransitionFeedback(Handle<AllocationSite> site,
       // If the array is huge, it's not likely to be defined in a local
       // function, so we shouldn't make new instances of it very often.
       uint32_t length = 0;
-      CHECK(Object::ToArrayLength(boilerplate->length(), &length));
+      CHECK(boilerplate->length().ToArrayLength(&length));
       if (length <= kMaximumArrayBytesToPretransition) {
         if (update_or_check == AllocationSiteUpdateMode::kCheckOnly) {
           return true;

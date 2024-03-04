@@ -1,8 +1,6 @@
 # ***************************************************************************
 # *  Project: c-ares
 # *
-# * Copyright (C) The c-ares project and its contributors
-# * SPDX-License-Identifier: MIT
 # ***************************************************************************
 # awk script which fetches c-ares version number and string from input
 # file and writes them to STDOUT. Here you can get an awk version for Win32:

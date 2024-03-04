@@ -15,7 +15,7 @@ RUNTIME_FUNCTION(Runtime_ShrinkFinalizationRegistryUnregisterTokenMap) {
   Handle<JSFinalizationRegistry> finalization_registry =
       args.at<JSFinalizationRegistry>(0);
 
-  if (!IsUndefined(finalization_registry->key_map(), isolate)) {
+  if (!finalization_registry->key_map().IsUndefined(isolate)) {
     Handle<SimpleNumberDictionary> key_map =
         handle(SimpleNumberDictionary::cast(finalization_registry->key_map()),
                isolate);
@@ -44,7 +44,7 @@ RUNTIME_FUNCTION(Runtime_JSWeakRefAddToKeptObjects) {
   HandleScope scope(isolate);
   DCHECK_EQ(1, args.length());
   Handle<HeapObject> object = args.at<HeapObject>(0);
-  DCHECK(Object::CanBeHeldWeakly(*object));
+  DCHECK(object->CanBeHeldWeakly());
 
   isolate->heap()->KeepDuringJob(object);
 

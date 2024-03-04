@@ -11,9 +11,9 @@
 namespace v8 {
 namespace internal {
 
-class CodeStubAssemblerTest : public TestWithContextAndZone {
+class CodeStubAssemblerTest : public TestWithIsolateAndZone {
  public:
-  CodeStubAssemblerTest() : TestWithContextAndZone(kCompressGraphZone) {}
+  CodeStubAssemblerTest() : TestWithIsolateAndZone(kCompressGraphZone) {}
   ~CodeStubAssemblerTest() override = default;
 };
 

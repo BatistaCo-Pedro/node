@@ -19,7 +19,6 @@ enum WriteBarrierKind : uint8_t {
   kAssertNoWriteBarrier,
   kMapWriteBarrier,
   kPointerWriteBarrier,
-  kIndirectPointerWriteBarrier,
   kEphemeronKeyWriteBarrier,
   kFullWriteBarrier
 };
@@ -38,8 +37,6 @@ inline std::ostream& operator<<(std::ostream& os, WriteBarrierKind kind) {
       return os << "MapWriteBarrier";
     case kPointerWriteBarrier:
       return os << "PointerWriteBarrier";
-    case kIndirectPointerWriteBarrier:
-      return os << "IndirectPointerWriteBarrier";
     case kEphemeronKeyWriteBarrier:
       return os << "EphemeronKeyWriteBarrier";
     case kFullWriteBarrier:

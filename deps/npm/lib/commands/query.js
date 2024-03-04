@@ -2,7 +2,6 @@
 
 const { resolve } = require('path')
 const BaseCommand = require('../base-command.js')
-const log = require('../utils/log-shim.js')
 
 class QuerySelectorItem {
   constructor (node) {
@@ -49,8 +48,6 @@ class Query extends BaseCommand {
     'workspace',
     'workspaces',
     'include-workspace-root',
-    'package-lock-only',
-    'expect-results',
   ]
 
   get parsedResponse () {
@@ -67,22 +64,10 @@ class Query extends BaseCommand {
       forceActual: true,
     }
     const arb = new Arborist(opts)
-    let tree
-    if (this.npm.config.get('package-lock-only')) {
-      try {
-        tree = await arb.loadVirtual()
-      } catch (err) {
-        log.verbose('loadVirtual', err.stack)
-        /* eslint-disable-next-line max-len */
-        throw this.usageError('A package lock or shrinkwrap file is required in package-lock-only mode')
-      }
-    } else {
-      tree = await arb.loadActual(opts)
-    }
+    const tree = await arb.loadActual(opts)
     const items = await tree.querySelectorAll(args[0], this.npm.flatOptions)
     this.buildResponse(items)
 
-    this.checkExpected(this.#response.length)
     this.npm.output(this.parsedResponse)
   }
 
@@ -106,7 +91,6 @@ class Query extends BaseCommand {
       }
       this.buildResponse(items)
     }
-    this.checkExpected(this.#response.length)
     this.npm.output(this.parsedResponse)
   }
 

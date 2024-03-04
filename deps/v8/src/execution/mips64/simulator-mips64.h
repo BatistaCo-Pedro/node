@@ -295,13 +295,8 @@ class Simulator : public SimulatorBase {
 
   Address get_sp() const { return static_cast<Address>(get_register(sp)); }
 
-  // Accessor to the internal simulator stack area. Adds a safety
-  // margin to prevent overflows (kAdditionalStackMargin).
+  // Accessor to the internal simulator stack area.
   uintptr_t StackLimit(uintptr_t c_limit) const;
-
-  // Return current stack view, without additional safety margins.
-  // Users, for example wasm::StackMemory, can add their own.
-  base::Vector<uint8_t> GetCurrentStackView() const;
 
   // Executes MIPS instructions until the PC reaches end_sim_pc.
   void Execute();
@@ -678,17 +673,9 @@ class Simulator : public SimulatorBase {
   uint32_t MSACSR_;
 
   // Simulator support.
-  uintptr_t stack_;
-  static const size_t kStackProtectionSize = KB;
-  // This includes a protection margin at each end of the stack area.
-  static size_t AllocatedStackSize() {
-    return (v8_flags.sim_stack_size * KB) + (2 * kStackProtectionSize);
-  }
-  static size_t UsableStackSize() { return v8_flags.sim_stack_size * KB; }
-  uintptr_t stack_limit_;
-  // Added in Simulator::StackLimit()
-  static const int kAdditionalStackMargin = 4 * KB;
-
+  // Allocate 1MB for stack.
+  size_t stack_size_;
+  char* stack_;
   bool pc_modified_;
   int64_t icount_;
   int break_count_;

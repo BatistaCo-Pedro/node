@@ -34,6 +34,7 @@ class CancelableTaskManager;
 class UnoptimizedCompileJob;
 class UnoptimizedCompileState;
 class FunctionLiteral;
+class Isolate;
 class ParseInfo;
 class ProducedPreparseData;
 class SharedFunctionInfo;
@@ -42,6 +43,8 @@ class Utf16CharacterStream;
 class WorkerThreadRuntimeCallStats;
 class Zone;
 
+template <typename T>
+class Handle;
 
 // The LazyCompileDispatcher uses a combination of idle tasks and background
 // tasks to parse and compile lazily parsed functions.

@@ -16,10 +16,6 @@
 #include "src/profiler/tick-sample.h"
 #include "src/utils/locked-queue.h"
 
-#if V8_OS_WIN
-#include "src/base/platform/platform-win32.h"
-#endif
-
 namespace v8 {
 namespace sampler {
 class Sampler;
@@ -258,9 +254,6 @@ class V8_EXPORT_PRIVATE SamplingEventsProcessor
   base::TimeDelta period_;           // Samples & code events processing period.
   const bool use_precise_sampling_;  // Whether or not busy-waiting is used for
                                      // low sampling intervals on Windows.
-#if V8_OS_WIN
-  base::PreciseSleepTimer precise_sleep_timer_;
-#endif  // V8_OS_WIN
 };
 
 // Builds and maintains a InstructionStreamMap tracking code objects on the VM
@@ -360,11 +353,11 @@ class V8_EXPORT_PRIVATE CpuProfiler {
       const char* title, CpuProfilingOptions options = {},
       std::unique_ptr<DiscardedSamplesDelegate> delegate = nullptr);
   CpuProfilingResult StartProfiling(
-      Tagged<String> title, CpuProfilingOptions options = {},
+      String title, CpuProfilingOptions options = {},
       std::unique_ptr<DiscardedSamplesDelegate> delegate = nullptr);
 
   CpuProfile* StopProfiling(const char* title);
-  CpuProfile* StopProfiling(Tagged<String> title);
+  CpuProfile* StopProfiling(String title);
   CpuProfile* StopProfiling(ProfilerId id);
 
   int GetProfilesCount();

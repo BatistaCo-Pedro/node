@@ -12,6 +12,9 @@
 namespace v8 {
 namespace internal {
 
+template <typename T>
+class Handle;
+
 class RootVisitor;
 struct ScriptDetails;
 
@@ -40,7 +43,7 @@ class CompilationCacheEvalOrScript {
   Isolate* isolate() const { return isolate_; }
 
   Isolate* const isolate_;
-  Tagged<Object> table_;
+  Object table_;
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(CompilationCacheEvalOrScript);
 };
@@ -127,7 +130,7 @@ class CompilationCacheRegExp {
   Isolate* isolate() const { return isolate_; }
 
   Isolate* const isolate_;
-  Tagged<Object> tables_[kGenerations];  // One for each generation.
+  Object tables_[kGenerations];  // One for each generation.
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(CompilationCacheRegExp);
 };

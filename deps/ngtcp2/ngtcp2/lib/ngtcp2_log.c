@@ -35,8 +35,6 @@
 #include "ngtcp2_vec.h"
 #include "ngtcp2_macro.h"
 #include "ngtcp2_conv.h"
-#include "ngtcp2_unreachable.h"
-#include "ngtcp2_net.h"
 
 void ngtcp2_log_init(ngtcp2_log *log, const ngtcp2_cid *scid,
                      ngtcp2_printf log_printf, ngtcp2_tstamp ts,
@@ -47,7 +45,6 @@ void ngtcp2_log_init(ngtcp2_log *log, const ngtcp2_cid *scid,
     log->scid[0] = '\0';
   }
   log->log_printf = log_printf;
-  log->events = 0xff;
   log->ts = log->last_ts = ts;
   log->user_data = user_data;
 }
@@ -68,7 +65,8 @@ void ngtcp2_log_init(ngtcp2_log *log, const ngtcp2_cid *scid,
  *   Source Connection ID in hex string.
  *
  * <EVENT>:
- *   Event.  See ngtcp2_log_event.
+ *   Event.  pkt=packet, frm=frame, rcv=recovery, cry=crypto,
+ *   con=connection(catch all)
  *
  * # Frame event
  *
@@ -140,7 +138,7 @@ static const char *strerrorcode(uint64_t error_code) {
     return "CRYPTO_BUFFER_EXCEEDED";
   case NGTCP2_KEY_UPDATE_ERROR:
     return "KEY_UPDATE_ERROR";
-  case NGTCP2_VERSION_NEGOTIATION_ERROR:
+  case NGTCP2_VERSION_NEGOTIATION_ERROR_DRAFT:
     return "VERSION_NEGOTIATION_ERROR";
   default:
     if (0x100u <= error_code && error_code <= 0x1ffu) {
@@ -204,14 +202,12 @@ static const char *strevent(ngtcp2_log_event ev) {
     return "pkt";
   case NGTCP2_LOG_EVENT_FRM:
     return "frm";
-  case NGTCP2_LOG_EVENT_LDC:
-    return "ldc";
+  case NGTCP2_LOG_EVENT_RCV:
+    return "rcv";
   case NGTCP2_LOG_EVENT_CRY:
     return "cry";
   case NGTCP2_LOG_EVENT_PTV:
     return "ptv";
-  case NGTCP2_LOG_EVENT_CCA:
-    return "cca";
   case NGTCP2_LOG_EVENT_NONE:
   default:
     return "non";
@@ -224,8 +220,8 @@ static void log_fr_stream(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
                           const ngtcp2_stream *fr, const char *dir) {
   log->log_printf(
       log->user_data,
-      (NGTCP2_LOG_PKT " STREAM(0x%02" PRIx64 ") id=0x%" PRIx64
-                      " fin=%d offset=%" PRIu64 " len=%" PRIu64 " uni=%d"),
+      (NGTCP2_LOG_PKT " STREAM(0x%02x) id=0x%" PRIx64 " fin=%d offset=%" PRIu64
+                      " len=%" PRIu64 " uni=%d"),
       NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type | fr->flags, fr->stream_id,
       fr->fin, fr->offset, ngtcp2_vec_len(fr->data, fr->datacnt),
       (fr->stream_id & 0x2) != 0);
@@ -237,37 +233,36 @@ static void log_fr_ack(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
   size_t i;
 
   log->log_printf(log->user_data,
-                  (NGTCP2_LOG_PKT " ACK(0x%02" PRIx64 ") largest_ack=%" PRId64
+                  (NGTCP2_LOG_PKT " ACK(0x%02x) largest_ack=%" PRId64
                                   " ack_delay=%" PRIu64 "(%" PRIu64
-                                  ") ack_range_count=%zu"),
+                                  ") ack_block_count=%zu"),
                   NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type, fr->largest_ack,
                   fr->ack_delay_unscaled / NGTCP2_MILLISECONDS, fr->ack_delay,
-                  fr->rangecnt);
+                  fr->num_blks);
 
   largest_ack = fr->largest_ack;
-  min_ack = fr->largest_ack - (int64_t)fr->first_ack_range;
+  min_ack = fr->largest_ack - (int64_t)fr->first_ack_blklen;
 
   log->log_printf(log->user_data,
-                  (NGTCP2_LOG_PKT " ACK(0x%02" PRIx64 ") range=[%" PRId64
-                                  "..%" PRId64 "] len=%" PRIu64),
+                  (NGTCP2_LOG_PKT " ACK(0x%02x) block=[%" PRId64 "..%" PRId64
+                                  "] block_count=%" PRIu64),
                   NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type, largest_ack, min_ack,
-                  fr->first_ack_range);
+                  fr->first_ack_blklen);
 
-  for (i = 0; i < fr->rangecnt; ++i) {
-    const ngtcp2_ack_range *range = &fr->ranges[i];
-    largest_ack = min_ack - (int64_t)range->gap - 2;
-    min_ack = largest_ack - (int64_t)range->len;
+  for (i = 0; i < fr->num_blks; ++i) {
+    const ngtcp2_ack_blk *blk = &fr->blks[i];
+    largest_ack = min_ack - (int64_t)blk->gap - 2;
+    min_ack = largest_ack - (int64_t)blk->blklen;
     log->log_printf(log->user_data,
-                    (NGTCP2_LOG_PKT " ACK(0x%02" PRIx64 ") range=[%" PRId64
-                                    "..%" PRId64 "] gap=%" PRIu64
-                                    " len=%" PRIu64),
+                    (NGTCP2_LOG_PKT " ACK(0x%02x) block=[%" PRId64 "..%" PRId64
+                                    "] gap=%" PRIu64 " block_count=%" PRIu64),
                     NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type, largest_ack,
-                    min_ack, range->gap, range->len);
+                    min_ack, blk->gap, blk->blklen);
   }
 
   if (fr->type == NGTCP2_FRAME_ACK_ECN) {
     log->log_printf(log->user_data,
-                    (NGTCP2_LOG_PKT " ACK(0x%02" PRIx64 ") ect0=%" PRIu64
+                    (NGTCP2_LOG_PKT " ACK(0x%02x) ect0=%" PRIu64
                                     " ect1=%" PRIu64 " ce=%" PRIu64),
                     NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type, fr->ecn.ect0,
                     fr->ecn.ect1, fr->ecn.ce);
@@ -276,8 +271,7 @@ static void log_fr_ack(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
 
 static void log_fr_padding(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
                            const ngtcp2_padding *fr, const char *dir) {
-  log->log_printf(log->user_data,
-                  (NGTCP2_LOG_PKT " PADDING(0x%02" PRIx64 ") len=%zu"),
+  log->log_printf(log->user_data, (NGTCP2_LOG_PKT " PADDING(0x%02x) len=%zu"),
                   NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type, fr->len);
 }
 
@@ -286,7 +280,7 @@ static void log_fr_reset_stream(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
                                 const char *dir) {
   log->log_printf(
       log->user_data,
-      (NGTCP2_LOG_PKT " RESET_STREAM(0x%02" PRIx64 ") id=0x%" PRIx64
+      (NGTCP2_LOG_PKT " RESET_STREAM(0x%02x) id=0x%" PRIx64
                       " app_error_code=%s(0x%" PRIx64 ") final_size=%" PRIu64),
       NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type, fr->stream_id,
       strapperrorcode(fr->app_error_code), fr->app_error_code, fr->final_size);
@@ -299,10 +293,9 @@ static void log_fr_connection_close(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
   size_t reasonlen = ngtcp2_min(sizeof(reason) - 1, fr->reasonlen);
 
   log->log_printf(log->user_data,
-                  (NGTCP2_LOG_PKT " CONNECTION_CLOSE(0x%02" PRIx64
-                                  ") error_code=%s(0x%" PRIx64 ") "
-                                  "frame_type=%" PRIx64
-                                  " reason_len=%zu reason=[%s]"),
+                  (NGTCP2_LOG_PKT
+                   " CONNECTION_CLOSE(0x%02x) error_code=%s(0x%" PRIx64 ") "
+                   "frame_type=%" PRIx64 " reason_len=%zu reason=[%s]"),
                   NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type,
                   fr->type == NGTCP2_FRAME_CONNECTION_CLOSE
                       ? strerrorcode(fr->error_code)
@@ -313,18 +306,16 @@ static void log_fr_connection_close(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
 
 static void log_fr_max_data(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
                             const ngtcp2_max_data *fr, const char *dir) {
-  log->log_printf(
-      log->user_data,
-      (NGTCP2_LOG_PKT " MAX_DATA(0x%02" PRIx64 ") max_data=%" PRIu64),
-      NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type, fr->max_data);
+  log->log_printf(log->user_data,
+                  (NGTCP2_LOG_PKT " MAX_DATA(0x%02x) max_data=%" PRIu64),
+                  NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type, fr->max_data);
 }
 
 static void log_fr_max_stream_data(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
                                    const ngtcp2_max_stream_data *fr,
                                    const char *dir) {
   log->log_printf(log->user_data,
-                  (NGTCP2_LOG_PKT " MAX_STREAM_DATA(0x%02" PRIx64
-                                  ") id=0x%" PRIx64
+                  (NGTCP2_LOG_PKT " MAX_STREAM_DATA(0x%02x) id=0x%" PRIx64
                                   " max_stream_data=%" PRIu64),
                   NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type, fr->stream_id,
                   fr->max_stream_data);
@@ -332,33 +323,31 @@ static void log_fr_max_stream_data(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
 
 static void log_fr_max_streams(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
                                const ngtcp2_max_streams *fr, const char *dir) {
-  log->log_printf(
-      log->user_data,
-      (NGTCP2_LOG_PKT " MAX_STREAMS(0x%02" PRIx64 ") max_streams=%" PRIu64),
-      NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type, fr->max_streams);
+  log->log_printf(log->user_data,
+                  (NGTCP2_LOG_PKT " MAX_STREAMS(0x%02x) max_streams=%" PRIu64),
+                  NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type, fr->max_streams);
 }
 
 static void log_fr_ping(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
                         const ngtcp2_ping *fr, const char *dir) {
-  log->log_printf(log->user_data, (NGTCP2_LOG_PKT " PING(0x%02" PRIx64 ")"),
+  log->log_printf(log->user_data, (NGTCP2_LOG_PKT " PING(0x%02x)"),
                   NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type);
 }
 
 static void log_fr_data_blocked(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
                                 const ngtcp2_data_blocked *fr,
                                 const char *dir) {
-  log->log_printf(
-      log->user_data,
-      (NGTCP2_LOG_PKT " DATA_BLOCKED(0x%02" PRIx64 ") offset=%" PRIu64),
-      NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type, fr->offset);
+  log->log_printf(log->user_data,
+                  (NGTCP2_LOG_PKT " DATA_BLOCKED(0x%02x) offset=%" PRIu64),
+                  NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type, fr->offset);
 }
 
 static void log_fr_stream_data_blocked(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
                                        const ngtcp2_stream_data_blocked *fr,
                                        const char *dir) {
   log->log_printf(log->user_data,
-                  (NGTCP2_LOG_PKT " STREAM_DATA_BLOCKED(0x%02" PRIx64
-                                  ") id=0x%" PRIx64 " offset=%" PRIu64),
+                  (NGTCP2_LOG_PKT " STREAM_DATA_BLOCKED(0x%02x) id=0x%" PRIx64
+                                  " offset=%" PRIu64),
                   NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type, fr->stream_id,
                   fr->offset);
 }
@@ -368,7 +357,7 @@ static void log_fr_streams_blocked(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
                                    const char *dir) {
   log->log_printf(
       log->user_data,
-      (NGTCP2_LOG_PKT " STREAMS_BLOCKED(0x%02" PRIx64 ") max_streams=%" PRIu64),
+      (NGTCP2_LOG_PKT " STREAMS_BLOCKED(0x%02x) max_streams=%" PRIu64),
       NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type, fr->max_streams);
 }
 
@@ -380,7 +369,7 @@ static void log_fr_new_connection_id(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
 
   log->log_printf(
       log->user_data,
-      (NGTCP2_LOG_PKT " NEW_CONNECTION_ID(0x%02" PRIx64 ") seq=%" PRIu64
+      (NGTCP2_LOG_PKT " NEW_CONNECTION_ID(0x%02x) seq=%" PRIu64
                       " cid=0x%s retire_prior_to=%" PRIu64
                       " stateless_reset_token=0x%s"),
       NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type, fr->seq,
@@ -394,7 +383,7 @@ static void log_fr_stop_sending(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
                                 const ngtcp2_stop_sending *fr,
                                 const char *dir) {
   log->log_printf(log->user_data,
-                  (NGTCP2_LOG_PKT " STOP_SENDING(0x%02" PRIx64 ") id=0x%" PRIx64
+                  (NGTCP2_LOG_PKT " STOP_SENDING(0x%02x) id=0x%" PRIx64
                                   " app_error_code=%s(0x%" PRIx64 ")"),
                   NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type, fr->stream_id,
                   strapperrorcode(fr->app_error_code), fr->app_error_code);
@@ -406,8 +395,7 @@ static void log_fr_path_challenge(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
   uint8_t buf[sizeof(fr->data) * 2 + 1];
 
   log->log_printf(
-      log->user_data,
-      (NGTCP2_LOG_PKT " PATH_CHALLENGE(0x%02" PRIx64 ") data=0x%s"),
+      log->user_data, (NGTCP2_LOG_PKT " PATH_CHALLENGE(0x%02x) data=0x%s"),
       NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type,
       (const char *)ngtcp2_encode_hex(buf, fr->data, sizeof(fr->data)));
 }
@@ -418,19 +406,18 @@ static void log_fr_path_response(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
   uint8_t buf[sizeof(fr->data) * 2 + 1];
 
   log->log_printf(
-      log->user_data,
-      (NGTCP2_LOG_PKT " PATH_RESPONSE(0x%02" PRIx64 ") data=0x%s"),
+      log->user_data, (NGTCP2_LOG_PKT " PATH_RESPONSE(0x%02x) data=0x%s"),
       NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type,
       (const char *)ngtcp2_encode_hex(buf, fr->data, sizeof(fr->data)));
 }
 
 static void log_fr_crypto(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
-                          const ngtcp2_stream *fr, const char *dir) {
-  log->log_printf(log->user_data,
-                  (NGTCP2_LOG_PKT " CRYPTO(0x%02" PRIx64 ") offset=%" PRIu64
-                                  " len=%" PRIu64),
-                  NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type, fr->offset,
-                  ngtcp2_vec_len(fr->data, fr->datacnt));
+                          const ngtcp2_crypto *fr, const char *dir) {
+  log->log_printf(
+      log->user_data,
+      (NGTCP2_LOG_PKT " CRYPTO(0x%02x) offset=%" PRIu64 " len=%" PRIu64),
+      NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type, fr->offset,
+      ngtcp2_vec_len(fr->data, fr->datacnt));
 }
 
 static void log_fr_new_token(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
@@ -440,41 +427,38 @@ static void log_fr_new_token(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
   uint8_t buf[128 + 1 + 1];
   uint8_t *p;
 
-  if (fr->tokenlen > 64) {
-    p = ngtcp2_encode_hex(buf, fr->token, 64);
+  if (fr->token.len > 64) {
+    p = ngtcp2_encode_hex(buf, fr->token.base, 64);
     p[128] = '*';
     p[129] = '\0';
   } else {
-    p = ngtcp2_encode_hex(buf, fr->token, fr->tokenlen);
+    p = ngtcp2_encode_hex(buf, fr->token.base, fr->token.len);
   }
   log->log_printf(
-      log->user_data,
-      (NGTCP2_LOG_PKT " NEW_TOKEN(0x%02" PRIx64 ") token=0x%s len=%zu"),
-      NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type, (const char *)p, fr->tokenlen);
+      log->user_data, (NGTCP2_LOG_PKT " NEW_TOKEN(0x%02x) token=0x%s len=%zu"),
+      NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type, (const char *)p, fr->token.len);
 }
 
 static void log_fr_retire_connection_id(ngtcp2_log *log,
                                         const ngtcp2_pkt_hd *hd,
                                         const ngtcp2_retire_connection_id *fr,
                                         const char *dir) {
-  log->log_printf(
-      log->user_data,
-      (NGTCP2_LOG_PKT " RETIRE_CONNECTION_ID(0x%02" PRIx64 ") seq=%" PRIu64),
-      NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type, fr->seq);
+  log->log_printf(log->user_data,
+                  (NGTCP2_LOG_PKT " RETIRE_CONNECTION_ID(0x%02x) seq=%" PRIu64),
+                  NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type, fr->seq);
 }
 
 static void log_fr_handshake_done(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
                                   const ngtcp2_handshake_done *fr,
                                   const char *dir) {
-  log->log_printf(log->user_data,
-                  (NGTCP2_LOG_PKT " HANDSHAKE_DONE(0x%02" PRIx64 ")"),
+  log->log_printf(log->user_data, (NGTCP2_LOG_PKT " HANDSHAKE_DONE(0x%02x)"),
                   NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type);
 }
 
 static void log_fr_datagram(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
                             const ngtcp2_datagram *fr, const char *dir) {
   log->log_printf(log->user_data,
-                  (NGTCP2_LOG_PKT " DATAGRAM(0x%02" PRIx64 ") len=%" PRIu64),
+                  (NGTCP2_LOG_PKT " DATAGRAM(0x%02x) len=%" PRIu64),
                   NGTCP2_LOG_FRM_HD_FIELDS(dir), fr->type,
                   ngtcp2_vec_len(fr->data, fr->datacnt));
 }
@@ -535,7 +519,7 @@ static void log_fr(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
     log_fr_path_response(log, hd, &fr->path_response, dir);
     break;
   case NGTCP2_FRAME_CRYPTO:
-    log_fr_crypto(log, hd, &fr->stream, dir);
+    log_fr_crypto(log, hd, &fr->crypto, dir);
     break;
   case NGTCP2_FRAME_NEW_TOKEN:
     log_fr_new_token(log, hd, &fr->new_token, dir);
@@ -551,13 +535,13 @@ static void log_fr(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
     log_fr_datagram(log, hd, &fr->datagram, dir);
     break;
   default:
-    ngtcp2_unreachable();
+    assert(0);
   }
 }
 
 void ngtcp2_log_rx_fr(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
                       const ngtcp2_frame *fr) {
-  if (!log->log_printf || !(log->events & NGTCP2_LOG_EVENT_FRM)) {
+  if (!log->log_printf) {
     return;
   }
 
@@ -566,7 +550,7 @@ void ngtcp2_log_rx_fr(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
 
 void ngtcp2_log_tx_fr(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
                       const ngtcp2_frame *fr) {
-  if (!log->log_printf || !(log->events & NGTCP2_LOG_EVENT_FRM)) {
+  if (!log->log_printf) {
     return;
   }
 
@@ -577,7 +561,7 @@ void ngtcp2_log_rx_vn(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
                       const uint32_t *sv, size_t nsv) {
   size_t i;
 
-  if (!log->log_printf || !(log->events & NGTCP2_LOG_EVENT_PKT)) {
+  if (!log->log_printf) {
     return;
   }
 
@@ -592,7 +576,7 @@ void ngtcp2_log_rx_sr(ngtcp2_log *log, const ngtcp2_pkt_stateless_reset *sr) {
   ngtcp2_pkt_hd shd;
   ngtcp2_pkt_hd *hd = &shd;
 
-  if (!log->log_printf || !(log->events & NGTCP2_LOG_EVENT_PKT)) {
+  if (!log->log_printf) {
     return;
   }
 
@@ -608,94 +592,82 @@ void ngtcp2_log_rx_sr(ngtcp2_log *log, const ngtcp2_pkt_stateless_reset *sr) {
       sr->randlen);
 }
 
-void ngtcp2_log_remote_tp(ngtcp2_log *log,
+void ngtcp2_log_remote_tp(ngtcp2_log *log, uint8_t exttype,
                           const ngtcp2_transport_params *params) {
   uint8_t token[NGTCP2_STATELESS_RESET_TOKENLEN * 2 + 1];
   uint8_t addr[16 * 2 + 7 + 1];
   uint8_t cid[NGTCP2_MAX_CIDLEN * 2 + 1];
   size_t i;
-  const ngtcp2_sockaddr_in *sa_in;
-  const ngtcp2_sockaddr_in6 *sa_in6;
-  const uint8_t *p;
-  uint32_t version;
 
-  if (!log->log_printf || !(log->events & NGTCP2_LOG_EVENT_CRY)) {
+  if (!log->log_printf) {
     return;
   }
 
-  if (params->stateless_reset_token_present) {
-    log->log_printf(
-        log->user_data, (NGTCP2_LOG_TP " stateless_reset_token=0x%s"),
-        NGTCP2_LOG_TP_HD_FIELDS,
-        (const char *)ngtcp2_encode_hex(token, params->stateless_reset_token,
-                                        sizeof(params->stateless_reset_token)));
-  }
+  if (exttype == NGTCP2_TRANSPORT_PARAMS_TYPE_ENCRYPTED_EXTENSIONS) {
+    if (params->stateless_reset_token_present) {
+      log->log_printf(log->user_data,
+                      (NGTCP2_LOG_TP " stateless_reset_token=0x%s"),
+                      NGTCP2_LOG_TP_HD_FIELDS,
+                      (const char *)ngtcp2_encode_hex(
+                          token, params->stateless_reset_token,
+                          sizeof(params->stateless_reset_token)));
+    }
 
-  if (params->preferred_addr_present) {
-    if (params->preferred_addr.ipv4_present) {
-      sa_in = &params->preferred_addr.ipv4;
-
+    if (params->preferred_address_present) {
       log->log_printf(log->user_data,
                       (NGTCP2_LOG_TP " preferred_address.ipv4_addr=%s"),
                       NGTCP2_LOG_TP_HD_FIELDS,
                       (const char *)ngtcp2_encode_ipv4(
-                          addr, (const uint8_t *)&sa_in->sin_addr));
-      log->log_printf(log->user_data,
-                      (NGTCP2_LOG_TP " preferred_address.ipv4_port=%u"),
-                      NGTCP2_LOG_TP_HD_FIELDS, ngtcp2_ntohs(sa_in->sin_port));
-    }
-
-    if (params->preferred_addr.ipv6_present) {
-      sa_in6 = &params->preferred_addr.ipv6;
+                          addr, params->preferred_address.ipv4_addr));
+      log->log_printf(
+          log->user_data, (NGTCP2_LOG_TP " preferred_address.ipv4_port=%u"),
+          NGTCP2_LOG_TP_HD_FIELDS, params->preferred_address.ipv4_port);
 
       log->log_printf(log->user_data,
                       (NGTCP2_LOG_TP " preferred_address.ipv6_addr=%s"),
                       NGTCP2_LOG_TP_HD_FIELDS,
                       (const char *)ngtcp2_encode_ipv6(
-                          addr, (const uint8_t *)&sa_in6->sin6_addr));
+                          addr, params->preferred_address.ipv6_addr));
+      log->log_printf(
+          log->user_data, (NGTCP2_LOG_TP " preferred_address.ipv6_port=%u"),
+          NGTCP2_LOG_TP_HD_FIELDS, params->preferred_address.ipv6_port);
+
       log->log_printf(log->user_data,
-                      (NGTCP2_LOG_TP " preferred_address.ipv6_port=%u"),
-                      NGTCP2_LOG_TP_HD_FIELDS, ngtcp2_ntohs(sa_in6->sin6_port));
+                      (NGTCP2_LOG_TP " preferred_address.cid=0x%s"),
+                      NGTCP2_LOG_TP_HD_FIELDS,
+                      (const char *)ngtcp2_encode_hex(
+                          cid, params->preferred_address.cid.data,
+                          params->preferred_address.cid.datalen));
+      log->log_printf(
+          log->user_data,
+          (NGTCP2_LOG_TP " preferred_address.stateless_reset_token=0x%s"),
+          NGTCP2_LOG_TP_HD_FIELDS,
+          (const char *)ngtcp2_encode_hex(
+              token, params->preferred_address.stateless_reset_token,
+              sizeof(params->preferred_address.stateless_reset_token)));
     }
 
-    log->log_printf(
-        log->user_data, (NGTCP2_LOG_TP " preferred_address.cid=0x%s"),
-        NGTCP2_LOG_TP_HD_FIELDS,
-        (const char *)ngtcp2_encode_hex(cid, params->preferred_addr.cid.data,
-                                        params->preferred_addr.cid.datalen));
-    log->log_printf(
-        log->user_data,
-        (NGTCP2_LOG_TP " preferred_address.stateless_reset_token=0x%s"),
-        NGTCP2_LOG_TP_HD_FIELDS,
-        (const char *)ngtcp2_encode_hex(
-            token, params->preferred_addr.stateless_reset_token,
-            sizeof(params->preferred_addr.stateless_reset_token)));
-  }
-
-  if (params->original_dcid_present) {
     log->log_printf(
         log->user_data,
         (NGTCP2_LOG_TP " original_destination_connection_id=0x%s"),
         NGTCP2_LOG_TP_HD_FIELDS,
         (const char *)ngtcp2_encode_hex(cid, params->original_dcid.data,
                                         params->original_dcid.datalen));
+
+    if (params->retry_scid_present) {
+      log->log_printf(
+          log->user_data, (NGTCP2_LOG_TP " retry_source_connection_id=0x%s"),
+          NGTCP2_LOG_TP_HD_FIELDS,
+          (const char *)ngtcp2_encode_hex(cid, params->retry_scid.data,
+                                          params->retry_scid.datalen));
+    }
   }
 
-  if (params->retry_scid_present) {
-    log->log_printf(
-        log->user_data, (NGTCP2_LOG_TP " retry_source_connection_id=0x%s"),
-        NGTCP2_LOG_TP_HD_FIELDS,
-        (const char *)ngtcp2_encode_hex(cid, params->retry_scid.data,
-                                        params->retry_scid.datalen));
-  }
-
-  if (params->initial_scid_present) {
-    log->log_printf(
-        log->user_data, (NGTCP2_LOG_TP " initial_source_connection_id=0x%s"),
-        NGTCP2_LOG_TP_HD_FIELDS,
-        (const char *)ngtcp2_encode_hex(cid, params->initial_scid.data,
-                                        params->initial_scid.datalen));
-  }
+  log->log_printf(
+      log->user_data, (NGTCP2_LOG_TP " initial_source_connection_id=0x%s"),
+      NGTCP2_LOG_TP_HD_FIELDS,
+      (const char *)ngtcp2_encode_hex(cid, params->initial_scid.data,
+                                      params->initial_scid.datalen));
 
   log->log_printf(
       log->user_data,
@@ -746,28 +718,26 @@ void ngtcp2_log_remote_tp(ngtcp2_log *log,
         (NGTCP2_LOG_TP " version_information.chosen_version=0x%08x"),
         NGTCP2_LOG_TP_HD_FIELDS, params->version_info.chosen_version);
 
-    assert(!(params->version_info.available_versionslen & 0x3));
+    assert(!(params->version_info.other_versionslen & 0x3));
 
-    for (i = 0, p = params->version_info.available_versions;
-         i < params->version_info.available_versionslen;
+    for (i = 0; i < params->version_info.other_versionslen;
          i += sizeof(uint32_t)) {
-      p = ngtcp2_get_uint32(&version, p);
-
       log->log_printf(
           log->user_data,
-          (NGTCP2_LOG_TP " version_information.available_versions[%zu]=0x%08x"),
-          NGTCP2_LOG_TP_HD_FIELDS, i >> 2, version);
+          (NGTCP2_LOG_TP " version_information.other_versions[%zu]=0x%08x"),
+          NGTCP2_LOG_TP_HD_FIELDS, i >> 2,
+          ngtcp2_get_uint32(&params->version_info.other_versions[i]));
     }
   }
 }
 
 void ngtcp2_log_pkt_lost(ngtcp2_log *log, int64_t pkt_num, uint8_t type,
                          uint8_t flags, ngtcp2_tstamp sent_ts) {
-  if (!log->log_printf || !(log->events & NGTCP2_LOG_EVENT_LDC)) {
+  if (!log->log_printf) {
     return;
   }
 
-  ngtcp2_log_info(log, NGTCP2_LOG_EVENT_LDC,
+  ngtcp2_log_info(log, NGTCP2_LOG_EVENT_RCV,
                   "pkn=%" PRId64 " lost type=%s sent_ts=%" PRIu64, pkt_num,
                   strpkttype_type_flags(type, flags), sent_ts);
 }
@@ -777,7 +747,7 @@ static void log_pkt_hd(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
   uint8_t dcid[sizeof(hd->dcid.data) * 2 + 1];
   uint8_t scid[sizeof(hd->scid.data) * 2 + 1];
 
-  if (!log->log_printf || !(log->events & NGTCP2_LOG_EVENT_PKT)) {
+  if (!log->log_printf) {
     return;
   }
 
@@ -812,7 +782,7 @@ void ngtcp2_log_info(ngtcp2_log *log, ngtcp2_log_event ev, const char *fmt,
   int n;
   char buf[NGTCP2_LOG_BUFLEN];
 
-  if (!log->log_printf || !(log->events & ev)) {
+  if (!log->log_printf) {
     return;
   }
 

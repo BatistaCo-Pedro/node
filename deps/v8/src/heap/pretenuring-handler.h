@@ -20,10 +20,9 @@ class Heap;
 
 class PretenuringHandler final {
  public:
-  static constexpr int kInitialFeedbackCapacity = 256;
-
+  static const int kInitialFeedbackCapacity = 256;
   using PretenuringFeedbackMap =
-      std::unordered_map<Tagged<AllocationSite>, size_t, Object::Hasher>;
+      std::unordered_map<AllocationSite, size_t, Object::Hasher>;
   enum FindMementoMode { kForRuntime, kForGC };
 
   explicit PretenuringHandler(Heap* heap);
@@ -34,8 +33,7 @@ class PretenuringHandler final {
   // If an object has an AllocationMemento trailing it, return it, otherwise
   // return a null AllocationMemento.
   template <FindMementoMode mode>
-  inline Tagged<AllocationMemento> FindAllocationMemento(
-      Tagged<Map> map, Tagged<HeapObject> object);
+  inline AllocationMemento FindAllocationMemento(Map map, HeapObject object);
 
   // ===========================================================================
   // Allocation site tracking. =================================================
@@ -44,8 +42,7 @@ class PretenuringHandler final {
   // Updates the AllocationSite of a given {object}. The entry (including the
   // count) is cached on the local pretenuring feedback.
   inline void UpdateAllocationSite(
-      Tagged<Map> map, Tagged<HeapObject> object,
-      PretenuringFeedbackMap* pretenuring_feedback);
+      Map map, HeapObject object, PretenuringFeedbackMap* pretenuring_feedback);
 
   // Merges local pretenuring feedback into the global one. Note that this
   // method needs to be called after evacuation, as allocation sites may be
@@ -57,7 +54,7 @@ class PretenuringHandler final {
   // next collection. Added allocation sites are pretenured independent of
   // their feedback.
   V8_EXPORT_PRIVATE void PretenureAllocationSiteOnNextCollection(
-      Tagged<AllocationSite> site);
+      AllocationSite site);
 
   // ===========================================================================
   // Pretenuring. ==============================================================
@@ -66,18 +63,18 @@ class PretenuringHandler final {
   // Pretenuring decisions are made based on feedback collected during new space
   // evacuation. Note that between feedback collection and calling this method
   // object in old space must not move.
-  void ProcessPretenuringFeedback(size_t new_space_capacity_before_gc);
+  void ProcessPretenuringFeedback();
 
   // Removes an entry from the global pretenuring storage.
-  void RemoveAllocationSitePretenuringFeedback(Tagged<AllocationSite> site);
+  void RemoveAllocationSitePretenuringFeedback(AllocationSite site);
 
   bool HasPretenuringFeedback() const {
     return !global_pretenuring_feedback_.empty();
   }
 
-  V8_EXPORT_PRIVATE static int GetMinMementoCountForTesting();
-
  private:
+  bool DeoptMaybeTenuredAllocationSites() const;
+
   Heap* const heap_;
 
   // The feedback storage is used to store allocation sites (keys) and how often

@@ -33,18 +33,18 @@ class SourceTextModule
 
   // The shared function info in case {status} is not kEvaluating, kEvaluated or
   // kErrored.
-  Tagged<SharedFunctionInfo> GetSharedFunctionInfo() const;
+  SharedFunctionInfo GetSharedFunctionInfo() const;
 
-  Tagged<Script> GetScript() const;
+  Script GetScript() const;
 
   // Whether or not this module is an async module. Set during module creation
   // and does not change afterwards.
   DECL_BOOLEAN_ACCESSORS(async)
 
   // Get the SourceTextModuleInfo associated with the code.
-  inline Tagged<SourceTextModuleInfo> info() const;
+  inline SourceTextModuleInfo info() const;
 
-  Tagged<Cell> GetCell(int cell_index);
+  Cell GetCell(int cell_index);
   static Handle<Object> LoadVariable(Isolate* isolate,
                                      Handle<SourceTextModule> module,
                                      int cell_index);
@@ -145,7 +145,7 @@ class SourceTextModule
 
   // The parent modules of a given async dependency, use async_parent_modules()
   // to retrieve the ArrayList representation.
-  DECL_ACCESSORS(async_parent_modules, Tagged<ArrayList>)
+  DECL_ACCESSORS(async_parent_modules, ArrayList)
 
   // Helpers for Instantiate and Evaluate.
   static void CreateExport(Isolate* isolate, Handle<SourceTextModule> module,
@@ -241,20 +241,20 @@ class SourceTextModuleInfo : public FixedArray {
   static Handle<SourceTextModuleInfo> New(IsolateT* isolate, Zone* zone,
                                           SourceTextModuleDescriptor* descr);
 
-  inline Tagged<FixedArray> module_requests() const;
-  inline Tagged<FixedArray> special_exports() const;
-  inline Tagged<FixedArray> regular_exports() const;
-  inline Tagged<FixedArray> regular_imports() const;
-  inline Tagged<FixedArray> namespace_imports() const;
+  inline FixedArray module_requests() const;
+  inline FixedArray special_exports() const;
+  inline FixedArray regular_exports() const;
+  inline FixedArray regular_imports() const;
+  inline FixedArray namespace_imports() const;
 
   // Accessors for [regular_exports].
   int RegularExportCount() const;
-  Tagged<String> RegularExportLocalName(int i) const;
+  String RegularExportLocalName(int i) const;
   int RegularExportCellIndex(int i) const;
-  Tagged<FixedArray> RegularExportExportNames(int i) const;
+  FixedArray RegularExportExportNames(int i) const;
 
 #ifdef DEBUG
-  inline bool Equals(Tagged<SourceTextModuleInfo> other) const;
+  inline bool Equals(SourceTextModuleInfo other) const;
 #endif
 
  private:

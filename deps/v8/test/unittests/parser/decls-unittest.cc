@@ -31,7 +31,7 @@
 #include "include/v8-initialization.h"
 #include "include/v8-template.h"
 #include "src/init/v8.h"
-#include "test/unittests/heap/heap-utils.h"
+#include "test/unittests/test-utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace v8 {
@@ -145,7 +145,8 @@ void DeclarationContext::Check(const char* source, int get, int set, int query,
   InitializeIfNeeded();
   // A retry after a GC may pollute the counts, so perform gc now
   // to avoid that.
-  InvokeMinorGC(i_isolate());
+  i_isolate()->heap()->CollectGarbage(i::NEW_SPACE,
+                                      i::GarbageCollectionReason::kTesting);
   HandleScope scope(isolate_);
   TryCatch catcher(isolate_);
   catcher.SetVerbose(true);
@@ -174,7 +175,8 @@ void DeclarationContext::Check(const char* source, int get, int set, int query,
     }
   }
   // Clean slate for the next test.
-  InvokeMemoryReducingMajorGCs(i_isolate());
+  i_isolate()->heap()->CollectAllAvailableGarbage(
+      i::GarbageCollectionReason::kTesting);
 }
 
 void DeclarationContext::HandleGet(

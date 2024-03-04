@@ -10,7 +10,7 @@ let kReturnValue = 19;
 
 let buffer = (function CreateBuffer() {
   let builder = new WasmModuleBuilder();
-  builder.addMemory(1, 1);
+  builder.addMemory(1, 1, true);
   builder.addFunction('main', kSig_i_v)
       .addBody([kExprI32Const, kReturnValue])
       .exportFunc();

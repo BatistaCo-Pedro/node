@@ -28,8 +28,6 @@
 // Flags: --string-slices --expose-externalize-string
 
 var a = "internalized dummy";
-a = createExternalizableString(
-    'abcdefghijklmnopqrstuvqxy' +
-    'z 🤓');
-externalizeString(a);
+a = "abcdefghijklmnopqrstuvqxy"+"z";
+externalizeString(a, true);
 assertEquals('b', a.substring(1).charAt(0));

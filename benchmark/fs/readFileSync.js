@@ -6,21 +6,12 @@ const fs = require('fs');
 const bench = common.createBenchmark(main, {
   encoding: ['undefined', 'utf8'],
   path: ['existing', 'non-existing'],
-  hasFileDescriptor: ['true', 'false'],
-  n: [1e4],
+  n: [60e1],
 });
 
-function main({ n, encoding, path, hasFileDescriptor }) {
+function main({ n, encoding, path }) {
   const enc = encoding === 'undefined' ? undefined : encoding;
-  let file;
-  let shouldClose = false;
-
-  if (hasFileDescriptor === 'true') {
-    shouldClose = path === 'existing';
-    file = path === 'existing' ? fs.openSync(__filename) : -1;
-  } else {
-    file = path === 'existing' ? __filename : '/tmp/not-found';
-  }
+  const file = path === 'existing' ? __filename : '/tmp/not-found';
   bench.start();
   for (let i = 0; i < n; ++i) {
     try {
@@ -30,7 +21,4 @@ function main({ n, encoding, path, hasFileDescriptor }) {
     }
   }
   bench.end(n);
-  if (shouldClose) {
-    fs.closeSync(file);
-  }
 }

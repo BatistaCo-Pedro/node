@@ -29,8 +29,6 @@ class WasmBuiltinsAssembler : public CodeStubAssembler {
 
   TNode<FixedArray> LoadManagedObjectMapsFromInstance(
       TNode<WasmInstanceObject> instance);
-
-  TNode<Float64T> StringToFloat64(TNode<String> input);
 };
 
 }  // namespace internal

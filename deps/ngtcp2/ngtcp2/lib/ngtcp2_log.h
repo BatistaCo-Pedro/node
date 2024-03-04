@@ -37,9 +37,6 @@ typedef struct ngtcp2_log {
   /* log_printf is a sink to write log.  NULL means no logging
      output. */
   ngtcp2_printf log_printf;
-  /* events is an event filter.  Only events set in this field are
-     emitted. */
-  uint8_t events;
   /* ts is the time point used to write time delta in the log. */
   ngtcp2_tstamp ts;
   /* last_ts is the most recent time point that this object is
@@ -66,33 +63,27 @@ typedef enum ngtcp2_log_event {
   /**
    * :enum:`NGTCP2_LOG_EVENT_CON` is a connection (catch-all) event
    */
-  NGTCP2_LOG_EVENT_CON = 0x1,
+  NGTCP2_LOG_EVENT_CON,
   /**
    * :enum:`NGTCP2_LOG_EVENT_PKT` is a packet event.
    */
-  NGTCP2_LOG_EVENT_PKT = 0x2,
+  NGTCP2_LOG_EVENT_PKT,
   /**
    * :enum:`NGTCP2_LOG_EVENT_FRM` is a QUIC frame event.
    */
-  NGTCP2_LOG_EVENT_FRM = 0x4,
+  NGTCP2_LOG_EVENT_FRM,
   /**
-   * :enum:`NGTCP2_LOG_EVENT_LDC` is a loss detection and congestion
-   * control event.
+   * :enum:`NGTCP2_LOG_EVENT_RCV` is a congestion and recovery event.
    */
-  NGTCP2_LOG_EVENT_LDC = 0x8,
+  NGTCP2_LOG_EVENT_RCV,
   /**
    * :enum:`NGTCP2_LOG_EVENT_CRY` is a crypto event.
    */
-  NGTCP2_LOG_EVENT_CRY = 0x10,
+  NGTCP2_LOG_EVENT_CRY,
   /**
    * :enum:`NGTCP2_LOG_EVENT_PTV` is a path validation event.
    */
-  NGTCP2_LOG_EVENT_PTV = 0x20,
-  /**
-   * :enum:`NGTCP2_LOG_EVENT_CCA` is a congestion controller algorithm
-   * event.
-   */
-  NGTCP2_LOG_EVENT_CCA = 0x40,
+  NGTCP2_LOG_EVENT_PTV,
 } ngtcp2_log_event;
 
 void ngtcp2_log_init(ngtcp2_log *log, const ngtcp2_cid *scid,
@@ -109,7 +100,7 @@ void ngtcp2_log_rx_vn(ngtcp2_log *log, const ngtcp2_pkt_hd *hd,
 
 void ngtcp2_log_rx_sr(ngtcp2_log *log, const ngtcp2_pkt_stateless_reset *sr);
 
-void ngtcp2_log_remote_tp(ngtcp2_log *log,
+void ngtcp2_log_remote_tp(ngtcp2_log *log, uint8_t exttype,
                           const ngtcp2_transport_params *params);
 
 void ngtcp2_log_pkt_lost(ngtcp2_log *log, int64_t pkt_num, uint8_t type,

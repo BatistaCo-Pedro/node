@@ -22,13 +22,13 @@ namespace internal {
 
 TQ_OBJECT_CONSTRUCTORS_IMPL(JSDateTimeFormat)
 
-ACCESSORS(JSDateTimeFormat, icu_locale, Tagged<Managed<icu::Locale>>,
-          kIcuLocaleOffset)
+ACCESSORS(JSDateTimeFormat, icu_locale, Managed<icu::Locale>, kIcuLocaleOffset)
 ACCESSORS(JSDateTimeFormat, icu_simple_date_format,
-          Tagged<Managed<icu::SimpleDateFormat>>, kIcuSimpleDateFormatOffset)
+          Managed<icu::SimpleDateFormat>, kIcuSimpleDateFormatOffset)
 ACCESSORS(JSDateTimeFormat, icu_date_interval_format,
-          Tagged<Managed<icu::DateIntervalFormat>>,
-          kIcuDateIntervalFormatOffset)
+          Managed<icu::DateIntervalFormat>, kIcuDateIntervalFormatOffset)
+
+BOOL_ACCESSORS(JSDateTimeFormat, flags, alt_calendar, AltCalendarBit::kShift)
 
 inline void JSDateTimeFormat::set_hour_cycle(HourCycle hour_cycle) {
   int hints = flags();

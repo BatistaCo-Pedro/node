@@ -1,6 +1,6 @@
 'use strict'
 
-const Busboy = require('@fastify/busboy')
+const Busboy = require('busboy')
 const util = require('../core/util')
 const {
   ReadableStreamFrom,
@@ -8,27 +8,31 @@ const {
   isReadableStreamLike,
   readableStreamClose,
   createDeferredPromise,
-  fullyReadBody,
-  extractMimeType
+  fullyReadBody
 } = require('./util')
 const { FormData } = require('./formdata')
 const { kState } = require('./symbols')
 const { webidl } = require('./webidl')
-const { Blob, File: NativeFile } = require('node:buffer')
+const { DOMException, structuredClone } = require('./constants')
+const { Blob, File: NativeFile } = require('buffer')
 const { kBodyUsed } = require('../core/symbols')
-const assert = require('node:assert')
+const assert = require('assert')
 const { isErrored } = require('../core/util')
 const { isUint8Array, isArrayBuffer } = require('util/types')
 const { File: UndiciFile } = require('./file')
-const { serializeAMimeType } = require('./dataURL')
+const { parseMIMEType, serializeAMimeType } = require('./dataURL')
+
+let ReadableStream = globalThis.ReadableStream
 
 /** @type {globalThis['File']} */
 const File = NativeFile ?? UndiciFile
-const textEncoder = new TextEncoder()
-const textDecoder = new TextDecoder()
 
 // https://fetch.spec.whatwg.org/#concept-bodyinit-extract
 function extractBody (object, keepalive = false) {
+  if (!ReadableStream) {
+    ReadableStream = require('stream/web').ReadableStream
+  }
+
   // 1. Let stream be null.
   let stream = null
 
@@ -41,19 +45,16 @@ function extractBody (object, keepalive = false) {
     stream = object.stream()
   } else {
     // 4. Otherwise, set stream to a new ReadableStream object, and set
-    //    up stream with byte reading support.
+    //    up stream.
     stream = new ReadableStream({
       async pull (controller) {
-        const buffer = typeof source === 'string' ? textEncoder.encode(source) : source
-
-        if (buffer.byteLength) {
-          controller.enqueue(buffer)
-        }
-
+        controller.enqueue(
+          typeof source === 'string' ? new TextEncoder().encode(source) : source
+        )
         queueMicrotask(() => readableStreamClose(controller))
       },
       start () {},
-      type: 'bytes'
+      type: undefined
     })
   }
 
@@ -118,6 +119,7 @@ function extractBody (object, keepalive = false) {
     // - That the content-length is calculated in advance.
     // - And that all parts are pre-encoded and ready to be sent.
 
+    const enc = new TextEncoder()
     const blobParts = []
     const rn = new Uint8Array([13, 10]) // '\r\n'
     length = 0
@@ -125,13 +127,13 @@ function extractBody (object, keepalive = false) {
 
     for (const [name, value] of object) {
       if (typeof value === 'string') {
-        const chunk = textEncoder.encode(prefix +
+        const chunk = enc.encode(prefix +
           `; name="${escape(normalizeLinefeeds(name))}"` +
           `\r\n\r\n${normalizeLinefeeds(value)}\r\n`)
         blobParts.push(chunk)
         length += chunk.byteLength
       } else {
-        const chunk = textEncoder.encode(`${prefix}; name="${escape(normalizeLinefeeds(name))}"` +
+        const chunk = enc.encode(`${prefix}; name="${escape(normalizeLinefeeds(name))}"` +
           (value.name ? `; filename="${escape(value.name)}"` : '') + '\r\n' +
           `Content-Type: ${
             value.type || 'application/octet-stream'
@@ -145,7 +147,7 @@ function extractBody (object, keepalive = false) {
       }
     }
 
-    const chunk = textEncoder.encode(`--${boundary}--`)
+    const chunk = enc.encode(`--${boundary}--`)
     blobParts.push(chunk)
     length += chunk.byteLength
     if (hasUnknownSizeValue) {
@@ -168,7 +170,7 @@ function extractBody (object, keepalive = false) {
     // Set type to `multipart/form-data; boundary=`,
     // followed by the multipart/form-data boundary string generated
     // by the multipart/form-data encoding algorithm.
-    type = `multipart/form-data; boundary=${boundary}`
+    type = 'multipart/form-data; boundary=' + boundary
   } else if (isBlobLike(object)) {
     // Blob
 
@@ -220,17 +222,13 @@ function extractBody (object, keepalive = false) {
           // When running action is done, close stream.
           queueMicrotask(() => {
             controller.close()
-            controller.byobRequest?.respond(0)
           })
         } else {
           // Whenever one or more bytes are available and stream is not errored,
           // enqueue a Uint8Array wrapping an ArrayBuffer containing the available
           // bytes into stream.
           if (!isErrored(stream)) {
-            const buffer = new Uint8Array(value)
-            if (buffer.byteLength) {
-              controller.enqueue(buffer)
-            }
+            controller.enqueue(new Uint8Array(value))
           }
         }
         return controller.desiredSize > 0
@@ -238,7 +236,7 @@ function extractBody (object, keepalive = false) {
       async cancel (reason) {
         await iterator.return()
       },
-      type: 'bytes'
+      type: undefined
     })
   }
 
@@ -252,6 +250,11 @@ function extractBody (object, keepalive = false) {
 
 // https://fetch.spec.whatwg.org/#bodyinit-safely-extract
 function safelyExtractBody (object, keepalive = false) {
+  if (!ReadableStream) {
+    // istanbul ignore next
+    ReadableStream = require('stream/web').ReadableStream
+  }
+
   // To safely extract a body and a `Content-Type` value from
   // a byte sequence or BodyInit object object, run these steps:
 
@@ -331,7 +334,7 @@ function bodyMixinMethods (instance) {
       return specConsumeBody(this, (bytes) => {
         let mimeType = bodyMimeType(this)
 
-        if (mimeType === null) {
+        if (mimeType === 'failure') {
           mimeType = ''
         } else if (mimeType) {
           mimeType = serializeAMimeType(mimeType)
@@ -370,22 +373,21 @@ function bodyMixinMethods (instance) {
 
       throwIfAborted(this[kState])
 
-      // 1. Let mimeType be the result of get the MIME type with this.
-      const mimeType = bodyMimeType(this)
+      const contentType = this.headers.get('Content-Type')
 
       // If mimeType’s essence is "multipart/form-data", then:
-      if (mimeType !== null && mimeType.essence === 'multipart/form-data') {
+      if (/multipart\/form-data/.test(contentType)) {
         const headers = {}
-        for (const [key, value] of this.headers) headers[key] = value
+        for (const [key, value] of this.headers) headers[key.toLowerCase()] = value
 
         const responseFormData = new FormData()
 
         let busboy
 
         try {
-          busboy = new Busboy({
+          busboy = Busboy({
             headers,
-            preservePath: true
+            defParamCharset: 'utf8'
           })
         } catch (err) {
           throw new DOMException(`${err}`, 'AbortError')
@@ -394,7 +396,8 @@ function bodyMixinMethods (instance) {
         busboy.on('field', (name, value) => {
           responseFormData.append(name, value)
         })
-        busboy.on('file', (name, value, filename, encoding, mimeType) => {
+        busboy.on('file', (name, value, info) => {
+          const { filename, encoding, mimeType } = info
           const chunks = []
 
           if (encoding === 'base64' || encoding.toLowerCase() === 'base64') {
@@ -432,7 +435,7 @@ function bodyMixinMethods (instance) {
         await busboyResolve
 
         return responseFormData
-      } else if (mimeType !== null && mimeType.essence === 'application/x-www-form-urlencoded') {
+      } else if (/application\/x-www-form-urlencoded/.test(contentType)) {
         // Otherwise, if mimeType’s essence is "application/x-www-form-urlencoded", then:
 
         // 1. Let entries be the result of parsing bytes.
@@ -441,21 +444,19 @@ function bodyMixinMethods (instance) {
           let text = ''
           // application/x-www-form-urlencoded parser will keep the BOM.
           // https://url.spec.whatwg.org/#concept-urlencoded-parser
-          // Note that streaming decoder is stateful and cannot be reused
-          const streamingDecoder = new TextDecoder('utf-8', { ignoreBOM: true })
-
+          const textDecoder = new TextDecoder('utf-8', { ignoreBOM: true })
           for await (const chunk of consumeBody(this[kState].body)) {
             if (!isUint8Array(chunk)) {
               throw new TypeError('Expected Uint8Array chunk')
             }
-            text += streamingDecoder.decode(chunk, { stream: true })
+            text += textDecoder.decode(chunk, { stream: true })
           }
-          text += streamingDecoder.decode()
+          text += textDecoder.decode()
           entries = new URLSearchParams(text)
         } catch (err) {
           // istanbul ignore next: Unclear when new URLSearchParams can fail on a string.
           // 2. If entries is failure, then throw a TypeError.
-          throw new TypeError(undefined, { cause: err })
+          throw Object.assign(new TypeError(), { cause: err })
         }
 
         // 3. Return a new FormData object whose entries are entries.
@@ -531,7 +532,7 @@ async function specConsumeBody (object, convertBytesToJSValue, instance) {
 
   // 6. Otherwise, fully read object’s body given successSteps,
   //    errorSteps, and object’s relevant global object.
-  await fullyReadBody(object[kState].body, successSteps, errorSteps)
+  fullyReadBody(object[kState].body, successSteps, errorSteps)
 
   // 7. Return promise.
   return promise.promise
@@ -565,7 +566,7 @@ function utf8DecodeBytes (buffer) {
 
   // 3. Process a queue with an instance of UTF-8’s
   //    decoder, ioQueue, output, and "replacement".
-  const output = textDecoder.decode(buffer)
+  const output = new TextDecoder().decode(buffer)
 
   // 4. Return output.
   return output
@@ -581,25 +582,17 @@ function parseJSONFromBytes (bytes) {
 
 /**
  * @see https://fetch.spec.whatwg.org/#concept-body-mime-type
- * @param {import('./response').Response|import('./request').Request} requestOrResponse
+ * @param {import('./response').Response|import('./request').Request} object
  */
-function bodyMimeType (requestOrResponse) {
-  // 1. Let headers be null.
-  // 2. If requestOrResponse is a Request object, then set headers to requestOrResponse’s request’s header list.
-  // 3. Otherwise, set headers to requestOrResponse’s response’s header list.
-  /** @type {import('./headers').HeadersList} */
-  const headers = requestOrResponse[kState].headersList
+function bodyMimeType (object) {
+  const { headersList } = object[kState]
+  const contentType = headersList.get('content-type')
 
-  // 4. Let mimeType be the result of extracting a MIME type from headers.
-  const mimeType = extractMimeType(headers)
-
-  // 5. If mimeType is failure, then return null.
-  if (mimeType === 'failure') {
-    return null
+  if (contentType === null) {
+    return 'failure'
   }
 
-  // 6. Return mimeType.
-  return mimeType
+  return parseMIMEType(contentType)
 }
 
 module.exports = {

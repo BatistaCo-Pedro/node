@@ -50,28 +50,28 @@ TEST_F(SymbolsTest, Create) {
   StdoutStream os;
   for (int i = 0; i < kNumSymbols; ++i) {
     symbols[i] = isolate()->factory()->NewSymbol();
-    CHECK(IsName(*symbols[i]));
-    CHECK(IsSymbol(*symbols[i]));
+    CHECK(symbols[i]->IsName());
+    CHECK(symbols[i]->IsSymbol());
     CHECK(symbols[i]->HasHashCode());
-    CHECK(IsUniqueName(*symbols[i]));
+    CHECK(symbols[i]->IsUniqueName());
     CHECK_GT(symbols[i]->hash(), 0u);
     os << Brief(*symbols[i]) << "\n";
 #if OBJECT_PRINT
-    Print(*symbols[i], os);
+    symbols[i]->Print(os);
 #endif
 #if VERIFY_HEAP
-    Object::ObjectVerify(*symbols[i], isolate());
+    symbols[i]->ObjectVerify(isolate());
 #endif
   }
 
-  InvokeMinorGC();
-  InvokeMajorGC();
+  CollectGarbage(i::NEW_SPACE);
+  CollectAllGarbage();
 
   // All symbols should be distinct.
   for (int i = 0; i < kNumSymbols; ++i) {
-    CHECK(Object::SameValue(*symbols[i], *symbols[i]));
+    CHECK(symbols[i]->SameValue(*symbols[i]));
     for (int j = i + 1; j < kNumSymbols; ++j) {
-      CHECK(!Object::SameValue(*symbols[i], *symbols[j]));
+      CHECK(!symbols[i]->SameValue(*symbols[j]));
     }
   }
 }

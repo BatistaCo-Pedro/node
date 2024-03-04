@@ -30,19 +30,6 @@
 #include <stdlib.h>
 
 
-/* Does the file path contain embedded nul bytes? */
-static int includes_nul(const char *s, size_t n) {
-  if (n == 0)
-    return 0;
-#ifdef __linux__
-  /* Accept abstract socket namespace path ("\0/virtual/path"). */
-  s++;
-  n--;
-#endif
-  return NULL != memchr(s, '\0', n);
-}
-
-
 int uv_pipe_init(uv_loop_t* loop, uv_pipe_t* handle, int ipc) {
   uv__stream_init(loop, (uv_stream_t*)handle, UV_NAMED_PIPE);
   handle->shutdown_req = NULL;
@@ -66,7 +53,6 @@ int uv_pipe_bind2(uv_pipe_t* handle,
   char* pipe_fname;
   int sockfd;
   int err;
-  socklen_t addrlen;
 
   pipe_fname = NULL;
 
@@ -79,8 +65,11 @@ int uv_pipe_bind2(uv_pipe_t* handle,
   if (namelen == 0)
     return UV_EINVAL;
 
-  if (includes_nul(name, namelen))
+#ifndef __linux__
+  /* Abstract socket namespace only works on Linux. */
+  if (*name == '\0')
     return UV_EINVAL;
+#endif
 
   if (flags & UV_PIPE_NO_TRUNCATE)
     if (namelen > sizeof(saddr.sun_path))
@@ -101,15 +90,10 @@ int uv_pipe_bind2(uv_pipe_t* handle,
    * We unlink the file later but abstract sockets disappear
    * automatically since they're not real file system entities.
    */
-  if (*name == '\0') {
-    addrlen = offsetof(struct sockaddr_un, sun_path) + namelen;
-  } else {
-    pipe_fname = uv__malloc(namelen + 1);
+  if (*name != '\0') {
+    pipe_fname = uv__strdup(name);
     if (pipe_fname == NULL)
       return UV_ENOMEM;
-    memcpy(pipe_fname, name, namelen);
-    pipe_fname[namelen] = '\0';
-    addrlen = sizeof saddr;
   }
 
   err = uv__socket(AF_UNIX, SOCK_STREAM, 0);
@@ -121,7 +105,7 @@ int uv_pipe_bind2(uv_pipe_t* handle,
   memcpy(&saddr.sun_path, name, namelen);
   saddr.sun_family = AF_UNIX;
 
-  if (bind(sockfd, (struct sockaddr*)&saddr, addrlen)) {
+  if (bind(sockfd, (struct sockaddr*)&saddr, sizeof saddr)) {
     err = UV__ERR(errno);
     /* Convert ENOENT to EACCES for compatibility with Windows. */
     if (err == UV_ENOENT)
@@ -133,7 +117,7 @@ int uv_pipe_bind2(uv_pipe_t* handle,
 
   /* Success. */
   handle->flags |= UV_HANDLE_BOUND;
-  handle->pipe_fname = pipe_fname; /* NULL or a copy of |name| */
+  handle->pipe_fname = pipe_fname; /* NULL or a strdup'ed copy. */
   handle->io_watcher.fd = sockfd;
   return 0;
 
@@ -226,22 +210,7 @@ void uv_pipe_connect(uv_connect_t* req,
                     uv_pipe_t* handle,
                     const char* name,
                     uv_connect_cb cb) {
-  int err;
-
-  err = uv_pipe_connect2(req, handle, name, strlen(name), 0, cb);
-
-  if (err) {
-    handle->delayed_error = err;
-    handle->connect_req = req;
-
-    uv__req_init(handle->loop, req, UV_CONNECT);
-    req->handle = (uv_stream_t*) handle;
-    req->cb = cb;
-    uv__queue_init(&req->queue);
-
-    /* Force callback to run on next tick in case of error. */
-    uv__io_feed(handle->loop, &handle->io_watcher);
-  }
+  uv_pipe_connect2(req, handle, name, strlen(name), 0, cb);
 }
 
 
@@ -255,7 +224,6 @@ int uv_pipe_connect2(uv_connect_t* req,
   int new_sock;
   int err;
   int r;
-  socklen_t addrlen;
 
   if (flags & ~UV_PIPE_NO_TRUNCATE)
     return UV_EINVAL;
@@ -266,8 +234,11 @@ int uv_pipe_connect2(uv_connect_t* req,
   if (namelen == 0)
     return UV_EINVAL;
 
-  if (includes_nul(name, namelen))
+#ifndef __linux__
+  /* Abstract socket namespace only works on Linux. */
+  if (*name == '\0')
     return UV_EINVAL;
+#endif
 
   if (flags & UV_PIPE_NO_TRUNCATE)
     if (namelen > sizeof(saddr.sun_path))
@@ -290,13 +261,9 @@ int uv_pipe_connect2(uv_connect_t* req,
   memcpy(&saddr.sun_path, name, namelen);
   saddr.sun_family = AF_UNIX;
 
-  if (*name == '\0')
-    addrlen = offsetof(struct sockaddr_un, sun_path) + namelen;
-  else
-    addrlen = sizeof saddr;
-
   do {
-    r = connect(uv__stream_fd(handle), (struct sockaddr*)&saddr, addrlen);
+    r = connect(uv__stream_fd(handle),
+                (struct sockaddr*)&saddr, sizeof saddr);
   }
   while (r == -1 && errno == EINTR);
 
@@ -328,7 +295,7 @@ out:
   handle->connect_req = req;
 
   uv__req_init(handle->loop, req, UV_CONNECT);
-  req->handle = (uv_stream_t*) handle;
+  req->handle = (uv_stream_t*)handle;
   req->cb = cb;
   uv__queue_init(&req->queue);
 

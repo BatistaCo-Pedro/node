@@ -16,14 +16,14 @@ namespace internal {
 void ManualOptimizationTable::MarkFunctionForManualOptimization(
     Isolate* isolate, Handle<JSFunction> function,
     IsCompiledScope* is_compiled_scope) {
-  DCHECK(v8_flags.testing_d8_test_runner || v8_flags.allow_natives_syntax);
+  DCHECK(v8_flags.testing_d8_test_runner);
   DCHECK(is_compiled_scope->is_compiled());
   DCHECK(function->has_feedback_vector());
 
   Handle<SharedFunctionInfo> shared_info(function->shared(), isolate);
 
   Handle<ObjectHashTable> table =
-      IsUndefined(isolate->heap()->functions_marked_for_manual_optimization())
+      isolate->heap()->functions_marked_for_manual_optimization().IsUndefined()
           ? ObjectHashTable::New(isolate, 1)
           : handle(ObjectHashTable::cast(
                        isolate->heap()
@@ -36,33 +36,31 @@ void ManualOptimizationTable::MarkFunctionForManualOptimization(
 }
 
 void ManualOptimizationTable::CheckMarkedForManualOptimization(
-    Isolate* isolate, Tagged<JSFunction> function) {
+    Isolate* isolate, JSFunction function) {
   if (!IsMarkedForManualOptimization(isolate, function)) {
     PrintF("Error: Function ");
-    ShortPrint(function);
+    function.ShortPrint();
     PrintF(
         " should be prepared for optimization with "
         "%%PrepareFunctionForOptimization before  "
-        "%%OptimizeFunctionOnNextCall / %%OptimizeMaglevOnNextCall / "
-        "%%OptimizeOSR ");
+        "%%OptimizeFunctionOnNextCall / %%OptimizeOSR ");
     UNREACHABLE();
   }
 }
 
 bool ManualOptimizationTable::IsMarkedForManualOptimization(
-    Isolate* isolate, Tagged<JSFunction> function) {
-  DCHECK(v8_flags.testing_d8_test_runner || v8_flags.allow_natives_syntax);
+    Isolate* isolate, JSFunction function) {
+  DCHECK(v8_flags.testing_d8_test_runner);
 
   Handle<Object> table = handle(
       isolate->heap()->functions_marked_for_manual_optimization(), isolate);
   Handle<Object> entry =
-      IsUndefined(*table)
+      table->IsUndefined()
           ? handle(ReadOnlyRoots(isolate).the_hole_value(), isolate)
           : handle(Handle<ObjectHashTable>::cast(table)->Lookup(
-                       handle(function->shared(), isolate)),
+                       handle(function.shared(), isolate)),
                    isolate);
-
-  return !IsTheHole(*entry);
+  return !entry->IsTheHole();
 }
 
 }  // namespace internal

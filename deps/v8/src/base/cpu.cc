@@ -14,7 +14,7 @@
 #if V8_OS_LINUX
 #include <linux/auxvec.h>  // AT_HWCAP
 #endif
-#if V8_GLIBC_PREREQ(2, 16) || V8_OS_ANDROID
+#if V8_GLIBC_PREREQ(2, 16)
 #include <sys/auxv.h>  // getauxval()
 #endif
 #if V8_OS_QNX
@@ -163,27 +163,17 @@ static V8_INLINE void __cpuid(int cpu_info[4], int info_type) {
 #define HWCAP_SB (1 << 29)
 #define HWCAP_PACA (1 << 30)
 #define HWCAP_PACG (1UL << 31)
-// See <uapi/asm/hwcap.h> kernel header.
-/*
- * HWCAP2 flags - for elf_hwcap2 (in kernel) and AT_HWCAP2
- */
-#define HWCAP2_MTE (1 << 18)
+
 #endif  // V8_HOST_ARCH_ARM64
 
 #if V8_HOST_ARCH_ARM || V8_HOST_ARCH_ARM64
 
-static std::tuple<uint32_t, uint32_t> ReadELFHWCaps() {
-  uint32_t hwcap = 0;
-  uint32_t hwcap2 = 0;
-#if defined(AT_HWCAP)
-  hwcap = static_cast<uint32_t>(getauxval(AT_HWCAP));
-#if defined(AT_HWCAP2)
-  hwcap2 = static_cast<uint32_t>(getauxval(AT_HWCAP2));
-#endif  // AT_HWCAP2
+static uint32_t ReadELFHWCaps() {
+  uint32_t result = 0;
+#if V8_GLIBC_PREREQ(2, 16)
+  result = static_cast<uint32_t>(getauxval(AT_HWCAP));
 #else
   // Read the ELF HWCAP flags by parsing /proc/self/auxv.
-  // If getauxval is not available, the kernel/libc is also not new enough to
-  // expose hwcap2.
   FILE* fp = base::Fopen("/proc/self/auxv", "r");
   if (fp != nullptr) {
     struct {
@@ -203,7 +193,7 @@ static std::tuple<uint32_t, uint32_t> ReadELFHWCaps() {
     base::Fclose(fp);
   }
 #endif
-  return std::make_tuple(hwcap, hwcap2);
+  return result;
 }
 
 #endif  // V8_HOST_ARCH_ARM || V8_HOST_ARCH_ARM64
@@ -416,12 +406,10 @@ CPU::CPU()
       has_jscvt_(false),
       has_dot_prod_(false),
       has_lse_(false),
-      has_mte_(false),
       is_fp64_mode_(false),
       has_non_stop_time_stamp_counter_(false),
       is_running_in_vm_(false),
       has_msa_(false),
-      riscv_mmu_(RV_MMU_MODE::kRiscvSV48),
       has_rvv_(false) {
   memcpy(vendor_, "Unknown", 8);
 
@@ -639,8 +627,7 @@ CPU::CPU()
   }
 
   // Try to extract the list of CPU features from ELF hwcaps.
-  uint32_t hwcaps, hwcaps2;
-  std::tie(hwcaps, hwcaps2) = ReadELFHWCaps();
+  uint32_t hwcaps = ReadELFHWCaps();
   if (hwcaps != 0) {
     has_idiva_ = (hwcaps & HWCAP_IDIVA) != 0;
     has_neon_ = (hwcaps & HWCAP_NEON) != 0;
@@ -752,9 +739,7 @@ CPU::CPU()
 
 #elif V8_OS_LINUX
   // Try to extract the list of CPU features from ELF hwcaps.
-  uint32_t hwcaps, hwcaps2;
-  std::tie(hwcaps, hwcaps2) = ReadELFHWCaps();
-  has_mte_ = (hwcaps2 & HWCAP2_MTE) != 0;
+  uint32_t hwcaps = ReadELFHWCaps();
   if (hwcaps != 0) {
     has_jscvt_ = (hwcaps & HWCAP_JSCVT) != 0;
     has_dot_prod_ = (hwcaps & HWCAP_ASIMDDP) != 0;
@@ -883,7 +868,6 @@ CPU::CPU()
 #endif  // !USE_SIMULATOR
 
 #elif V8_HOST_ARCH_RISCV64
-#if V8_OS_LINUX
   CPUInfo cpu_info;
   char* features = cpu_info.ExtractField("isa");
 
@@ -894,17 +878,6 @@ CPU::CPU()
     has_fpu_ = true;
     has_rvv_ = true;
   }
-  char* mmu = cpu_info.ExtractField("mmu");
-  if (HasListItem(mmu, "sv48")) {
-    riscv_mmu_ = RV_MMU_MODE::kRiscvSV48;
-  }
-  if (HasListItem(mmu, "sv39")) {
-    riscv_mmu_ = RV_MMU_MODE::kRiscvSV39;
-  }
-  if (HasListItem(mmu, "sv57")) {
-    riscv_mmu_ = RV_MMU_MODE::kRiscvSV57;
-  }
-#endif
 #endif  // V8_HOST_ARCH_RISCV64
 }
 

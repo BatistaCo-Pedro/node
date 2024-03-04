@@ -72,10 +72,7 @@ assertThrows(() => {
 }, TypeError);
 
 assertThrows(() => {
-  Iterator.from({
-    [Symbol.iterator]: 0,
-    next() {
-      return 42;
-    },
-  });
+  Iterator.from({[Symbol.iterator]() {
+    return { next: "not callable" };
+  }});
 }, TypeError);

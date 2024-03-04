@@ -25,15 +25,15 @@ bool FunctionTemplateInfo::HasInstanceType() {
 Handle<SharedFunctionInfo> FunctionTemplateInfo::GetOrCreateSharedFunctionInfo(
     Isolate* isolate, Handle<FunctionTemplateInfo> info,
     MaybeHandle<Name> maybe_name) {
-  Tagged<Object> current_info = info->shared_function_info();
-  if (IsSharedFunctionInfo(current_info)) {
+  Object current_info = info->shared_function_info();
+  if (current_info.IsSharedFunctionInfo()) {
     return handle(SharedFunctionInfo::cast(current_info), isolate);
   }
   Handle<Name> name;
   Handle<String> name_string;
-  if (maybe_name.ToHandle(&name) && IsString(*name)) {
+  if (maybe_name.ToHandle(&name) && name->IsString()) {
     name_string = Handle<String>::cast(name);
-  } else if (IsString(info->class_name())) {
+  } else if (info->class_name().IsString()) {
     name_string = handle(String::cast(info->class_name()), isolate);
   } else {
     name_string = isolate->factory()->empty_string();
@@ -49,30 +49,30 @@ Handle<SharedFunctionInfo> FunctionTemplateInfo::GetOrCreateSharedFunctionInfo(
                                                               function_kind);
   {
     DisallowGarbageCollection no_gc;
-    Tagged<SharedFunctionInfo> raw_sfi = *sfi;
-    Tagged<FunctionTemplateInfo> raw_template = *info;
-    raw_sfi->set_length(raw_template->length());
-    raw_sfi->DontAdaptArguments();
-    DCHECK(raw_sfi->IsApiFunction());
-    raw_template->set_shared_function_info(raw_sfi);
+    auto raw_sfi = *sfi;
+    auto raw_template = *info;
+    raw_sfi.set_length(raw_template.length());
+    raw_sfi.DontAdaptArguments();
+    DCHECK(raw_sfi.IsApiFunction());
+    raw_template.set_shared_function_info(raw_sfi);
   }
   return sfi;
 }
 
-bool FunctionTemplateInfo::IsTemplateFor(Tagged<Map> map) const {
+bool FunctionTemplateInfo::IsTemplateFor(Map map) const {
   RCS_SCOPE(
       LocalHeap::Current() == nullptr
-          ? GetIsolateChecked()->counters()->runtime_call_stats()
+          ? GetIsolate()->counters()->runtime_call_stats()
           : LocalIsolate::FromHeap(LocalHeap::Current())->runtime_call_stats(),
       RuntimeCallCounterId::kIsTemplateFor);
 
   // There is a constraint on the object; check.
-  if (!IsJSObjectMap(map)) return false;
+  if (!map.IsJSObjectMap()) return false;
 
   if (v8_flags.embedder_instance_types) {
     DCHECK_IMPLIES(allowed_receiver_instance_type_range_start() == 0,
                    allowed_receiver_instance_type_range_end() == 0);
-    if (base::IsInRange(map->instance_type(),
+    if (base::IsInRange(map.instance_type(),
                         allowed_receiver_instance_type_range_start(),
                         allowed_receiver_instance_type_range_end())) {
       return true;
@@ -80,41 +80,40 @@ bool FunctionTemplateInfo::IsTemplateFor(Tagged<Map> map) const {
   }
 
   // Fetch the constructor function of the object.
-  Tagged<Object> cons_obj = map->GetConstructor();
-  Tagged<Object> type;
-  if (IsJSFunction(cons_obj)) {
-    Tagged<JSFunction> fun = JSFunction::cast(cons_obj);
-    type = fun->shared()->function_data(kAcquireLoad);
-  } else if (IsFunctionTemplateInfo(cons_obj)) {
+  Object cons_obj = map.GetConstructor();
+  Object type;
+  if (cons_obj.IsJSFunction()) {
+    JSFunction fun = JSFunction::cast(cons_obj);
+    type = fun.shared().function_data(kAcquireLoad);
+  } else if (cons_obj.IsFunctionTemplateInfo()) {
     type = FunctionTemplateInfo::cast(cons_obj);
   } else {
     return false;
   }
   // Iterate through the chain of inheriting function templates to
   // see if the required one occurs.
-  while (IsFunctionTemplateInfo(type)) {
+  while (type.IsFunctionTemplateInfo()) {
     if (type == *this) return true;
-    type = FunctionTemplateInfo::cast(type)->GetParentTemplate();
+    type = FunctionTemplateInfo::cast(type).GetParentTemplate();
   }
   // Didn't find the required type in the inheritance chain.
   return false;
 }
 
-bool FunctionTemplateInfo::IsLeafTemplateForApiObject(
-    Tagged<Object> object) const {
+bool FunctionTemplateInfo::IsLeafTemplateForApiObject(Object object) const {
   i::DisallowGarbageCollection no_gc;
 
-  if (!IsJSApiObject(object)) {
+  if (!object.IsJSApiObject()) {
     return false;
   }
 
   bool result = false;
-  Tagged<Map> map = HeapObject::cast(object)->map();
-  Tagged<Object> constructor_obj = map->GetConstructor();
-  if (IsJSFunction(constructor_obj)) {
-    Tagged<JSFunction> fun = JSFunction::cast(constructor_obj);
-    result = (*this == fun->shared()->function_data(kAcquireLoad));
-  } else if (IsFunctionTemplateInfo(constructor_obj)) {
+  Map map = HeapObject::cast(object).map();
+  Object constructor_obj = map.GetConstructor();
+  if (constructor_obj.IsJSFunction()) {
+    JSFunction fun = JSFunction::cast(constructor_obj);
+    result = (*this == fun.shared().function_data(kAcquireLoad));
+  } else if (constructor_obj.IsFunctionTemplateInfo()) {
     result = (*this == constructor_obj);
   }
   DCHECK_IMPLIES(result, IsTemplateFor(map));
@@ -122,49 +121,47 @@ bool FunctionTemplateInfo::IsLeafTemplateForApiObject(
 }
 
 // static
-Tagged<FunctionTemplateRareData>
-FunctionTemplateInfo::AllocateFunctionTemplateRareData(
+FunctionTemplateRareData FunctionTemplateInfo::AllocateFunctionTemplateRareData(
     Isolate* isolate, Handle<FunctionTemplateInfo> function_template_info) {
-  DCHECK(IsUndefined(function_template_info->rare_data(kAcquireLoad), isolate));
+  DCHECK(function_template_info->rare_data(kAcquireLoad).IsUndefined(isolate));
   Handle<FunctionTemplateRareData> rare_data =
       isolate->factory()->NewFunctionTemplateRareData();
   function_template_info->set_rare_data(*rare_data, kReleaseStore);
   return *rare_data;
 }
 
-base::Optional<Tagged<Name>> FunctionTemplateInfo::TryGetCachedPropertyName(
-    Isolate* isolate, Tagged<Object> getter) {
+base::Optional<Name> FunctionTemplateInfo::TryGetCachedPropertyName(
+    Isolate* isolate, Object getter) {
   DisallowGarbageCollection no_gc;
-  if (!IsFunctionTemplateInfo(getter)) {
-    if (!IsJSFunction(getter)) return {};
-    Tagged<SharedFunctionInfo> info = JSFunction::cast(getter)->shared();
-    if (!info->IsApiFunction()) return {};
-    getter = info->api_func_data();
+  if (!getter.IsFunctionTemplateInfo()) {
+    if (!getter.IsJSFunction()) return {};
+    SharedFunctionInfo info = JSFunction::cast(getter).shared();
+    if (!info.IsApiFunction()) return {};
+    getter = info.get_api_func_data();
   }
   // Check if the accessor uses a cached property.
-  Tagged<Object> maybe_name =
-      FunctionTemplateInfo::cast(getter)->cached_property_name();
-  if (IsTheHole(maybe_name, isolate)) return {};
+  Object maybe_name = FunctionTemplateInfo::cast(getter).cached_property_name();
+  if (maybe_name.IsTheHole(isolate)) return {};
   return Name::cast(maybe_name);
 }
 
 int FunctionTemplateInfo::GetCFunctionsCount() const {
   i::DisallowHeapAllocation no_gc;
-  return FixedArray::cast(GetCFunctionOverloads())->length() /
+  return FixedArray::cast(GetCFunctionOverloads()).length() /
          kFunctionOverloadEntrySize;
 }
 
 Address FunctionTemplateInfo::GetCFunction(int index) const {
   i::DisallowHeapAllocation no_gc;
   return v8::ToCData<Address>(FixedArray::cast(GetCFunctionOverloads())
-                                  ->get(index * kFunctionOverloadEntrySize));
+                                  .get(index * kFunctionOverloadEntrySize));
 }
 
 const CFunctionInfo* FunctionTemplateInfo::GetCSignature(int index) const {
   i::DisallowHeapAllocation no_gc;
   return v8::ToCData<CFunctionInfo*>(
       FixedArray::cast(GetCFunctionOverloads())
-          ->get(index * kFunctionOverloadEntrySize + 1));
+          .get(index * kFunctionOverloadEntrySize + 1));
 }
 
 }  // namespace internal

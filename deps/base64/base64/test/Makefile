@@ -1,4 +1,4 @@
-CFLAGS += -std=c99 -O3 -Wall -Wextra -pedantic -DBASE64_STATIC_DEFINE
+CFLAGS += -std=c99 -O3 -Wall -Wextra -pedantic
 ifdef OPENMP
   CFLAGS += -fopenmp
 endif
@@ -6,21 +6,16 @@ endif
 TARGET := $(shell $(CC) -dumpmachine)
 ifneq (, $(findstring darwin, $(TARGET)))
   BENCH_LDFLAGS=
-else ifneq (, $(findstring mingw, $(TARGET)))
-  BENCH_LDFLAGS=
 else
   # default to linux, -lrt needed
   BENCH_LDFLAGS=-lrt
 endif
 
-.PHONY: clean test valgrind
+.PHONY: clean test
 
 test: clean test_base64 benchmark
 	./test_base64
 	./benchmark
-
-valgrind: clean test_base64
-	valgrind --error-exitcode=2 ./test_base64
 
 test_base64: test_base64.c codec_supported.o ../lib/libbase64.o
 	$(CC) $(CFLAGS) -o $@ $^

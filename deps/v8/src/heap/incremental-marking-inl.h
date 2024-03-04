@@ -15,22 +15,30 @@
 namespace v8 {
 namespace internal {
 
-void IncrementalMarking::TransferColor(Tagged<HeapObject> from,
-                                       Tagged<HeapObject> to) {
-  if (marking_state()->IsMarked(to)) {
+void IncrementalMarking::TransferColor(HeapObject from, HeapObject to) {
+  if (atomic_marking_state()->IsMarked(to)) {
     DCHECK(black_allocation());
     return;
   }
-  DCHECK(marking_state()->IsUnmarked(to));
-  if (marking_state()->IsMarked(from)) {
-    bool success = marking_state()->TryMark(to);
+
+  DCHECK(atomic_marking_state()->IsUnmarked(to));
+  if (atomic_marking_state()->IsGrey(from)) {
+    bool success = atomic_marking_state()->TryMark(to);
     DCHECK(success);
     USE(success);
-    if (!IsDescriptorArray(to) ||
+  } else if (atomic_marking_state()->IsMarked(from)) {
+    bool success = atomic_marking_state()->TryMark(to);
+    DCHECK(success);
+    USE(success);
+    success = atomic_marking_state()->GreyToBlack(to);
+    DCHECK(success);
+    USE(success);
+    if (!to.IsDescriptorArray() ||
         (DescriptorArrayMarkingState::Marked::decode(
-             DescriptorArray::cast(to)->raw_gc_state(kRelaxedLoad)) != 0)) {
-      MemoryChunk::FromHeapObject(to)->IncrementLiveBytesAtomically(
-          ALIGN_TO_ALLOCATION_ALIGNMENT(to->Size()));
+             DescriptorArray::cast(to).raw_gc_state(kRelaxedLoad)) != 0)) {
+      atomic_marking_state()->IncrementLiveBytes(
+          MemoryChunk::cast(BasicMemoryChunk::FromHeapObject(to)),
+          ALIGN_TO_ALLOCATION_ALIGNMENT(to.Size()));
     }
   }
 }

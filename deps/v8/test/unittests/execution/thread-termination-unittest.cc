@@ -55,10 +55,7 @@ class TerminatorThread : public base::Thread {
   Isolate* isolate_;
 };
 
-void Signal(const FunctionCallbackInfo<Value>& info) {
-  CHECK(i::ValidateCallbackInfo(info));
-  semaphore->Signal();
-}
+void Signal(const FunctionCallbackInfo<Value>& args) { semaphore->Signal(); }
 
 MaybeLocal<Value> CompileRun(Local<Context> context, Local<String> source) {
   Local<Script> script = Script::Compile(context, source).ToLocalChecked();
@@ -71,11 +68,10 @@ MaybeLocal<Value> CompileRun(Local<Context> context, const char* source) {
       String::NewFromUtf8(context->GetIsolate(), source).ToLocalChecked());
 }
 
-void DoLoop(const FunctionCallbackInfo<Value>& info) {
-  CHECK(i::ValidateCallbackInfo(info));
-  TryCatch try_catch(info.GetIsolate());
-  CHECK(!info.GetIsolate()->IsExecutionTerminating());
-  MaybeLocal<Value> result = CompileRun(info.GetIsolate()->GetCurrentContext(),
+void DoLoop(const FunctionCallbackInfo<Value>& args) {
+  TryCatch try_catch(args.GetIsolate());
+  CHECK(!args.GetIsolate()->IsExecutionTerminating());
+  MaybeLocal<Value> result = CompileRun(args.GetIsolate()->GetCurrentContext(),
                                         "function f() {"
                                         "  var term = true;"
                                         "  try {"
@@ -94,25 +90,23 @@ void DoLoop(const FunctionCallbackInfo<Value>& info) {
   CHECK(try_catch.Exception()->IsNull());
   CHECK(try_catch.Message().IsEmpty());
   CHECK(!try_catch.CanContinue());
-  CHECK(info.GetIsolate()->IsExecutionTerminating());
+  CHECK(args.GetIsolate()->IsExecutionTerminating());
 }
 
-void Fail(const FunctionCallbackInfo<Value>& info) { UNREACHABLE(); }
+void Fail(const FunctionCallbackInfo<Value>& args) { UNREACHABLE(); }
 
-void Loop(const FunctionCallbackInfo<Value>& info) {
-  CHECK(i::ValidateCallbackInfo(info));
-  CHECK(!info.GetIsolate()->IsExecutionTerminating());
+void Loop(const FunctionCallbackInfo<Value>& args) {
+  CHECK(!args.GetIsolate()->IsExecutionTerminating());
   MaybeLocal<Value> result =
-      CompileRun(info.GetIsolate()->GetCurrentContext(),
+      CompileRun(args.GetIsolate()->GetCurrentContext(),
                  "try { doloop(); fail(); } catch(e) { fail(); }");
   CHECK(result.IsEmpty());
-  CHECK(info.GetIsolate()->IsExecutionTerminating());
+  CHECK(args.GetIsolate()->IsExecutionTerminating());
 }
 
-void TerminateCurrentThread(const FunctionCallbackInfo<Value>& info) {
-  CHECK(i::ValidateCallbackInfo(info));
-  CHECK(!info.GetIsolate()->IsExecutionTerminating());
-  info.GetIsolate()->TerminateExecution();
+void TerminateCurrentThread(const FunctionCallbackInfo<Value>& args) {
+  CHECK(!args.GetIsolate()->IsExecutionTerminating());
+  args.GetIsolate()->TerminateExecution();
 }
 
 class ThreadTerminationTest : public TestWithIsolate {
@@ -159,11 +153,10 @@ class ThreadTerminationTest : public TestWithIsolate {
   }
 };
 
-void DoLoopNoCall(const FunctionCallbackInfo<Value>& info) {
-  CHECK(i::ValidateCallbackInfo(info));
-  TryCatch try_catch(info.GetIsolate());
-  CHECK(!info.GetIsolate()->IsExecutionTerminating());
-  MaybeLocal<Value> result = CompileRun(info.GetIsolate()->GetCurrentContext(),
+void DoLoopNoCall(const FunctionCallbackInfo<Value>& args) {
+  TryCatch try_catch(args.GetIsolate());
+  CHECK(!args.GetIsolate()->IsExecutionTerminating());
+  MaybeLocal<Value> result = CompileRun(args.GetIsolate()->GetCurrentContext(),
                                         "var term = true;"
                                         "while(true) {"
                                         "  if (term) terminate();"
@@ -174,7 +167,7 @@ void DoLoopNoCall(const FunctionCallbackInfo<Value>& info) {
   CHECK(try_catch.Exception()->IsNull());
   CHECK(try_catch.Message().IsEmpty());
   CHECK(!try_catch.CanContinue());
-  CHECK(info.GetIsolate()->IsExecutionTerminating());
+  CHECK(args.GetIsolate()->IsExecutionTerminating());
 }
 
 // Test that a single thread of JavaScript execution can terminate
@@ -299,12 +292,11 @@ TEST_F(ThreadTerminationTest, TerminateBigIntFromString) {
       "fail();\n");
 }
 
-void LoopGetProperty(const FunctionCallbackInfo<Value>& info) {
-  CHECK(i::ValidateCallbackInfo(info));
-  TryCatch try_catch(info.GetIsolate());
-  CHECK(!info.GetIsolate()->IsExecutionTerminating());
+void LoopGetProperty(const FunctionCallbackInfo<Value>& args) {
+  TryCatch try_catch(args.GetIsolate());
+  CHECK(!args.GetIsolate()->IsExecutionTerminating());
   MaybeLocal<Value> result =
-      CompileRun(info.GetIsolate()->GetCurrentContext(),
+      CompileRun(args.GetIsolate()->GetCurrentContext(),
                  "function f() {"
                  "  try {"
                  "    while(true) {"
@@ -322,25 +314,24 @@ void LoopGetProperty(const FunctionCallbackInfo<Value>& info) {
   CHECK(try_catch.Exception()->IsNull());
   CHECK(try_catch.Message().IsEmpty());
   CHECK(!try_catch.CanContinue());
-  CHECK(info.GetIsolate()->IsExecutionTerminating());
+  CHECK(args.GetIsolate()->IsExecutionTerminating());
 }
 
 int call_count = 0;
 
-void TerminateOrReturnObject(const FunctionCallbackInfo<Value>& info) {
-  CHECK(i::ValidateCallbackInfo(info));
+void TerminateOrReturnObject(const FunctionCallbackInfo<Value>& args) {
   if (++call_count == 10) {
-    CHECK(!info.GetIsolate()->IsExecutionTerminating());
-    info.GetIsolate()->TerminateExecution();
+    CHECK(!args.GetIsolate()->IsExecutionTerminating());
+    args.GetIsolate()->TerminateExecution();
     return;
   }
-  Local<Object> result = Object::New(info.GetIsolate());
-  Local<Context> context = info.GetIsolate()->GetCurrentContext();
+  Local<Object> result = Object::New(args.GetIsolate());
+  Local<Context> context = args.GetIsolate()->GetCurrentContext();
   Maybe<bool> val = result->Set(
       context, String::NewFromUtf8(context->GetIsolate(), "x").ToLocalChecked(),
-      Integer::New(info.GetIsolate(), 42));
+      Integer::New(args.GetIsolate(), 42));
   CHECK(val.FromJust());
-  info.GetReturnValue().Set(result);
+  args.GetReturnValue().Set(result);
 }
 
 // Test that we correctly handle termination exceptions if they are
@@ -372,10 +363,9 @@ TEST_F(ThreadTerminationTest, TerminateLoadICException) {
 Persistent<String> reenter_script_1;
 Persistent<String> reenter_script_2;
 
-void ReenterAfterTermination(const FunctionCallbackInfo<Value>& info) {
-  CHECK(i::ValidateCallbackInfo(info));
-  TryCatch try_catch(info.GetIsolate());
-  Isolate* isolate = info.GetIsolate();
+void ReenterAfterTermination(const FunctionCallbackInfo<Value>& args) {
+  TryCatch try_catch(args.GetIsolate());
+  Isolate* isolate = args.GetIsolate();
   CHECK(!isolate->IsExecutionTerminating());
   Local<String> script = Local<String>::New(isolate, reenter_script_1);
   MaybeLocal<Value> result =
@@ -465,9 +455,8 @@ TEST_F(ThreadTerminationTest,
   reenter_script_2.Reset();
 }
 
-void DoLoopCancelTerminate(const FunctionCallbackInfo<Value>& info) {
-  CHECK(i::ValidateCallbackInfo(info));
-  Isolate* isolate = info.GetIsolate();
+void DoLoopCancelTerminate(const FunctionCallbackInfo<Value>& args) {
+  Isolate* isolate = args.GetIsolate();
   TryCatch try_catch(isolate);
   CHECK(!isolate->IsExecutionTerminating());
   MaybeLocal<Value> result = CompileRun(isolate->GetCurrentContext(),
@@ -511,7 +500,6 @@ void MicrotaskShouldNotRun(const FunctionCallbackInfo<Value>& info) {
 }
 
 void MicrotaskLoopForever(const FunctionCallbackInfo<Value>& info) {
-  CHECK(i::ValidateCallbackInfo(info));
   Isolate* isolate = info.GetIsolate();
   HandleScope scope(isolate);
   // Enqueue another should-not-run task to ensure we clean out the queue
@@ -715,10 +703,9 @@ TEST_F(ThreadTerminationTest, SafeForTerminateException) {
   }    // postpone -> no scope
 }
 
-void RequestTermianteAndCallAPI(const FunctionCallbackInfo<Value>& info) {
-  CHECK(i::ValidateCallbackInfo(info));
-  info.GetIsolate()->TerminateExecution();
-  AssertFinishedCodeRun(info.GetIsolate());
+void RequestTermianteAndCallAPI(const FunctionCallbackInfo<Value>& args) {
+  args.GetIsolate()->TerminateExecution();
+  AssertFinishedCodeRun(args.GetIsolate());
 }
 
 TEST_F(TestWithPlatform, IsolateSafeForTerminationMode) {
@@ -793,10 +780,9 @@ TEST_F(ThreadTerminationTest, ErrorObjectAfterTermination) {
   CHECK(error->IsNativeError());
 }
 
-void InnerTryCallTerminate(const FunctionCallbackInfo<Value>& info) {
-  CHECK(i::ValidateCallbackInfo(info));
-  CHECK(!info.GetIsolate()->IsExecutionTerminating());
-  Isolate* isolate = info.GetIsolate();
+void InnerTryCallTerminate(const FunctionCallbackInfo<Value>& args) {
+  CHECK(!args.GetIsolate()->IsExecutionTerminating());
+  Isolate* isolate = args.GetIsolate();
   Local<Object> global = isolate->GetCurrentContext()->Global();
   Local<Function> loop = Local<Function>::Cast(
       global
@@ -811,7 +797,7 @@ void InnerTryCallTerminate(const FunctionCallbackInfo<Value>& info) {
   CHECK(result.is_null());
   CHECK(exception.is_null());
   // TryCall reschedules the termination exception.
-  CHECK(info.GetIsolate()->IsExecutionTerminating());
+  CHECK(args.GetIsolate()->IsExecutionTerminating());
 }
 
 TEST_F(ThreadTerminationTest, TerminationInInnerTryCall) {
@@ -871,7 +857,7 @@ TEST_F(ThreadTerminationTest, TerminateAndTryCall) {
 
 class ConsoleImpl : public debug::ConsoleDelegate {
  private:
-  void Log(const debug::ConsoleCallArguments& info,
+  void Log(const debug::ConsoleCallArguments& args,
            const debug::ConsoleContext&) override {
     CompileRun(Isolate::GetCurrent()->GetCurrentContext(), "1 + 1");
   }

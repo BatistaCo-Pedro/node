@@ -2,11 +2,10 @@ Name: inspector protocol
 Short Name: inspector_protocol
 URL: https://chromium.googlesource.com/deps/inspector_protocol/
 Version: 0
-Revision: fc500ba6b4303e25e186b368decf02aca8709a91
+Revision: 03764695ffd5887cebc446f61ec43059e03f55b5
 License: BSD
 License File: LICENSE
-Security Critical: yes
-Shipped: yes
+Security Critical: no
 
 Description:
 src/inspector uses these scripts to generate handlers from protocol

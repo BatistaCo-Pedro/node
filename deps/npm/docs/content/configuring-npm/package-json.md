@@ -93,10 +93,8 @@ It should look like this:
 
 ```json
 {
-  "bugs": {
-    "url": "https://github.com/owner/project/issues",
-    "email": "project@hostname.com"
-  }
+  "url" : "https://github.com/owner/project/issues",
+  "email" : "project@hostname.com"
 }
 ```
 
@@ -287,43 +285,28 @@ Certain files are always included, regardless of settings:
 * `README`
 * `LICENSE` / `LICENCE`
 * The file in the "main" field
-* The file(s) in the "bin" field
 
 `README` & `LICENSE` can have any case and extension.
 
-Some files are always ignored by default:
+Conversely, some files are always ignored:
 
-* `*.orig`
+* `.git`
+* `CVS`
+* `.svn`
+* `.hg`
+* `.lock-wscript`
+* `.wafpickle-N`
 * `.*.swp`
 * `.DS_Store`
 * `._*`
-* `.git`
-* `.hg`
-* `.lock-wscript`
-* `.npmrc`
-* `.svn`
-* `.wafpickle-N`
-* `CVS`
-* `config.gypi`
-* `node_modules`
 * `npm-debug.log`
-* `package-lock.json` (use
-  [`npm-shrinkwrap.json`](/configuring-npm/npm-shrinkwrap-json)
-  if you wish it to be published)
-* `pnpm-lock.yaml`
-* `yarn.lock`
-
-Most of these ignored files can be included specifically if included in
-the `files` globs.  Exceptions to this are:
-
-* `.git`
 * `.npmrc`
 * `node_modules`
-* `package-lock.json`
-* `pnpm-lock.yaml`
-* `yarn.lock`
-
-These can not be included.
+* `config.gypi`
+* `*.orig`
+* `package-lock.json` (use
+  [`npm-shrinkwrap.json`](/configuring-npm/npm-shrinkwrap-json) if you wish
+  it to be published)
 
 ### main
 
@@ -726,7 +709,7 @@ in which case they will be normalized to a relative path and added to your
 
 This feature is helpful for local offline development and creating tests
 that require npm installing where you don't want to hit an external server,
-but should not be used when publishing your package to the public registry.
+but should not be used when publishing packages to the public registry.
 
 *note*: Packages linked by local path will not have their own
 dependencies installed when `npm install` is ran in this case.  You must

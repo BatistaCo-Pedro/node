@@ -25,21 +25,15 @@ class SerializerDeserializer : public RootVisitor {
                                            RootVisitor* visitor);
 
  protected:
-  enum class SlotType {
-    kAnySlot,
-    kMapSlot,
-  };
-  static bool CanBeDeferred(Tagged<HeapObject> o, SlotType slot_type);
+  static bool CanBeDeferred(HeapObject o);
 
   void RestoreExternalReferenceRedirector(Isolate* isolate,
-                                          Tagged<AccessorInfo> accessor_info);
-  void RestoreExternalReferenceRedirector(
-      Isolate* isolate, Tagged<CallHandlerInfo> call_handler_info);
+                                          AccessorInfo accessor_info);
+  void RestoreExternalReferenceRedirector(Isolate* isolate,
+                                          CallHandlerInfo call_handler_info);
 
-  // clang-format off
+// clang-format off
 #define UNUSED_SERIALIZER_BYTE_CODES(V)                           \
-  /* Free range 0x10..0x1f */                                     \
-  V(0x1c) V(0x1d) V(0x1e) V(0x1f)                                 \
   /* Free range 0x20..0x2f */                                     \
   V(0x20) V(0x21) V(0x22) V(0x23) V(0x24) V(0x25) V(0x26) V(0x27) \
   V(0x28) V(0x29) V(0x2a) V(0x2b) V(0x2c) V(0x2d) V(0x2e) V(0x2f) \
@@ -71,7 +65,7 @@ class SerializerDeserializer : public RootVisitor {
   // The static assert below will trigger when the number of preallocated spaces
   // changed. If that happens, update the kNewObject and kBackref bytecode
   // ranges in the comments below.
-  static_assert(4 == kNumberOfSnapshotSpaces);
+  static_assert(3 == kNumberOfSnapshotSpaces);
 
   // First 32 root array items.
   static const int kRootArrayConstantsCount = 0x20;
@@ -84,7 +78,7 @@ class SerializerDeserializer : public RootVisitor {
   // 8 hot (recently seen or back-referenced) objects with optional skip.
   static const int kHotObjectCount = 8;
 
-  enum Bytecode : uint8_t {
+  enum Bytecode : byte {
     //
     // ---------- byte code range 0x00..0x1f ----------
     //
@@ -92,7 +86,7 @@ class SerializerDeserializer : public RootVisitor {
     // 0x00..0x03  Allocate new object, in specified space.
     kNewObject = 0x00,
     // Reference to previously allocated object.
-    kBackref = 0x04,
+    kBackref = 0x03,
     // Reference to an object in the read only heap.
     kReadOnlyHeapRef,
     // Object in the startup object cache.
@@ -101,6 +95,8 @@ class SerializerDeserializer : public RootVisitor {
     kRootArray,
     // Object provided in the attached list.
     kAttachedReference,
+    // Object in the read-only object cache.
+    kReadOnlyObjectCache,
     // Object in the shared heap object cache.
     kSharedHeapObjectCache,
     // Do nothing, used for padding.
@@ -124,6 +120,11 @@ class SerializerDeserializer : public RootVisitor {
     kApiReference,
     // External reference referenced by id.
     kExternalReference,
+    // External reference encoded as raw pointer. Can only be used when the
+    // snapshot will be deserialized again in the same Isolate, and so is only
+    // useful for testing. This is currently unused as unsandboxed raw external
+    // references are encoded as FixedRawData instead.
+    kRawExternalReference,
     // Same as three bytecodes above but for serializing sandboxed external
     // pointer values.
     // TODO(v8:10391): Remove them once all ExternalPointer usages are
@@ -131,9 +132,13 @@ class SerializerDeserializer : public RootVisitor {
     kSandboxedApiReference,
     kSandboxedExternalReference,
     kSandboxedRawExternalReference,
+    // Internal reference of a code objects in code stream.
+    kInternalReference,
     // In-place weak references.
     kClearedWeakReference,
     kWeakPrefix,
+    // Encodes an off-heap instruction stream target.
+    kOffHeapTarget,
     // Registers the current slot as a "pending" forward reference, to be later
     // filled by a corresponding resolution bytecode.
     kRegisterPendingForwardRef,
@@ -147,10 +152,10 @@ class SerializerDeserializer : public RootVisitor {
     // register as the pending field. We could either hack around this, or
     // simply introduce this new bytecode.
     kNewMetaMap,
-    // When the sandbox is enabled, a prefix indicating that the following
-    // object is referenced through an indirect pointer, i.e. through an entry
-    // in a pointer table.
-    kIndirectPointerPrefix,
+    // Special construction bytecode for InstructionStream object bodies, which
+    // have a more
+    // complex deserialization ordering and RelocInfo processing.
+    kCodeBody,
 
     //
     // ---------- byte code range 0x40..0x7f ----------
@@ -191,13 +196,12 @@ class SerializerDeserializer : public RootVisitor {
       return base::IsInRange(static_cast<int>(value), kMinValue, kMaxValue);
     }
 
-    static constexpr uint8_t Encode(TValue value) {
+    static constexpr byte Encode(TValue value) {
       DCHECK(IsEncodable(value));
-      return static_cast<uint8_t>(kBytecode + static_cast<int>(value) -
-                                  kMinValue);
+      return static_cast<byte>(kBytecode + static_cast<int>(value) - kMinValue);
     }
 
-    static constexpr TValue Decode(uint8_t bytecode) {
+    static constexpr TValue Decode(byte bytecode) {
       DCHECK(base::IsInRange(bytecode, Encode(static_cast<TValue>(kMinValue)),
                              Encode(static_cast<TValue>(kMaxValue))));
       return static_cast<TValue>(bytecode - kBytecode + kMinValue);

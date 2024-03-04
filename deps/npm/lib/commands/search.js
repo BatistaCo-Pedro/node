@@ -68,10 +68,6 @@ class Search extends BaseCommand {
     let anyOutput = false
 
     class FilterStream extends Minipass {
-      constructor () {
-        super({ objectMode: true })
-      }
-
       write (pkg) {
         if (filter(pkg, opts.include, opts.exclude)) {
           super.write(pkg)
@@ -81,8 +77,9 @@ class Search extends BaseCommand {
 
     const filterStream = new FilterStream()
 
-    // Grab a configured output stream that will spit out packages in the desired format.
-    const outputStream = await formatSearchStream({
+    // Grab a configured output stream that will spit out packages in the
+    // desired format.
+    const outputStream = formatSearchStream({
       args, // --searchinclude options are not highlighted
       ...opts,
     })

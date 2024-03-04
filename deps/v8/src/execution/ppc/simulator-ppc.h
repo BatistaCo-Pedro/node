@@ -200,12 +200,8 @@ class Simulator : public SimulatorBase {
   // Accessor to the internal Link Register
   intptr_t get_lr() const;
 
-  // Accessor to the internal simulator stack area. Adds a safety
-  // margin to prevent overflows.
+  // Accessor to the internal simulator stack area.
   uintptr_t StackLimit(uintptr_t c_limit) const;
-  // Return current stack view, without additional safety margins.
-  // Users, for example wasm::StackMemory, can add their own.
-  base::Vector<uint8_t> GetCurrentStackView() const;
 
   // Executes PPC instructions until the PC reaches end_sim_pc.
   void Execute();
@@ -355,7 +351,7 @@ class Simulator : public SimulatorBase {
 
   void Trace(Instruction* instr);
   void SetCR0(intptr_t result, bool setSO = false);
-  void SetCR6(bool true_for_all);
+  void SetCR6(bool true_for_all, bool false_for_all);
   void ExecuteBranchConditional(Instruction* instr, BCType type);
   void ExecuteGeneric(Instruction* instr);
 
@@ -471,20 +467,8 @@ class Simulator : public SimulatorBase {
   }
 
   // Simulator support.
-  uint8_t* stack_;
-  static const size_t kStackProtectionSize = 256 * kSystemPointerSize;
-  // This includes a protection margin at each end of the stack area.
-  static size_t AllocatedStackSize() {
-#if V8_TARGET_ARCH_PPC64
-    size_t stack_size = v8_flags.sim_stack_size * KB;
-#else
-    size_t stack_size = MB;  // allocate 1MB for stack
-#endif
-    return stack_size + (2 * kStackProtectionSize);
-  }
-  static size_t UsableStackSize() {
-    return AllocatedStackSize() - kStackProtectionSize;
-  }
+  char* stack_;
+  static const size_t stack_protection_size_ = 256 * kSystemPointerSize;
   bool pc_modified_;
   int icount_;
 

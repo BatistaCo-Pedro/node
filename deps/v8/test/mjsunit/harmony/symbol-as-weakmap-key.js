@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// Flags: --expose-gc --allow-natives-syntax --noincremental-marking
+// Flags: --harmony-symbol-as-weakmap-key --expose-gc --allow-natives-syntax --noincremental-marking
 
 (function TestWeakMapWithNonRegisteredSymbolKey() {
   const key = Symbol('123');
@@ -35,17 +35,10 @@
     assertTrue(map.has(innerKey));
     assertSame(innerValue, map.get(innerKey));
   })();
-
-  // We need to invoke GC asynchronously and wait for it to finish, so that
-  // it doesn't need to scan the stack. Otherwise, some objects may not be
-  // reclaimed because of conservative stack scanning and the test may not
-  // work as intended.
-  (async function () {
-    await gc({ type: 'major', execution: 'async' });
-    assertTrue(map.has(outerKey));
-    assertSame(outerValue, map.get(outerKey));
-    assertEquals(1, %GetWeakCollectionSize(map));
-  })();
+  gc();
+  assertTrue(map.has(outerKey));
+  assertSame(outerValue, map.get(outerKey));
+  assertEquals(1, %GetWeakCollectionSize(map));
 })();
 
 (function TestWeakMapWithRegisteredSymbolKey() {
@@ -88,15 +81,8 @@
     assertTrue(set.has(innerKey));
   })();
   assertTrue(set.has(outerKey));
-  // We need to invoke GC asynchronously and wait for it to finish, so that
-  // it doesn't need to scan the stack. Otherwise, some objects may not be
-  // reclaimed because of conservative stack scanning and the test may not
-  // work as intended.
-  (async function () {
-    await gc({ type: 'major', execution: 'async' });
-    assertTrue(set.has(outerKey));
-    assertEquals(1, %GetWeakCollectionSize(set));
-  })();
+  gc();
+  assertEquals(1, %GetWeakCollectionSize(set));
 })();
 
 (function TestWeakSetWithRegisteredSymbolKey() {

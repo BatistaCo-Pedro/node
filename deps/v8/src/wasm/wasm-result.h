@@ -21,6 +21,10 @@
 namespace v8 {
 namespace internal {
 
+class Isolate;
+template <typename T>
+class Handle;
+
 namespace wasm {
 
 class V8_EXPORT_PRIVATE WasmError {

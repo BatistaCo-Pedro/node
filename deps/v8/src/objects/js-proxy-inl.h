@@ -20,7 +20,7 @@ namespace internal {
 
 TQ_OBJECT_CONSTRUCTORS_IMPL(JSProxy)
 
-bool JSProxy::IsRevoked() const { return !IsJSReceiver(handler()); }
+bool JSProxy::IsRevoked() const { return !handler().IsJSReceiver(); }
 
 }  // namespace internal
 }  // namespace v8

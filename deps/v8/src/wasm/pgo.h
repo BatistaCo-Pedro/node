@@ -45,7 +45,7 @@ void DumpProfileToFile(const WasmModule* module,
                        uint32_t* tiering_budget_array);
 
 V8_WARN_UNUSED_RESULT std::unique_ptr<ProfileInformation> LoadProfileFromFile(
-    const WasmModule* module, base::Vector<const uint8_t> wire_bytes);
+    WasmModule* module, base::Vector<const uint8_t> wire_bytes);
 
 }  // namespace v8::internal::wasm
 

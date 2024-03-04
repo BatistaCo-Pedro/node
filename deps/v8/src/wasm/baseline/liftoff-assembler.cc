@@ -10,6 +10,7 @@
 #include "src/base/platform/memory.h"
 #include "src/codegen/assembler-inl.h"
 #include "src/codegen/macro-assembler-inl.h"
+#include "src/compiler/linkage.h"
 #include "src/compiler/wasm-compiler.h"
 #include "src/utils/ostreams.h"
 #include "src/wasm/baseline/liftoff-register.h"
@@ -93,6 +94,7 @@ class StackTransferRecipe {
     // can eliminate a second {Execute} in the destructor.
     bool all_done = move_dst_regs_.is_empty() && load_dst_regs_.is_empty();
     V8_ASSUME(all_done);
+    USE(all_done);
   }
 
   V8_INLINE void Transfer(const VarState& dst, const VarState& src) {
@@ -125,7 +127,8 @@ class StackTransferRecipe {
     }
   }
 
-  V8_INLINE void LoadIntoRegister(LiftoffRegister dst, const VarState& src) {
+  V8_INLINE void LoadIntoRegister(LiftoffRegister dst,
+                                  const LiftoffAssembler::VarState& src) {
     if (src.is_reg()) {
       DCHECK_EQ(dst.reg_class(), src.reg_class());
       if (dst != src.reg()) MoveRegister(dst, src.reg(), src.kind());
@@ -137,7 +140,8 @@ class StackTransferRecipe {
     }
   }
 
-  void LoadI64HalfIntoRegister(LiftoffRegister dst, const VarState& src,
+  void LoadI64HalfIntoRegister(LiftoffRegister dst,
+                               const LiftoffAssembler::VarState& src,
                                RegPairHalf half) {
     // Use CHECK such that the remaining code is statically dead if
     // {kNeedI64RegPair} is false.
@@ -182,19 +186,11 @@ class StackTransferRecipe {
     }
     if (move_dst_regs_.has(dst)) {
       DCHECK_EQ(register_move(dst)->src, src);
-      // Check for compatible value kinds.
-      // - references can occur with mixed kRef / kRefNull kinds.
-      // - FP registers can only occur with mixed f32 / f64 kinds (if they hold
-      //   the initial zero value).
-      // - others must match exactly.
-      DCHECK_EQ(is_object_reference(register_move(dst)->kind),
-                is_object_reference(kind));
-      DCHECK_EQ(dst.is_fp(), register_move(dst)->kind == kF32 ||
-                                 register_move(dst)->kind == kF64);
-      if (!is_object_reference(kind) && !dst.is_fp()) {
-        DCHECK_EQ(register_move(dst)->kind, kind);
-      }
-      // Potentially upgrade an existing `kF32` move to a `kF64` move.
+      // Non-fp registers can only occur with the exact same type.
+      DCHECK_IMPLIES(!dst.is_fp(), register_move(dst)->kind == kind);
+      // It can happen that one fp register holds both the f32 zero and the f64
+      // zero, as the initial value for local variables. Move the value as f64
+      // in that case.
       if (kind == kF64) register_move(dst)->kind = kF64;
       return;
     }
@@ -218,8 +214,8 @@ class StackTransferRecipe {
     }
   }
 
-  void LoadStackSlot(LiftoffRegister dst, int stack_offset, ValueKind kind) {
-    V8_ASSUME(stack_offset > 0);
+  void LoadStackSlot(LiftoffRegister dst, uint32_t stack_offset,
+                     ValueKind kind) {
     if (load_dst_regs_.has(dst)) {
       // It can happen that we spilled the same register to different stack
       // slots, and then we reload them later into the same dst register.
@@ -227,11 +223,6 @@ class StackTransferRecipe {
       return;
     }
     load_dst_regs_.set(dst);
-    // Make sure that we only spill to positions after this stack offset to
-    // avoid overwriting the content.
-    if (stack_offset > last_spill_offset_) {
-      last_spill_offset_ = stack_offset;
-    }
     if (dst.is_gp_pair()) {
       DCHECK_EQ(kI64, kind);
       *register_load(dst.low()) =
@@ -375,7 +366,7 @@ class StackTransferRecipe {
 class RegisterReuseMap {
  public:
   void Add(LiftoffRegister src, LiftoffRegister dst) {
-    if ([[maybe_unused]] auto previous = Lookup(src)) {
+    if (auto previous = Lookup(src)) {
       DCHECK_EQ(previous, dst);
       return;
     }
@@ -419,7 +410,7 @@ enum ReuseRegisters : bool {
 // to set up the region such that later merges (via {MergeStackWith} /
 // {MergeFullStackWith} can successfully transfer their values to this new
 // state.
-void InitMergeRegion(LiftoffAssembler::CacheState* target_state,
+void InitMergeRegion(LiftoffAssembler::CacheState* state,
                      const VarState* source, VarState* target, uint32_t count,
                      MergeKeepStackSlots keep_stack_slots,
                      MergeAllowConstants allow_constants,
@@ -454,7 +445,7 @@ void InitMergeRegion(LiftoffAssembler::CacheState* target_state,
     bool needs_reg_transfer = true;
     if (allow_registers) {
       // First try: Keep the same register, if it's free.
-      if (source->is_reg() && target_state->is_free(source->reg())) {
+      if (source->is_reg() && state->is_free(source->reg())) {
         reg = source->reg();
         needs_reg_transfer = false;
       }
@@ -465,8 +456,8 @@ void InitMergeRegion(LiftoffAssembler::CacheState* target_state,
       }
       // Third try: Use any free register.
       RegClass rc = reg_class_for(source->kind());
-      if (!reg && target_state->has_unused_register(rc, used_regs)) {
-        reg = target_state->unused_register(rc, used_regs);
+      if (!reg && state->has_unused_register(rc, used_regs)) {
+        reg = state->unused_register(rc, used_regs);
       }
     }
     // See above: Recompute the stack offset if requested.
@@ -479,7 +470,7 @@ void InitMergeRegion(LiftoffAssembler::CacheState* target_state,
     if (reg) {
       if (needs_reg_transfer) transfers.LoadIntoRegister(*reg, *source);
       if (reuse_registers) register_reuse_map.Add(source->reg(), *reg);
-      target_state->inc_used(*reg);
+      state->inc_used(*reg);
       *target = VarState(source->kind(), *reg, target_offset);
     } else {
       // No free register; make this a stack slot.
@@ -514,11 +505,8 @@ LiftoffAssembler::CacheState LiftoffAssembler::MergeIntoNewState(
     target.SetInstanceCacheRegister(cache_state_.cached_instance);
   }
 
-  DCHECK_EQ(cache_state_.cached_mem_start == no_reg,
-            cache_state_.cached_mem_index == CacheState::kNoCachedMemIndex);
   if (cache_state_.cached_mem_start != no_reg) {
-    target.SetMemStartCacheRegister(cache_state_.cached_mem_start,
-                                    cache_state_.cached_mem_index);
+    target.SetMemStartCacheRegister(cache_state_.cached_mem_start);
   }
 
   uint32_t target_height = num_locals + stack_depth + arity;
@@ -879,8 +867,7 @@ void LiftoffAssembler::MergeFullStackWith(CacheState& target) {
   if (cache_state_.cached_instance != target.cached_instance) {
     target.ClearCachedInstanceRegister();
   }
-  if (cache_state_.cached_mem_index != target.cached_mem_index ||
-      cache_state_.cached_mem_start != target.cached_mem_start) {
+  if (cache_state_.cached_mem_start != target.cached_mem_start) {
     target.ClearCachedMemStartRegister();
   }
 }
@@ -923,46 +910,29 @@ void LiftoffAssembler::MergeStackWith(CacheState& target, uint32_t arity,
   // {StackTransferRecipe}. Remember whether the register content has to be
   // reloaded after executing the stack transfers.
   bool reload_instance = false;
-  // If the instance cache registers match, or the destination has no instance
-  // cache register, nothing needs to be done.
-  if (cache_state_.cached_instance != target.cached_instance &&
-      target.cached_instance != no_reg) {
-    // On forward jumps, just reset the cached register in the target state.
-    if (jump_direction == kForwardJump) {
-      target.ClearCachedInstanceRegister();
-    } else if (cache_state_.cached_instance != no_reg) {
-      // If the source has the instance cached but in the wrong register,
-      // execute a register move as part of the stack transfer.
-      transfers.MoveRegister(LiftoffRegister{target.cached_instance},
-                             LiftoffRegister{cache_state_.cached_instance},
-                             kIntPtrKind);
-    } else {
-      // Otherwise (the source state has no cached instance), we reload later.
-      reload_instance = true;
-    }
-  }
-
   bool reload_mem_start = false;
-  // If the cached memory start registers match, or the destination has no cache
-  // register, nothing needs to be done.
-  DCHECK_EQ(target.cached_mem_start == no_reg,
-            target.cached_mem_index == CacheState::kNoCachedMemIndex);
-  if ((cache_state_.cached_mem_start != target.cached_mem_start ||
-       cache_state_.cached_mem_index != target.cached_mem_index) &&
-      target.cached_mem_start != no_reg) {
+  for (auto tuple :
+       {std::make_tuple(&reload_instance, cache_state_.cached_instance,
+                        &target.cached_instance),
+        std::make_tuple(&reload_mem_start, cache_state_.cached_mem_start,
+                        &target.cached_mem_start)}) {
+    bool* reload = std::get<0>(tuple);
+    Register src_reg = std::get<1>(tuple);
+    Register* dst_reg = std::get<2>(tuple);
+    // If the registers match, or the destination has no cache register, nothing
+    // needs to be done.
+    if (src_reg == *dst_reg || *dst_reg == no_reg) continue;
     // On forward jumps, just reset the cached register in the target state.
     if (jump_direction == kForwardJump) {
-      target.ClearCachedMemStartRegister();
-    } else if (cache_state_.cached_mem_index == target.cached_mem_index) {
-      DCHECK_NE(no_reg, cache_state_.cached_mem_start);
+      target.ClearCacheRegister(dst_reg);
+    } else if (src_reg != no_reg) {
       // If the source has the content but in the wrong register, execute a
       // register move as part of the stack transfer.
-      transfers.MoveRegister(LiftoffRegister{target.cached_mem_start},
-                             LiftoffRegister{cache_state_.cached_mem_start},
-                             kIntPtrKind);
+      transfers.MoveRegister(LiftoffRegister{*dst_reg},
+                             LiftoffRegister{src_reg}, kIntPtrKind);
     } else {
       // Otherwise (the source state has no cached content), we reload later.
-      reload_mem_start = true;
+      *reload = true;
     }
   }
 
@@ -978,25 +948,14 @@ void LiftoffAssembler::MergeStackWith(CacheState& target, uint32_t arity,
     Register instance = target.cached_instance;
     if (instance == no_reg) {
       // We don't have the instance available yet. Store it into the target
-      // mem_start, so that we can load the mem0_start from there.
+      // mem_start, so that we can load the mem_start from there.
       instance = target.cached_mem_start;
       LoadInstanceFromFrame(instance);
     }
-    if (target.cached_mem_index == 0) {
-      LoadFromInstance(
-          target.cached_mem_start, instance,
-          ObjectAccess::ToTagged(WasmInstanceObject::kMemory0StartOffset),
-          sizeof(size_t));
-    } else {
-      LoadTaggedPointerFromInstance(
-          target.cached_mem_start, instance,
-          ObjectAccess::ToTagged(
-              WasmInstanceObject::kMemoryBasesAndSizesOffset));
-      int buffer_offset = wasm::ObjectAccess::ToTagged(ByteArray::kHeaderSize) +
-                          kSystemPointerSize * target.cached_mem_index * 2;
-      LoadFullPointer(target.cached_mem_start, target.cached_mem_start,
-                      buffer_offset);
-    }
+    LoadFromInstance(
+        target.cached_mem_start, instance,
+        ObjectAccess::ToTagged(WasmInstanceObject::kMemoryStartOffset),
+        sizeof(size_t));
 #ifdef V8_ENABLE_SANDBOX
     DecodeSandboxedPointer(target.cached_mem_start);
 #endif
@@ -1095,7 +1054,7 @@ void PrepareStackTransfers(const ValueKindSig* sig,
       const RegPairHalf half =
           is_gp_pair && lowered_idx == 0 ? kHighWord : kLowWord;
       --call_desc_input_idx;
-      LinkageLocation loc =
+      compiler::LinkageLocation loc =
           call_descriptor->GetInputLocation(call_desc_input_idx);
       if (loc.IsRegister()) {
         DCHECK(!loc.IsAnyRegister());
@@ -1237,7 +1196,7 @@ void LiftoffAssembler::FinishCall(const ValueKindSig* sig,
                                    kGpCacheRegList.GetFirstRegSet()};
     LiftoffRegList pinned;
     for (int pair_idx = 0; pair_idx < num_lowered_params; ++pair_idx) {
-      LinkageLocation loc =
+      compiler::LinkageLocation loc =
           call_descriptor->GetReturnLocation(call_desc_return_idx++);
       if (loc.IsRegister()) {
         DCHECK(!loc.IsAnyRegister());
@@ -1352,7 +1311,7 @@ void LiftoffAssembler::MoveToReturnLocationsMultiReturn(
     bool needs_gp_pair = needs_gp_reg_pair(return_kind);
     int num_lowered_params = 1 + needs_gp_pair;
     for (int pair_idx = 0; pair_idx < num_lowered_params; ++pair_idx) {
-      LinkageLocation loc =
+      compiler::LinkageLocation loc =
           descriptor->GetReturnLocation(call_desc_return_idx++);
       if (loc.IsCallerFrameSlot()) {
         RegPairHalf half = pair_idx == 0 ? kLowWord : kHighWord;
@@ -1373,7 +1332,7 @@ void LiftoffAssembler::MoveToReturnLocationsMultiReturn(
     int num_lowered_params = 1 + needs_gp_pair;
     for (int pair_idx = 0; pair_idx < num_lowered_params; ++pair_idx) {
       RegPairHalf half = pair_idx == 0 ? kLowWord : kHighWord;
-      LinkageLocation loc =
+      compiler::LinkageLocation loc =
           descriptor->GetReturnLocation(call_desc_return_idx++);
       if (loc.IsRegister()) {
         DCHECK(!loc.IsAnyRegister());

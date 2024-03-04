@@ -7,7 +7,6 @@
 #include "src/objects/objects-inl.h"
 #include "src/parsing/scanner-character-streams.h"
 #include "src/parsing/scanner.h"
-#include "test/unittests/heap/heap-utils.h"
 #include "test/unittests/test-utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -516,7 +515,7 @@ void TestCharacterStreams(const char* one_byte_source, unsigned length,
     TestCharacterStream(one_byte_source, uc16_stream.get(), length, start, end);
 
     // This avoids the GC from trying to free a stack allocated resource.
-    if (IsExternalString(*uc16_string))
+    if (uc16_string->IsExternalString())
       i::Handle<i::ExternalTwoByteString>::cast(uc16_string)
           ->SetResource(isolate, nullptr);
   }
@@ -536,7 +535,7 @@ void TestCharacterStreams(const char* one_byte_source, unsigned length,
     TestCharacterStream(one_byte_source, one_byte_stream.get(), length, start,
                         end);
     // This avoids the GC from trying to free a stack allocated resource.
-    if (IsExternalString(*ext_one_byte_string))
+    if (ext_one_byte_string->IsExternalString())
       i::Handle<i::ExternalOneByteString>::cast(ext_one_byte_string)
           ->SetResource(isolate, nullptr);
   }
@@ -760,7 +759,7 @@ TEST_F(ScannerStreamsTest, TestOverlongAndInvalidSequences) {
 }
 
 TEST_F(ScannerStreamsTest, RelocatingCharacterStream) {
-  // This test relies on the invariant that GC will move objects.
+  // This test relies on the invariant that the scavenger will move objects
   if (i::v8_flags.single_generation) return;
   i::v8_flags.manual_evacuation_candidates_selection = true;
   v8::internal::ManualGCScope manual_gc_scope(i_isolate());
@@ -784,16 +783,13 @@ TEST_F(ScannerStreamsTest, RelocatingCharacterStream) {
   CHECK_EQ('a', two_byte_string_stream->Advance());
   CHECK_EQ('b', two_byte_string_stream->Advance());
   CHECK_EQ(size_t{2}, two_byte_string_stream->pos());
-  i::Tagged<i::String> raw = *two_byte_string;
-  // We need to invoke GC without stack, otherwise no compaction is performed.
-  i::DisableConservativeStackScanningScopeForTesting no_stack_scanning(
-      i_isolate()->heap());
+  i::String raw = *two_byte_string;
   // 1st GC moves `two_byte_string` to old space and 2nd GC evacuates it within
   // old space.
-  InvokeMajorGC();
+  CollectGarbage(i::OLD_SPACE);
   i::Page::FromHeapObject(*two_byte_string)
       ->SetFlag(i::MemoryChunk::FORCE_EVACUATION_CANDIDATE_FOR_TESTING);
-  InvokeMajorGC();
+  CollectGarbage(i::OLD_SPACE);
   // GC moved the string.
   CHECK_NE(raw, *two_byte_string);
   CHECK_EQ('c', two_byte_string_stream->Advance());
@@ -801,7 +797,7 @@ TEST_F(ScannerStreamsTest, RelocatingCharacterStream) {
 }
 
 TEST_F(ScannerStreamsTest, RelocatingUnbufferedCharacterStream) {
-  // This test relies on the invariant that GC will move objects.
+  // This test relies on the invariant that the scavenger will move objects
   if (i::v8_flags.single_generation) return;
   i::v8_flags.manual_evacuation_candidates_selection = true;
   v8::internal::ManualGCScope manual_gc_scope(i_isolate());
@@ -828,16 +824,13 @@ TEST_F(ScannerStreamsTest, RelocatingUnbufferedCharacterStream) {
   CHECK_EQ('c', two_byte_string_stream->Advance());
   CHECK_EQ(size_t{3}, two_byte_string_stream->pos());
 
-  i::Tagged<i::String> raw = *two_byte_string;
-  // We need to invoke GC without stack, otherwise no compaction is performed.
-  i::DisableConservativeStackScanningScopeForTesting no_stack_scanning(
-      i_isolate()->heap());
+  i::String raw = *two_byte_string;
   // 1st GC moves `two_byte_string` to old space and 2nd GC evacuates it within
   // old space.
-  InvokeMajorGC();
+  CollectGarbage(i::OLD_SPACE);
   i::Page::FromHeapObject(*two_byte_string)
       ->SetFlag(i::MemoryChunk::FORCE_EVACUATION_CANDIDATE_FOR_TESTING);
-  InvokeMajorGC();
+  CollectGarbage(i::OLD_SPACE);
   // GC moved the string and buffer was updated to the correct location.
   CHECK_NE(raw, *two_byte_string);
 
@@ -883,7 +876,7 @@ TEST_F(ScannerStreamsTest, CloneCharacterStreams) {
     TestCloneCharacterStream(one_byte_source, uc16_stream.get(), length);
 
     // This avoids the GC from trying to free a stack allocated resource.
-    if (IsExternalString(*uc16_string))
+    if (uc16_string->IsExternalString())
       i::Handle<i::ExternalTwoByteString>::cast(uc16_string)
           ->SetResource(i_isolate(), nullptr);
   }
@@ -902,7 +895,7 @@ TEST_F(ScannerStreamsTest, CloneCharacterStreams) {
         i::ScannerStream::For(i_isolate(), ext_one_byte_string, 0, length));
     TestCloneCharacterStream(one_byte_source, one_byte_stream.get(), length);
     // This avoids the GC from trying to free a stack allocated resource.
-    if (IsExternalString(*ext_one_byte_string))
+    if (ext_one_byte_string->IsExternalString())
       i::Handle<i::ExternalOneByteString>::cast(ext_one_byte_string)
           ->SetResource(i_isolate(), nullptr);
   }

@@ -17,14 +17,3 @@ assertEquals(0, (new Intl.Collator('en')).compare("","\u0001\u0002\u00AD\u0604")
 // Default Thai collation ignores punctuation.
 assertEquals(0, (new Intl.Collator('th')).compare(""," "));
 assertEquals(0, (new Intl.Collator('th')).compare("","*"));
-assertEquals(0, (new Intl.Collator('th', {ignorePunctuation: true})).compare(""," "));
-assertEquals(0, (new Intl.Collator('th', {ignorePunctuation: true})).compare("","*"));
-assertEquals(-1, (new Intl.Collator('th', {ignorePunctuation: false})).compare(""," "));
-assertEquals(-1, (new Intl.Collator('th', {ignorePunctuation: false})).compare("","*"));
-
-assertEquals(-1, (new Intl.Collator('en')).compare(""," "));
-assertEquals(-1, (new Intl.Collator('en')).compare("","*"));
-assertEquals(0, (new Intl.Collator('en', {ignorePunctuation: true})).compare(""," "));
-assertEquals(0, (new Intl.Collator('en', {ignorePunctuation: true})).compare("","*"));
-assertEquals(-1, (new Intl.Collator('en', {ignorePunctuation: false})).compare(""," "));
-assertEquals(-1, (new Intl.Collator('en', {ignorePunctuation: false})).compare("","*"));

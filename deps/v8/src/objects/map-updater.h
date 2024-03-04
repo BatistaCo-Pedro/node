@@ -69,9 +69,9 @@ class V8_EXPORT_PRIVATE MapUpdater {
 
   // As above but does not mutate maps; instead, we attempt to replay existing
   // transitions to find an updated map. No lock is taken.
-  static base::Optional<Tagged<Map>> TryUpdateNoLock(
-      Isolate* isolate, Tagged<Map> old_map,
-      ConcurrencyMode cmode) V8_WARN_UNUSED_RESULT;
+  static base::Optional<Map> TryUpdateNoLock(Isolate* isolate, Map old_map,
+                                             ConcurrencyMode cmode)
+      V8_WARN_UNUSED_RESULT;
 
   static Handle<Map> ReconfigureExistingProperty(Isolate* isolate,
                                                  Handle<Map> map,
@@ -88,8 +88,7 @@ class V8_EXPORT_PRIVATE MapUpdater {
 
   // Completes inobject slack tracking for the transition tree starting at the
   // initial map.
-  static void CompleteInobjectSlackTracking(Isolate* isolate,
-                                            Tagged<Map> initial_map);
+  static void CompleteInobjectSlackTracking(Isolate* isolate, Map initial_map);
 
  private:
   enum State {
@@ -161,7 +160,7 @@ class V8_EXPORT_PRIVATE MapUpdater {
   State Normalize(const char* reason);
 
   // Returns name of a |descriptor| property.
-  inline Tagged<Name> GetKey(InternalIndex descriptor) const;
+  inline Name GetKey(InternalIndex descriptor) const;
 
   // Returns property details of a |descriptor| in "updated" |old_descriptors_|
   // array.
@@ -169,11 +168,11 @@ class V8_EXPORT_PRIVATE MapUpdater {
 
   // Returns value of a |descriptor| with kDescriptor location in "updated"
   // |old_descriptors_| array.
-  inline Tagged<Object> GetValue(InternalIndex descriptor) const;
+  inline Object GetValue(InternalIndex descriptor) const;
 
   // Returns field type for a |descriptor| with kField location in "updated"
   // |old_descriptors_| array.
-  inline Tagged<FieldType> GetFieldType(InternalIndex descriptor) const;
+  inline FieldType GetFieldType(InternalIndex descriptor) const;
 
   // If a |descriptor| property in "updated" |old_descriptors_| has kField
   // location then returns its field type, otherwise computes the optimal field

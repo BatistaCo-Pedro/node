@@ -16,17 +16,16 @@
 namespace v8 {
 namespace internal {
 
-bool NativeContextInferrer::Infer(PtrComprCageBase cage_base, Tagged<Map> map,
-                                  Tagged<HeapObject> object,
+bool NativeContextInferrer::Infer(Isolate* isolate, Map map, HeapObject object,
                                   Address* native_context) {
-  switch (map->visitor_id()) {
+  switch (map.visitor_id()) {
     case kVisitContext:
-      return InferForContext(cage_base, Context::cast(object), native_context);
+      return InferForContext(isolate, Context::cast(object), native_context);
     case kVisitNativeContext:
       *native_context = object.ptr();
       return true;
     case kVisitJSFunction:
-      return InferForJSFunction(cage_base, JSFunction::cast(object),
+      return InferForJSFunction(isolate, JSFunction::cast(object),
                                 native_context);
     case kVisitJSApiObject:
     case kVisitJSArrayBuffer:
@@ -35,22 +34,21 @@ bool NativeContextInferrer::Infer(PtrComprCageBase cage_base, Tagged<Map> map,
     case kVisitJSObjectFast:
     case kVisitJSTypedArray:
     case kVisitJSWeakCollection:
-      return InferForJSObject(cage_base, map, JSObject::cast(object),
+      return InferForJSObject(isolate, map, JSObject::cast(object),
                               native_context);
     default:
       return false;
   }
 }
 
-V8_INLINE bool NativeContextStats::HasExternalBytes(Tagged<Map> map) {
-  InstanceType instance_type = map->instance_type();
+V8_INLINE bool NativeContextStats::HasExternalBytes(Map map) {
+  InstanceType instance_type = map.instance_type();
   return (instance_type == JS_ARRAY_BUFFER_TYPE ||
           InstanceTypeChecker::IsExternalString(instance_type));
 }
 
-V8_INLINE void NativeContextStats::IncrementSize(Address context,
-                                                 Tagged<Map> map,
-                                                 Tagged<HeapObject> object,
+V8_INLINE void NativeContextStats::IncrementSize(Address context, Map map,
+                                                 HeapObject object,
                                                  size_t size) {
   size_by_context_[context] += size;
   if (HasExternalBytes(map)) {

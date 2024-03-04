@@ -28,11 +28,11 @@ NEVER_READ_ONLY_SPACE_IMPL(AccessorPair)
 
 TQ_OBJECT_CONSTRUCTORS_IMPL(ClassPositions)
 
-Tagged<Object> AccessorPair::get(AccessorComponent component) {
+Object AccessorPair::get(AccessorComponent component) {
   return component == ACCESSOR_GETTER ? getter() : setter();
 }
 
-void AccessorPair::set(AccessorComponent component, Tagged<Object> value) {
+void AccessorPair::set(AccessorComponent component, Object value) {
   if (component == ACCESSOR_GETTER) {
     set_getter(value);
   } else {
@@ -40,7 +40,7 @@ void AccessorPair::set(AccessorComponent component, Tagged<Object> value) {
   }
 }
 
-void AccessorPair::set(AccessorComponent component, Tagged<Object> value,
+void AccessorPair::set(AccessorComponent component, Object value,
                        ReleaseStoreTag tag) {
   if (component == ACCESSOR_GETTER) {
     set_getter(value, tag);
@@ -49,16 +49,15 @@ void AccessorPair::set(AccessorComponent component, Tagged<Object> value,
   }
 }
 
-RELEASE_ACQUIRE_ACCESSORS(AccessorPair, getter, Tagged<Object>, kGetterOffset)
-RELEASE_ACQUIRE_ACCESSORS(AccessorPair, setter, Tagged<Object>, kSetterOffset)
+RELEASE_ACQUIRE_ACCESSORS(AccessorPair, getter, Object, kGetterOffset)
+RELEASE_ACQUIRE_ACCESSORS(AccessorPair, setter, Object, kSetterOffset)
 
-void AccessorPair::SetComponents(Tagged<Object> getter, Tagged<Object> setter) {
-  if (!IsNull(getter)) set_getter(getter);
-  if (!IsNull(setter)) set_setter(setter);
+void AccessorPair::SetComponents(Object getter, Object setter) {
+  if (!getter.IsNull()) set_getter(getter);
+  if (!setter.IsNull()) set_setter(setter);
 }
 
-bool AccessorPair::Equals(Tagged<Object> getter_value,
-                          Tagged<Object> setter_value) {
+bool AccessorPair::Equals(Object getter_value, Object setter_value) {
   return (getter() == getter_value) && (setter() == setter_value);
 }
 

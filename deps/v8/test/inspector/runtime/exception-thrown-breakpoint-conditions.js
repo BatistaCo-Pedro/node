@@ -25,7 +25,7 @@ async function testSyntaxError() {
   await Protocol.Debugger.removeBreakpoint({ breakpointId });
 }
 
-async function testRepeatedErrorsCauseOneEventEach() {
+async function testRepeatedErrorsOnlyCauseOneEvent() {
   const { result: { breakpointId } } = await Protocol.Debugger.setBreakpointByUrl({
     lineNumber: 3,
     url: 'test.js',
@@ -66,6 +66,6 @@ InspectorTest.runAsyncTestSuite([
     await Protocol.Debugger.onceScriptParsed();
   },
   testSyntaxError,
-  testRepeatedErrorsCauseOneEventEach,
+  testRepeatedErrorsOnlyCauseOneEvent,
   testSporadicThrowing,
 ]);

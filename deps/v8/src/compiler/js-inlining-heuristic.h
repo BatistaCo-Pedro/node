@@ -13,12 +13,7 @@ namespace compiler {
 
 class JSInliningHeuristic final : public AdvancedReducer {
  public:
-  enum Mode {
-    kJSOnly,            // Inline JS calls only.
-    kWasmWrappersOnly,  // Inline wasm wrappers only.
-    kWasmFullInlining,  // Inline wasm wrappers and (if supported) whole wasm
-                        // functions.
-  };
+  enum Mode { kJSOnly, kWasmOnly };
 
   JSInliningHeuristic(Editor* editor, Zone* local_zone,
                       OptimizedCompilationInfo* info, JSGraph* jsgraph,
@@ -28,7 +23,7 @@ class JSInliningHeuristic final : public AdvancedReducer {
                       const wasm::WasmModule* wasm_module = nullptr)
       : AdvancedReducer(editor),
         inliner_(editor, local_zone, info, jsgraph, broker, source_positions,
-                 node_origins, wasm_module, mode == kWasmFullInlining),
+                 node_origins, wasm_module),
         candidates_(local_zone),
         seen_(local_zone),
         source_positions_(source_positions),
@@ -39,8 +34,7 @@ class JSInliningHeuristic final : public AdvancedReducer {
             v8_flags.max_inlined_bytecode_size_cumulative),
         max_inlined_bytecode_size_absolute_(
             v8_flags.max_inlined_bytecode_size_absolute) {
-    DCHECK_EQ(mode == kWasmWrappersOnly || mode == kWasmFullInlining,
-              wasm_module != nullptr);
+    DCHECK_EQ(mode == kWasmOnly, wasm_module != nullptr);
   }
 
   const char* reducer_name() const override { return "JSInliningHeuristic"; }
@@ -92,11 +86,9 @@ class JSInliningHeuristic final : public AdvancedReducer {
   Reduction InlineCandidate(Candidate const& candidate, bool small_function);
   void CreateOrReuseDispatch(Node* node, Node* callee,
                              Candidate const& candidate, Node** if_successes,
-                             Node** calls, Node** inputs, int input_count,
-                             int* num_calls);
+                             Node** calls, Node** inputs, int input_count);
   bool TryReuseDispatch(Node* node, Node* callee, Node** if_successes,
-                        Node** calls, Node** inputs, int input_count,
-                        int* num_calls);
+                        Node** calls, Node** inputs, int input_count);
   enum StateCloneMode { kCloneState, kChangeInPlace };
   FrameState DuplicateFrameStateAndRename(FrameState frame_state, Node* from,
                                           Node* to, StateCloneMode mode);

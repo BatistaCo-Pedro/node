@@ -15,7 +15,6 @@ namespace internal {
 
 class Isolate;
 class Object;
-class ByteArray;
 
 // Utility class to build the builtins constants table and store it on the root
 // list. The constants table contains constants used by builtins, and is there

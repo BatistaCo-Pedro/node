@@ -54,23 +54,18 @@ inline BranchHint NegateBranchHint(BranchHint hint) {
   UNREACHABLE();
 }
 
-#if V8_ENABLE_WEBASSEMBLY
-enum class TrapId : int32_t {
-#define DEF_ENUM(Name, ...) \
-  k##Name = static_cast<uint32_t>(Builtin::kThrowWasm##Name),
+enum class TrapId : uint32_t {
+#define DEF_ENUM(Name, ...) k##Name,
   FOREACH_WASM_TRAPREASON(DEF_ENUM)
 #undef DEF_ENUM
+      kInvalid
 };
-
-static_assert(std::is_same_v<std::underlying_type_t<Builtin>,
-                             std::underlying_type_t<TrapId>>);
 
 inline size_t hash_value(TrapId id) { return static_cast<uint32_t>(id); }
 
 std::ostream& operator<<(std::ostream&, TrapId trap_id);
 
 TrapId TrapIdOf(const Operator* const op);
-#endif
 
 class BranchParameters final {
  public:
@@ -556,11 +551,8 @@ class V8_EXPORT_PRIVATE CommonOperatorBuilder final
                                FeedbackSource const& feedback);
   const Operator* DeoptimizeUnless(DeoptimizeReason reason,
                                    FeedbackSource const& feedback);
-
-#if V8_ENABLE_WEBASSEMBLY
-  const Operator* TrapIf(TrapId trap_id, bool has_frame_state);
-  const Operator* TrapUnless(TrapId trap_id, bool has_frame_state);
-#endif
+  const Operator* TrapIf(TrapId trap_id);
+  const Operator* TrapUnless(TrapId trap_id);
   const Operator* Return(int value_input_count = 1);
   const Operator* Terminate();
 
@@ -615,6 +607,7 @@ class V8_EXPORT_PRIVATE CommonOperatorBuilder final
   const Operator* Projection(size_t index);
   const Operator* Retain();
   const Operator* TypeGuard(Type type);
+  const Operator* FoldConstant();
   const Operator* EnterMachineGraph(UseInfo use_info);
   const Operator* ExitMachineGraph(MachineRepresentation output_representation,
                                    Type output_type);
@@ -693,8 +686,7 @@ class FrameState : public CommonNodeWrapperBase {
   Node* parameters() const {
     Node* n = node()->InputAt(kFrameStateParametersInput);
     DCHECK(n->opcode() == IrOpcode::kStateValues ||
-           n->opcode() == IrOpcode::kTypedStateValues ||
-           n->opcode() == IrOpcode::kDeadValue);
+           n->opcode() == IrOpcode::kTypedStateValues);
     return n;
   }
   Node* locals() const {

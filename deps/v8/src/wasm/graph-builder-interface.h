@@ -57,7 +57,7 @@ struct DanglingExceptions {
 };
 
 V8_EXPORT_PRIVATE void BuildTFGraph(
-    AccountingAllocator* allocator, WasmFeatures enabled,
+    AccountingAllocator* allocator, const WasmFeatures& enabled,
     const WasmModule* module, compiler::WasmGraphBuilder* builder,
     WasmFeatures* detected, const FunctionBody& body,
     std::vector<compiler::WasmLoopInfo>* loop_infos,

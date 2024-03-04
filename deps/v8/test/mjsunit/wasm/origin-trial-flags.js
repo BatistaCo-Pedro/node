@@ -13,7 +13,7 @@ function instantiateModuleWithGC() {
   builder.addFunction('main', makeSig([], [kWasmAnyRef]))
       .addBody([
         kExprI32Const, 42,
-        kGCPrefix, kExprRefI31,
+        kGCPrefix, kExprI31New,
       ])
       .exportFunc();
 

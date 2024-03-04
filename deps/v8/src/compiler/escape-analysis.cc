@@ -298,11 +298,10 @@ class EscapeAnalysisTracker : public ZoneObject {
 
  private:
   friend class EscapeAnalysisResult;
-  static constexpr int kTrackingBudget = 600;
+  static const size_t kMaxTrackedObjects = 100;
 
   VirtualObject* NewVirtualObject(int size) {
-    if (number_of_tracked_bytes_ + size >= kTrackingBudget) return nullptr;
-    number_of_tracked_bytes_ += size;
+    if (next_object_id_ >= kMaxTrackedObjects) return nullptr;
     return zone_->New<VirtualObject>(&variable_states_, next_object_id_++,
                                      size);
   }
@@ -312,7 +311,6 @@ class EscapeAnalysisTracker : public ZoneObject {
   ZoneUnorderedMap<Node*, bool> framestate_might_lazy_deopt_;
   VariableTracker variable_states_;
   VirtualObject::Id next_object_id_ = 0;
-  int number_of_tracked_bytes_ = 0;
   JSGraph* const jsgraph_;
   Zone* const zone_;
 };
@@ -570,13 +568,13 @@ Maybe<int> OffsetOfElementsAccess(const Operator* op, Node* index_node) {
 }
 
 Node* LowerCompareMapsWithoutLoad(Node* checked_map,
-                                  ZoneRefSet<Map> const& checked_against,
+                                  ZoneHandleSet<Map> const& checked_against,
                                   JSGraph* jsgraph) {
   Node* true_node = jsgraph->TrueConstant();
   Node* false_node = jsgraph->FalseConstant();
   Node* replacement = false_node;
-  for (MapRef map : checked_against) {
-    Node* map_node = jsgraph->HeapConstant(map.object());
+  for (Handle<Map> map : checked_against) {
+    Node* map_node = jsgraph->HeapConstant(map);
     // We cannot create a HeapConstant type here as we are off-thread.
     NodeProperties::SetType(map_node, Type::Internal());
     Node* comparison = jsgraph->graph()->NewNode(
@@ -781,7 +779,7 @@ void ReduceNode(const Operator* op, EscapeAnalysisTracker::Scope* current,
           Type const map_type = NodeProperties::GetType(map);
           if (map_type.IsHeapConstant() &&
               params.maps().contains(
-                  map_type.AsHeapConstant()->Ref().AsMap())) {
+                  map_type.AsHeapConstant()->Ref().AsMap().object())) {
             current->MarkForDeletion();
             break;
           }

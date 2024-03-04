@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// Flags: --allow-natives-syntax
+// Flags: --allow-natives-syntax --harmony-sharedarraybuffer --harmony-atomics-waitasync
 
 (function testOutOfBounds() {
   const sab = new SharedArrayBuffer(16);

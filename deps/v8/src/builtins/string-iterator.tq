@@ -4,9 +4,8 @@
 
 namespace string {
 
-macro NewJSStringIterator(
-    implicit context: Context)(string: String,
-    nextIndex: Smi): JSStringIterator {
+macro NewJSStringIterator(implicit context: Context)(
+    string: String, nextIndex: Smi): JSStringIterator {
   return new JSStringIterator{
     map: GetInitialStringIteratorMap(),
     properties_or_hash: kEmptyFixedArray,

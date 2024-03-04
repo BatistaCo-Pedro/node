@@ -29,20 +29,19 @@ class V8_EXPORT_PRIVATE CagedHeap final {
 
   template <typename RetType = uintptr_t>
   static RetType OffsetFromAddress(const void* address) {
-    static_assert(std::numeric_limits<RetType>::max() >=
-                      (api_constants::kCagedHeapMaxReservationSize - 1),
-                  "The return type should be large enough");
+    static_assert(
+        std::numeric_limits<RetType>::max() >= (kCagedHeapReservationSize - 1),
+        "The return type should be large enough");
     return reinterpret_cast<uintptr_t>(address) &
-           (api_constants::kCagedHeapReservationAlignment - 1);
+           (kCagedHeapReservationAlignment - 1);
   }
 
   static uintptr_t BaseFromAddress(const void* address) {
     return reinterpret_cast<uintptr_t>(address) &
-           ~(api_constants::kCagedHeapReservationAlignment - 1);
+           ~(kCagedHeapReservationAlignment - 1);
   }
 
-  static void InitializeIfNeeded(PageAllocator& platform_allocator,
-                                 size_t desired_heap_size);
+  static void InitializeIfNeeded(PageAllocator&);
 
   static CagedHeap& Instance();
 
@@ -67,8 +66,7 @@ class V8_EXPORT_PRIVATE CagedHeap final {
   friend class v8::base::LeakyObject<CagedHeap>;
   friend class testing::TestWithHeap;
 
-  explicit CagedHeap(PageAllocator& platform_allocator,
-                     size_t desired_heap_size);
+  explicit CagedHeap(PageAllocator& platform_allocator);
 
   static CagedHeap* instance_;
 

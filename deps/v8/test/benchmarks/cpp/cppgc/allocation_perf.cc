@@ -26,9 +26,8 @@ BENCHMARK_F(Allocate, Tiny)(benchmark::State& st) {
   subtle::NoGarbageCollectionScope no_gc(*Heap::From(&heap()));
   for (auto _ : st) {
     USE(_);
-    TinyObject* result =
-        cppgc::MakeGarbageCollected<TinyObject>(heap().GetAllocationHandle());
-    benchmark::DoNotOptimize(result);
+    benchmark::DoNotOptimize(
+        cppgc::MakeGarbageCollected<TinyObject>(heap().GetAllocationHandle()));
   }
   st.SetBytesProcessed(st.iterations() * sizeof(TinyObject));
 }
@@ -43,9 +42,8 @@ BENCHMARK_F(Allocate, Large)(benchmark::State& st) {
   subtle::NoGarbageCollectionScope no_gc(*Heap::From(&heap()));
   for (auto _ : st) {
     USE(_);
-    LargeObject* result =
-        cppgc::MakeGarbageCollected<LargeObject>(heap().GetAllocationHandle());
-    benchmark::DoNotOptimize(result);
+    benchmark::DoNotOptimize(
+        cppgc::MakeGarbageCollected<LargeObject>(heap().GetAllocationHandle()));
   }
   st.SetBytesProcessed(st.iterations() * sizeof(LargeObject));
 }

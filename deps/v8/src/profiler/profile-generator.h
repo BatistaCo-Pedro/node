@@ -131,7 +131,7 @@ class CodeEntry {
 
   Address** heap_object_location_address() { return &heap_object_location_; }
 
-  void FillFunctionInfo(Tagged<SharedFunctionInfo> shared);
+  void FillFunctionInfo(SharedFunctionInfo shared);
 
   void SetBuiltinId(Builtin id);
   Builtin builtin() const { return BuiltinField::decode(bit_field_); }
@@ -559,9 +559,7 @@ class V8_EXPORT_PRIVATE CpuProfilesCollection {
   std::vector<std::unique_ptr<CpuProfile>>* profiles() {
     return &finished_profiles_;
   }
-  const char* GetName(Tagged<Name> name) {
-    return resource_names_.GetName(name);
-  }
+  const char* GetName(Name name) { return resource_names_.GetName(name); }
   void RemoveProfile(CpuProfile* profile);
 
   // Finds a common sampling interval dividing each CpuProfile's interval,

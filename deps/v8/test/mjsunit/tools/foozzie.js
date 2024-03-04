@@ -122,7 +122,7 @@ let then_called = false;
 Atomics.waitAsync().value.then(() => {then_called = true;});
 assertEquals(true, then_called);
 
-// Test .caller access is neutralized.
+// Test .caller access is neutered.
 function callee() {
   assertEquals(null, callee.caller);
 }
@@ -130,8 +130,3 @@ function caller() {
   callee();
 }
 caller();
-
-// Neutralized serializer API.
-let object = {'foo': 42}
-assertEquals(d8.serializer.serialize(object), object)
-assertEquals(d8.serializer.deserialize(object), object)

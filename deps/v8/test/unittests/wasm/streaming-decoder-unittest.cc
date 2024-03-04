@@ -30,7 +30,7 @@ struct MockStreamingResult {
 
 class NoTracer {
  public:
-  void Bytes(const uint8_t* start, uint32_t count) {}
+  void Bytes(const byte* start, uint32_t count) {}
   void Description(const char* desc) {}
 };
 
@@ -39,7 +39,8 @@ class MockStreamingProcessor : public StreamingProcessor {
   explicit MockStreamingProcessor(MockStreamingResult* result)
       : result_(result) {}
 
-  bool ProcessModuleHeader(base::Vector<const uint8_t> bytes) override {
+  bool ProcessModuleHeader(base::Vector<const uint8_t> bytes,
+                           uint32_t offset) override {
     Decoder decoder(bytes.begin(), bytes.end());
     uint32_t magic_word = decoder.consume_u32("wasm magic", ITracer::NoTrace);
     if (decoder.failed() || magic_word != kWasmMagic) {

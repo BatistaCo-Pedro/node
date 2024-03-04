@@ -5,61 +5,34 @@
 #ifndef V8_HEAP_INCREMENTAL_MARKING_JOB_H_
 #define V8_HEAP_INCREMENTAL_MARKING_JOB_H_
 
-#include "include/v8-platform.h"
-#include "src/base/optional.h"
-#include "src/base/platform/mutex.h"
-#include "src/base/platform/time.h"
+#include "src/tasks/cancelable-task.h"
 
-namespace v8::internal {
+namespace v8 {
+namespace internal {
 
 class Heap;
 class Isolate;
 
 // The incremental marking job uses platform tasks to perform incremental
-// marking actions (start, step, finalize). The job posts regular foreground
-// tasks or delayed foreground tasks if marking progress allows.
+// marking steps. The job posts a foreground task that makes a small (~1ms)
+// step and posts another task until the marking is completed.
 class IncrementalMarkingJob final {
  public:
-  enum class TaskType {
-    kNormal,
-    kPending,
-  };
+  explicit IncrementalMarkingJob(Heap* heap) V8_NOEXCEPT : heap_(heap) {}
 
-  explicit IncrementalMarkingJob(Heap* heap);
-
-  IncrementalMarkingJob(const IncrementalMarkingJob&) = delete;
-  IncrementalMarkingJob& operator=(const IncrementalMarkingJob&) = delete;
-
-  // Schedules a task with a given `task_type`. Safe to be called from any
-  // thread.
-  void ScheduleTask(TaskType task_type = TaskType::kNormal);
-
-  // Returns a weighted average of time to task. For delayed tasks the time to
-  // task is only recorded after the initial delay. In case a task is currently
-  // running, it is added to the average.
-  base::Optional<v8::base::TimeDelta> AverageTimeToTask() const;
-
-  base::Optional<v8::base::TimeDelta> CurrentTimeToTask() const;
+  void ScheduleTask();
+  double CurrentTimeToTask() const;
 
  private:
   class Task;
+  static constexpr double kDelayInSeconds = 10.0 / 1000.0;
 
-  Heap* const heap_;
-  const std::shared_ptr<v8::TaskRunner> foreground_task_runner_;
-  mutable base::Mutex mutex_;
-  v8::base::TimeTicks scheduled_time_;
-  base::Optional<TaskType> pending_task_;
+  Heap* heap_;
+  base::Mutex mutex_;
+  double scheduled_time_ = 0.0;
+  bool is_task_pending_ = false;
 };
-
-constexpr const char* ToString(IncrementalMarkingJob::TaskType task_type) {
-  switch (task_type) {
-    case IncrementalMarkingJob::TaskType::kNormal:
-      return "normal";
-    case IncrementalMarkingJob::TaskType::kPending:
-      return "pending";
-  }
-}
-
-}  // namespace v8::internal
+}  // namespace internal
+}  // namespace v8
 
 #endif  // V8_HEAP_INCREMENTAL_MARKING_JOB_H_

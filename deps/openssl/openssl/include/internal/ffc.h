@@ -58,11 +58,8 @@
 # define FFC_CHECK_INVALID_Q_VALUE            0x00020
 # define FFC_CHECK_INVALID_J_VALUE            0x00040
 
-/*
- * 0x80, 0x100 reserved by include/openssl/dh.h with check bits that are not
- * relevant for FFC.
- */
-
+# define FFC_CHECK_BAD_LN_PAIR                0x00080
+# define FFC_CHECK_INVALID_SEED_SIZE          0x00100
 # define FFC_CHECK_MISSING_SEED_OR_COUNTER    0x00200
 # define FFC_CHECK_INVALID_G                  0x00400
 # define FFC_CHECK_INVALID_PQ                 0x00800
@@ -71,8 +68,6 @@
 # define FFC_CHECK_Q_MISMATCH                 0x04000
 # define FFC_CHECK_G_MISMATCH                 0x08000
 # define FFC_CHECK_COUNTER_MISMATCH           0x10000
-# define FFC_CHECK_BAD_LN_PAIR                0x20000
-# define FFC_CHECK_INVALID_SEED_SIZE          0x40000
 
 /* Validation Return codes */
 # define FFC_ERROR_PUBKEY_TOO_SMALL       0x01

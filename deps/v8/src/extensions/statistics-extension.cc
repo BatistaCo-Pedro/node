@@ -9,7 +9,6 @@
 #include "src/execution/isolate.h"
 #include "src/heap/heap-inl.h"  // crbug.com/v8/8499
 #include "src/logging/counters.h"
-#include "src/objects/tagged.h"
 #include "src/roots/roots.h"
 
 namespace v8 {
@@ -60,21 +59,21 @@ static void AddNumber64(v8::Isolate* isolate,
       .FromJust();
 }
 
+
 void StatisticsExtension::GetCounters(
-    const v8::FunctionCallbackInfo<v8::Value>& info) {
-  DCHECK(ValidateCallbackInfo(info));
-  Isolate* isolate = reinterpret_cast<Isolate*>(info.GetIsolate());
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  Isolate* isolate = reinterpret_cast<Isolate*>(args.GetIsolate());
   Heap* heap = isolate->heap();
 
-  if (info.Length() > 0) {  // GC if first argument evaluates to true.
-    if (info[0]->IsBoolean() && info[0]->BooleanValue(info.GetIsolate())) {
-      heap->CollectAllGarbage(GCFlag::kNoFlags,
+  if (args.Length() > 0) {  // GC if first argument evaluates to true.
+    if (args[0]->IsBoolean() && args[0]->BooleanValue(args.GetIsolate())) {
+      heap->CollectAllGarbage(Heap::kNoGCFlags,
                               GarbageCollectionReason::kCountersExtension);
     }
   }
 
   Counters* counters = isolate->counters();
-  v8::Local<v8::Object> result = v8::Object::New(info.GetIsolate());
+  v8::Local<v8::Object> result = v8::Object::New(args.GetIsolate());
 
   struct StatisticsCounter {
     v8::internal::StatsCounter* counter;
@@ -90,7 +89,7 @@ void StatisticsExtension::GetCounters(
   // clang-format on
 
   for (size_t i = 0; i < arraysize(counter_list); i++) {
-    AddCounter(info.GetIsolate(), result, counter_list[i].counter,
+    AddCounter(args.GetIsolate(), result, counter_list[i].counter,
                counter_list[i].name);
   }
 
@@ -127,59 +126,49 @@ void StatisticsExtension::GetCounters(
       {heap->code_lo_space()->Available(), "code_lo_space_available_bytes"},
       {heap->code_lo_space()->CommittedMemory(),
        "code_lo_space_commited_bytes"},
-      {heap->trusted_space()->Size(), "trusted_space_live_bytes"},
-      {heap->trusted_space()->Available(), "trusted_space_available_bytes"},
-      {heap->trusted_space()->CommittedMemory(),
-       "trusted_space_commited_bytes"},
-      {heap->trusted_lo_space()->Size(), "trusted_lo_space_live_bytes"},
-      {heap->trusted_lo_space()->Available(),
-       "trusted_lo_space_available_bytes"},
-      {heap->trusted_lo_space()->CommittedMemory(),
-       "trusted_lo_space_commited_bytes"},
   };
 
   for (size_t i = 0; i < arraysize(numbers); i++) {
-    AddNumber(info.GetIsolate(), result, numbers[i].number, numbers[i].name);
+    AddNumber(args.GetIsolate(), result, numbers[i].number, numbers[i].name);
   }
 
-  AddNumber64(info.GetIsolate(), result, heap->external_memory(),
+  AddNumber64(args.GetIsolate(), result, heap->external_memory(),
               "amount_of_external_allocated_memory");
 
   int reloc_info_total = 0;
   int source_position_table_total = 0;
   {
     HeapObjectIterator iterator(
-        reinterpret_cast<Isolate*>(info.GetIsolate())->heap());
+        reinterpret_cast<Isolate*>(args.GetIsolate())->heap());
     DCHECK(!AllowGarbageCollection::IsAllowed());
-    for (Tagged<HeapObject> obj = iterator.Next(); !obj.is_null();
+    for (HeapObject obj = iterator.Next(); !obj.is_null();
          obj = iterator.Next()) {
-      Tagged<Object> maybe_source_positions;
-      if (IsCode(obj)) {
-        Tagged<Code> code = Code::cast(obj);
-        reloc_info_total += code->relocation_size();
+      Object maybe_source_positions;
+      if (obj.IsCode()) {
+        Code code = Code::cast(obj);
+        reloc_info_total += code.relocation_info().Size();
         // Baseline code doesn't have source positions since it uses
         // interpreter code positions.
-        if (code->kind() == CodeKind::BASELINE) continue;
-        maybe_source_positions = code->source_position_table();
-      } else if (IsBytecodeArray(obj)) {
+        if (code.kind() == CodeKind::BASELINE) continue;
+        maybe_source_positions = code.source_position_table();
+      } else if (obj.IsBytecodeArray()) {
         maybe_source_positions =
-            BytecodeArray::cast(obj)->source_position_table(kAcquireLoad);
+            BytecodeArray::cast(obj).source_position_table(kAcquireLoad);
       } else {
         continue;
       }
-      if (!IsByteArray(maybe_source_positions)) continue;
-      Tagged<ByteArray> source_positions =
-          ByteArray::cast(maybe_source_positions);
-      if (source_positions->length() == 0) continue;
-      source_position_table_total += source_positions->AllocatedSize();
+      if (!maybe_source_positions.IsByteArray()) continue;
+      ByteArray source_positions = ByteArray::cast(maybe_source_positions);
+      if (source_positions.length() == 0) continue;
+      source_position_table_total += source_positions.Size();
     }
   }
 
-  AddNumber(info.GetIsolate(), result, reloc_info_total,
+  AddNumber(args.GetIsolate(), result, reloc_info_total,
             "reloc_info_total_size");
-  AddNumber(info.GetIsolate(), result, source_position_table_total,
+  AddNumber(args.GetIsolate(), result, source_position_table_total,
             "source_position_table_total_size");
-  info.GetReturnValue().Set(result);
+  args.GetReturnValue().Set(result);
 }
 
 }  // namespace internal

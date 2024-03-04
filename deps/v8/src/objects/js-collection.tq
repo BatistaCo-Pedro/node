@@ -31,6 +31,3 @@ extern class JSSetKeyValueIterator extends JSSetIterator
     generates 'TNode<JSSetIterator>';
 extern class JSSetValueIterator extends JSSetIterator
     generates 'TNode<JSSetIterator>';
-
-transient type JSSetWithNoCustomIteration extends JSSet;
-transient type JSMapWithNoCustomIteration extends JSMap;

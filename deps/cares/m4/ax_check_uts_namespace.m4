@@ -10,9 +10,6 @@
 #   Also requires user namespaces to be available, so that non-root users
 #   can enter the namespace.
 #   If so, it calls AC_DEFINE(HAVE_UTS_NAMESPACE).
-#
-# Copyright (C) The c-ares team
-# SPDX-License-Identifier: MIT
 
 AC_DEFUN([AX_CHECK_UTS_NAMESPACE],[dnl
  AC_CACHE_CHECK([whether UTS namespaces are supported],
@@ -58,9 +55,9 @@ int main() {
   pid_t child = clone(fn, st + 1024*1024, CLONE_NEWUSER|SIGCHLD, 0);
   if (child < 0) return 1;
 
-  snprintf(buffer, sizeof(buffer), "/proc/%d/uid_map", child);
+  sprintf(buffer, "/proc/%d/uid_map", child);
   fd = open(buffer, O_CREAT|O_WRONLY|O_TRUNC, 0755);
-  snprintf(buffer, sizeof(buffer), "0 %d 1\n", getuid());
+  sprintf(buffer, "0 %d 1\n", getuid());
   write(fd, buffer, strlen(buffer));
   close(fd);
 

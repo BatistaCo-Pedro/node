@@ -433,29 +433,26 @@ def _SkipTreeCheck(input_api, output_api):
 def _CheckCommitMessageBugEntry(input_api, output_api):
   """Check that bug entries are well-formed in commit message."""
   bogus_bug_msg = (
-      'Bogus BUG entry: {}. Please specify prefix:number for v8 or chromium '
-      '(e.g. chromium:12345) or b/number for buganizer.')
+      'Bogus BUG entry: {}. Please specify the issue tracker prefix and the '
+      'issue number, separated by a colon, e.g. v8:123 or chromium:12345.')
   results = []
   for bug in (input_api.change.BUG or '').split(','):
     bug = bug.strip()
     if 'none'.startswith(bug.lower()):
       continue
-    if ':' not in bug and not bug.startswith('b/'):
+    if ':' not in bug:
       try:
-        if int(bug) > 10000000:
-          results.append(
-            'Buganizer entry requires issue tracker prefix b/{}'.format(bug))
+        if int(bug) > 100000:
+          # Rough indicator for current chromium bugs.
+          prefix_guess = 'chromium'
         else:
-          if int(bug) > 200000:
-            prefix_guess = 'chromium'
-          else:
-            prefix_guess = 'v8'
-          results.append(
-              'BUG entry requires issue tracker prefix, e.g. {}:{}'.format(
-                  prefix_guess, bug))
+          prefix_guess = 'v8'
+        results.append(
+            'BUG entry requires issue tracker prefix, e.g. {}:{}'.format(
+                prefix_guess, bug))
       except ValueError:
         results.append(bogus_bug_msg.format(bug))
-    elif not re.match(r'\w+[:\/]\d+', bug):
+    elif not re.match(r'\w+:\d+', bug):
       results.append(bogus_bug_msg.format(bug))
   return [output_api.PresubmitError(r) for r in results]
 

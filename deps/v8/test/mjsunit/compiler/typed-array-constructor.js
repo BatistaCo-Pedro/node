@@ -4,148 +4,137 @@
 
 // Flags: --allow-natives-syntax
 
-const kMaxByteLength = %ArrayBufferMaxByteLength();
+const limit = %TypedArrayMaxLength() + 1;
 
 (function() {
   function foo() {
-    const kMaxLength = kMaxByteLength / Int8Array.BYTES_PER_ELEMENT;
-    try { new Int8Array(kMaxLength + 1); } catch (e) { return e.stack; }
+    try { new Int8Array(limit); } catch (e) { return e.stack; }
   }
 
   %PrepareFunctionForOptimization(foo);
-  assertContains('new Int8Array', foo());
-  assertContains('new Int8Array', foo());
+  assertTrue(/new Int8Array/.test(foo()));
+  assertTrue(/new Int8Array/.test(foo()));
   %OptimizeFunctionOnNextCall(foo);
-  assertContains('new Int8Array', foo());
+  assertTrue(/new Int8Array/.test(foo()));
 })();
 
 (function() {
   function foo() {
-    const kMaxLength = kMaxByteLength / Uint8Array.BYTES_PER_ELEMENT;
-    try { new Uint8Array(kMaxLength + 1); } catch (e) { return e.stack; }
+    try { new Uint8Array(limit); } catch (e) { return e.stack; }
   }
 
   %PrepareFunctionForOptimization(foo);
-  assertContains('new Uint8Array', foo());
-  assertContains('new Uint8Array', foo());
+  assertTrue(/new Uint8Array/.test(foo()));
+  assertTrue(/new Uint8Array/.test(foo()));
   %OptimizeFunctionOnNextCall(foo);
-  assertContains('new Uint8Array', foo());
+  assertTrue(/new Uint8Array/.test(foo()));
 })();
 
 (function() {
   function foo() {
-    const kMaxLength = kMaxByteLength / Uint8ClampedArray.BYTES_PER_ELEMENT;
-    try { new Uint8ClampedArray(kMaxLength + 1); } catch (e) { return e.stack; }
+    try { new Uint8ClampedArray(limit); } catch (e) { return e.stack; }
   }
 
   %PrepareFunctionForOptimization(foo);
-  assertContains('new Uint8ClampedArray', foo());
-  assertContains('new Uint8ClampedArray', foo());
+  assertTrue(/new Uint8ClampedArray/.test(foo()));
+  assertTrue(/new Uint8ClampedArray/.test(foo()));
   %OptimizeFunctionOnNextCall(foo);
-  assertContains('new Uint8ClampedArray', foo());
+  assertTrue(/new Uint8ClampedArray/.test(foo()));
 })();
 
 (function() {
   function foo() {
-    const kMaxLength = kMaxByteLength / Int16Array.BYTES_PER_ELEMENT;
-    try { new Int16Array(kMaxLength + 1); } catch (e) { return e.stack; }
+    try { new Int16Array(limit); } catch (e) { return e.stack; }
   }
 
   %PrepareFunctionForOptimization(foo);
-  assertContains('new Int16Array', foo());
-  assertContains('new Int16Array', foo());
+  assertTrue(/new Int16Array/.test(foo()));
+  assertTrue(/new Int16Array/.test(foo()));
   %OptimizeFunctionOnNextCall(foo);
-  assertContains('new Int16Array', foo());
+  assertTrue(/new Int16Array/.test(foo()));
 })();
 
 (function() {
   function foo() {
-    const kMaxLength = kMaxByteLength / Uint16Array.BYTES_PER_ELEMENT;
-    try { new Uint16Array(kMaxLength + 1); } catch (e) { return e.stack; }
+    try { new Uint16Array(limit); } catch (e) { return e.stack; }
   }
 
   %PrepareFunctionForOptimization(foo);
-  assertContains('new Uint16Array', foo());
-  assertContains('new Uint16Array', foo());
+  assertTrue(/new Uint16Array/.test(foo()));
+  assertTrue(/new Uint16Array/.test(foo()));
   %OptimizeFunctionOnNextCall(foo);
-  assertContains('new Uint16Array', foo());
+  assertTrue(/new Uint16Array/.test(foo()));
 })();
 
 (function() {
   function foo() {
-    const kMaxLength = kMaxByteLength / Int32Array.BYTES_PER_ELEMENT;
-    try { new Int32Array(kMaxLength + 1); } catch (e) { return e.stack; }
+    try { new Int32Array(limit); } catch (e) { return e.stack; }
   }
 
   %PrepareFunctionForOptimization(foo);
-  assertContains('new Int32Array', foo());
-  assertContains('new Int32Array', foo());
+  assertTrue(/new Int32Array/.test(foo()));
+  assertTrue(/new Int32Array/.test(foo()));
   %OptimizeFunctionOnNextCall(foo);
-  assertContains('new Int32Array', foo());
+  assertTrue(/new Int32Array/.test(foo()));
 })();
 
 (function() {
   function foo() {
-    const kMaxLength = kMaxByteLength / Uint32Array.BYTES_PER_ELEMENT;
-    try { new Uint32Array(kMaxLength + 1); } catch (e) { return e.stack; }
+    try { new Uint32Array(limit); } catch (e) { return e.stack; }
   }
 
   %PrepareFunctionForOptimization(foo);
-  assertContains('new Uint32Array', foo());
-  assertContains('new Uint32Array', foo());
+  assertTrue(/new Uint32Array/.test(foo()));
+  assertTrue(/new Uint32Array/.test(foo()));
   %OptimizeFunctionOnNextCall(foo);
-  assertContains('new Uint32Array', foo());
+  assertTrue(/new Uint32Array/.test(foo()));
 })();
 
 (function() {
   function foo() {
-    const kMaxLength = kMaxByteLength / Float32Array.BYTES_PER_ELEMENT;
-    try { new Float32Array(kMaxLength + 1); } catch (e) { return e.stack; }
+    try { new Float32Array(limit); } catch (e) { return e.stack; }
   }
 
   %PrepareFunctionForOptimization(foo);
-  assertContains('new Float32Array', foo());
-  assertContains('new Float32Array', foo());
+  assertTrue(/new Float32Array/.test(foo()));
+  assertTrue(/new Float32Array/.test(foo()));
   %OptimizeFunctionOnNextCall(foo);
-  assertContains('new Float32Array', foo());
+  assertTrue(/new Float32Array/.test(foo()));
 })();
 
 
 (function() {
   function foo() {
-    const kMaxLength = kMaxByteLength / Float64Array.BYTES_PER_ELEMENT;
-    try { new Float64Array(kMaxLength + 1); } catch (e) { return e.stack; }
+    try { new Float64Array(limit); } catch (e) { return e.stack; }
   }
 
   %PrepareFunctionForOptimization(foo);
-  assertContains('new Float64Array', foo());
-  assertContains('new Float64Array', foo());
+  assertTrue(/new Float64Array/.test(foo()));
+  assertTrue(/new Float64Array/.test(foo()));
   %OptimizeFunctionOnNextCall(foo);
-  assertContains('new Float64Array', foo());
+  assertTrue(/new Float64Array/.test(foo()));
 })();
 
 (function() {
   function foo() {
-    const kMaxLength = kMaxByteLength / BigInt64Array.BYTES_PER_ELEMENT;
-    try { new BigInt64Array(kMaxLength + 1); } catch (e) { return e.stack; }
+    try { new BigInt64Array(limit); } catch (e) { return e.stack; }
   }
 
   %PrepareFunctionForOptimization(foo);
-  assertContains('new BigInt64Array', foo());
-  assertContains('new BigInt64Array', foo());
+  assertTrue(/new BigInt64Array/.test(foo()));
+  assertTrue(/new BigInt64Array/.test(foo()));
   %OptimizeFunctionOnNextCall(foo);
-  assertContains('new BigInt64Array', foo());
+  assertTrue(/new BigInt64Array/.test(foo()));
 })();
 
 (function() {
   function foo() {
-    const kMaxLength = kMaxByteLength / BigUint64Array.BYTES_PER_ELEMENT;
-    try { new BigUint64Array(kMaxLength + 1); } catch (e) { return e.stack; }
+    try { new BigUint64Array(limit); } catch (e) { return e.stack; }
   }
 
   %PrepareFunctionForOptimization(foo);
-  assertContains('new BigUint64Array', foo());
-  assertContains('new BigUint64Array', foo());
+  assertTrue(/new BigUint64Array/.test(foo()));
+  assertTrue(/new BigUint64Array/.test(foo()));
   %OptimizeFunctionOnNextCall(foo);
-  assertContains('new BigUint64Array', foo());
+  assertTrue(/new BigUint64Array/.test(foo()));
 })();

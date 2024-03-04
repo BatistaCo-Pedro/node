@@ -30,11 +30,7 @@ namespace wasm {
 //   rec. group.
 class TypeCanonicalizer {
  public:
-  static constexpr uint32_t kPredefinedArrayI8Index = 0;
-  static constexpr uint32_t kPredefinedArrayI16Index = 1;
-  static constexpr uint32_t kNumberOfPredefinedTypes = 2;
-
-  TypeCanonicalizer();
+  TypeCanonicalizer() = default;
 
   // Singleton class; no copying or moving allowed.
   TypeCanonicalizer(const TypeCanonicalizer& other) = delete;
@@ -67,8 +63,6 @@ class TypeCanonicalizer {
                                             uint32_t super_index,
                                             const WasmModule* sub_module,
                                             const WasmModule* super_module);
-
-  size_t EstimateCurrentMemoryConsumption() const;
 
  private:
   using TypeInModule = std::pair<const WasmModule*, uint32_t>;
@@ -119,8 +113,6 @@ class TypeCanonicalizer {
 
     std::vector<CanonicalType> types;
   };
-
-  void AddPredefinedArrayType(uint32_t index, ValueType element_type);
 
   int FindCanonicalGroup(CanonicalGroup&) const;
 

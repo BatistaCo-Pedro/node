@@ -28,7 +28,7 @@ let instance = (() => {
       .exportFunc();
 
   builder.addFunction('i31_as_eq_producer', makeSig([], [kWasmEqRef]))
-      .addBody([kExprI32Const, 5, kGCPrefix, kExprRefI31])
+      .addBody([kExprI32Const, 5, kGCPrefix, kExprI31New])
       .exportFunc();
 
   builder.addFunction('func_producer', makeSig([], [wasmRefType(sig)]))

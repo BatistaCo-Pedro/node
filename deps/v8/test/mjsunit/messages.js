@@ -60,7 +60,7 @@ test(function() {
 // kCalledNonCallable
 test(function() {
   [].forEach(1);
-}, "number 1 is not a function", TypeError);
+}, "1 is not a function", TypeError);
 
 // kCalledOnNonObject
 test(function() {
@@ -477,83 +477,71 @@ test(function() {
 // kJsonParseUnterminatedString
 test(function() {
   JSON.parse('{"a" : "}')
-}, "Unterminated string in JSON at position 9 (line 1 column 10)", SyntaxError);
+}, "Unterminated string in JSON at position 9", SyntaxError);
 
 // kJsonParseExpectedPropNameOrRBrace
 test(function() {
   JSON.parse("{")
-}, "Expected property name or '}' in JSON at position 1 (line 1 column 2)",
-  SyntaxError);
+}, "Expected property name or '}' in JSON at position 1", SyntaxError);
 
 // kJsonParseExpectedDoubleQuotedPropertyName
 test(function() {
   JSON.parse('{"foo" : 1, }');
-}, "Expected double-quoted property name in JSON at position 12 (line 1 column 13)",
-  SyntaxError);
+}, "Expected double-quoted property name in JSON at position 12", SyntaxError);
 
 // kJsonParseExpectedCommaNameOrRBrack
 test(function() {
   JSON.parse("{'foo': 1}");
-}, "Expected property name or '}' in JSON at position 1 (line 1 column 2)",
-  SyntaxError);
+}, "Expected property name or '}' in JSON at position 1", SyntaxError);
 
 // kJsonParseExpectedCommaNameOrRBrace
 test(function() {
   JSON.parse('[1, 2, 3, 4');
-}, "Expected ',' or ']' after array element in JSON " +
-"at position 11 (line 1 column 12)", SyntaxError);
+}, "Expected ',' or ']' after array element in JSON at position 11", SyntaxError);
 
 test(function() {
   JSON.parse('[1, 2, 3, 4g');
-}, "Expected ',' or ']' after array element in JSON " +
-"at position 11 (line 1 column 12)", SyntaxError);
+}, "Expected ',' or ']' after array element in JSON at position 11", SyntaxError);
 
 // kJsonParseExponentPartMissingNumber
 test(function() {
   JSON.parse('[1e]');
-}, "Exponent part is missing a number in JSON at position 3 (line 1 column 4)",
-  SyntaxError);
+}, "Exponent part is missing a number in JSON at position 3", SyntaxError);
 
 // kJsonParseExpectedColonAfterPropertyName
 test(function() {
   JSON.parse('{"a"}');
-}, "Expected ':' after property name in JSON at position 4 (line 1 column 5)",
-  SyntaxError);
+}, "Expected ':' after property name in JSON at position 4", SyntaxError);
 
 // kJsonParseUnterminatedFractionNumber
 test(function() {
   JSON.parse('{"a": 0.bs}');
-}, "Unterminated fractional number in JSON at position 8 (line 1 column 9)",
-  SyntaxError);
+}, "Unterminated fractional number in JSON at position 8", SyntaxError);
 
 // kJsonParseUnexpectedNonWhiteSpaceCharacter
 test(function() {
   JSON.parse('{"a": 3}a');
-}, "Unexpected non-whitespace character after JSON " +
-"at position 8 (line 1 column 9)", SyntaxError);
+}, "Unexpected non-whitespace character after JSON at position 8", SyntaxError);
 
 // kJsonParseBadEscapedCharacter
 test(function() {
   JSON.parse('{"b" : "\\a"}');
-}, "Bad escaped character in JSON at position 9 (line 1 column 10)",
-  SyntaxError);
+}, "Bad escaped character in JSON at position 9", SyntaxError);
 
 // kJsonParseBadControlCharacter
 test(function() {
   JSON.parse('"a\bz"');
-}, "Bad control character in string literal in JSON " +
-"at position 2 (line 1 column 3)", SyntaxError);
+}, "Bad control character in string literal in JSON at position 2", SyntaxError);
 
 // kJsonParseBadUnicodeEscape
 test(function() {
   JSON.parse("[\"\\t\\u");
-}, "Bad Unicode escape in JSON at position 6 (line 1 column 7)", SyntaxError);
+}, "Bad Unicode escape in JSON at position 6", SyntaxError);
 
 // kJsonParseNoNumberAfterMinusSign
 test(function() {
   JSON.parse('-');
-}, "No number after minus sign in JSON at position 1 (line 1 column 2)",
-  SyntaxError);
+}, "No number after minus sign in JSON at position 1", SyntaxError);
 
 // kJsonParseUnexpectedTokenShortString
 test(function () {
@@ -588,14 +576,12 @@ test(function () {
 // kJsonParseExpectedPropNameOrRBrace
 test(function() {
   JSON.parse("{ 1")
-}, "Expected property name or '}' in JSON at position 2 (line 1 column 3)",
-  SyntaxError);
+}, "Expected property name or '}' in JSON at position 2", SyntaxError);
 
 // kJsonParseUnexpectedNonWhiteSpaceCharacter
 test(function() {
   JSON.parse('"""')
-}, "Unexpected non-whitespace character after JSON " +
-"at position 2 (line 1 column 3)", SyntaxError);
+}, "Unexpected non-whitespace character after JSON at position 2", SyntaxError);
 
 // kJsonParseUnexpectedTokenStringShortString
 test(function() {

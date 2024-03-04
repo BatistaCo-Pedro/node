@@ -40,14 +40,14 @@ bool MaterializedObjectStore::Remove(Address fp) {
   int index = static_cast<int>(std::distance(frame_fps_.begin(), it));
 
   frame_fps_.erase(it);
-  Tagged<FixedArray> array = isolate()->heap()->materialized_objects();
+  FixedArray array = isolate()->heap()->materialized_objects();
 
-  CHECK_LT(index, array->length());
+  CHECK_LT(index, array.length());
   int fps_size = static_cast<int>(frame_fps_.size());
   for (int i = index; i < fps_size; i++) {
-    array->set(i, array->get(i + 1));
+    array.set(i, array.get(i + 1));
   }
-  array->set(fps_size, ReadOnlyRoots(isolate()).undefined_value());
+  array.set(fps_size, ReadOnlyRoots(isolate()).undefined_value());
   return true;
 }
 
@@ -79,8 +79,7 @@ Handle<FixedArray> MaterializedObjectStore::EnsureStackEntries(int length) {
   for (int i = 0; i < array->length(); i++) {
     new_array->set(i, array->get(i));
   }
-  Tagged<HeapObject> undefined_value =
-      ReadOnlyRoots(isolate()).undefined_value();
+  HeapObject undefined_value = ReadOnlyRoots(isolate()).undefined_value();
   for (int i = array->length(); i < length; i++) {
     new_array->set(i, undefined_value);
   }

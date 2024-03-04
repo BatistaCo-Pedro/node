@@ -12,6 +12,9 @@ namespace internal {
 
 class MicrotaskQueue;
 
+template <typename T>
+class Handle;
+
 class Execution final : public AllStatic {
  public:
   // Whether to report pending messages, or keep them pending on the isolate.

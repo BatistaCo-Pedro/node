@@ -24,7 +24,6 @@
 #include "unicode/localpointer.h"
 #include "cmemory.h"
 #include "cstring.h"
-#include "iso8601cal.h"
 #include "ustrenum.h"
 #include "uenumimp.h"
 #include "ulist.h"
@@ -308,8 +307,7 @@ ucal_setGregorianChange(UCalendar *cal, UDate date, UErrorCode *pErrorCode) {
         *pErrorCode = U_ILLEGAL_ARGUMENT_ERROR;
         return;
     }
-    if(typeid(*cpp_cal) != typeid(GregorianCalendar) &&
-       typeid(*cpp_cal) != typeid(ISO8601Calendar)) {
+    if(typeid(*cpp_cal) != typeid(GregorianCalendar)) {
         *pErrorCode = U_UNSUPPORTED_ERROR;
         return;
     }
@@ -331,8 +329,7 @@ ucal_getGregorianChange(const UCalendar *cal, UErrorCode *pErrorCode) {
         *pErrorCode = U_ILLEGAL_ARGUMENT_ERROR;
         return (UDate)0;
     }
-    if(typeid(*cpp_cal) != typeid(GregorianCalendar) &&
-       typeid(*cpp_cal) != typeid(ISO8601Calendar)) {
+    if(typeid(*cpp_cal) != typeid(GregorianCalendar)) {
         *pErrorCode = U_UNSUPPORTED_ERROR;
         return (UDate)0;
     }
@@ -627,16 +624,6 @@ ucal_getCanonicalTimeZoneID(const char16_t* id, int32_t len,
     }
     return reslen;
 }
-
-U_DRAFT int32_t U_EXPORT2
-ucal_getIanaTimeZoneID(const char16_t* id, int32_t len,
-                        char16_t* result, int32_t resultCapacity, UErrorCode* status)
-{
-    UnicodeString ianaID;
-    TimeZone::getIanaID(UnicodeString(id, len), ianaID, *status);
-    return ianaID.extract(result, resultCapacity, *status);
-}
-
 
 U_CAPI const char * U_EXPORT2
 ucal_getType(const UCalendar *cal, UErrorCode* status)

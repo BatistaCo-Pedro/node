@@ -5,16 +5,16 @@
 #ifndef V8_CODEGEN_TNODE_H_
 #define V8_CODEGEN_TNODE_H_
 
-#include <type_traits>
-
 #include "src/codegen/machine-type.h"
-#include "src/objects/tagged.h"
 
 namespace v8 {
 namespace internal {
 
 class HeapNumber;
 class BigInt;
+class Object;
+class Smi;
+class TaggedIndex;
 
 namespace compiler {
 
@@ -88,10 +88,6 @@ struct ExternalPointerHandleT : Uint32T {
   static constexpr MachineType kMachineType = MachineType::Uint32();
 };
 
-struct IndirectPointerHandleT : Uint32T {
-  static constexpr MachineType kMachineType = MachineType::Uint32();
-};
-
 #ifdef V8_ENABLE_SANDBOX
 struct ExternalPointerT : Uint32T {
   static constexpr MachineType kMachineType = MachineType::Uint32();
@@ -121,9 +117,7 @@ using TaggedT = IntPtrT;
 #endif
 
 // Result of a comparison operation.
-struct BoolT : Word32T {
-  static constexpr MachineType kMachineType = MachineType::Int32();
-};
+struct BoolT : Word32T {};
 
 // Value type of a Turbofan node with two results.
 template <class T1, class T2>
@@ -146,14 +140,6 @@ inline constexpr MachineType CommonMachineType(MachineType type1,
                                  ? MachineType::AnyTagged()
                                  : MachineType::None());
 }
-
-template <class T1, class T2>
-struct UnionT;
-
-template <typename T>
-struct is_union_t : public std::false_type {};
-template <typename T1, typename T2>
-struct is_union_t<UnionT<T1, T2>> : public std::true_type {};
 
 template <class Type, class Enable = void>
 struct MachineTypeOf {
@@ -180,27 +166,20 @@ struct MachineTypeOf<TaggedIndex> {
   static constexpr MachineType value = MachineType::Pointer();
 };
 template <class HeapObjectSubtype>
-struct MachineTypeOf<
-    HeapObjectSubtype,
-    std::enable_if_t<std::is_base_of_v<HeapObject, HeapObjectSubtype>>> {
+struct MachineTypeOf<HeapObjectSubtype,
+                     typename std::enable_if<std::is_base_of<
+                         HeapObject, HeapObjectSubtype>::value>::type> {
   static constexpr MachineType value = MachineType::TaggedPointer();
 };
-
-template <class HeapObjectSubtype>
-constexpr MachineType MachineTypeOf<
-    HeapObjectSubtype,
-    std::enable_if_t<std::is_base_of_v<HeapObject, HeapObjectSubtype>>>::value;
-
 template <>
 struct MachineTypeOf<ExternalReference> {
   static constexpr MachineType value = MachineType::Pointer();
 };
 
-template <class T1, class T2>
-struct MachineTypeOf<UnionT<T1, T2>> {
-  static constexpr MachineType value =
-      CommonMachineType(MachineTypeOf<T1>::value, MachineTypeOf<T2>::value);
-};
+template <class HeapObjectSubtype>
+constexpr MachineType MachineTypeOf<
+    HeapObjectSubtype, typename std::enable_if<std::is_base_of<
+                           HeapObject, HeapObjectSubtype>::value>::type>::value;
 
 template <class Type, class Enable = void>
 struct MachineRepresentationOf {
@@ -210,24 +189,23 @@ struct MachineRepresentationOf {
 // there.
 template <class T>
 struct MachineRepresentationOf<T, std::void_t<decltype(T::kMachineType)>> {
-  static constexpr MachineRepresentation value =
-      T::kMachineType.representation();
+  static const MachineRepresentation value = T::kMachineType.representation();
 };
 template <class T>
-struct MachineRepresentationOf<T, std::enable_if_t<is_taggable_v<T>>> {
-  static constexpr MachineRepresentation value =
+struct MachineRepresentationOf<
+    T, typename std::enable_if<std::is_base_of<Object, T>::value>::type> {
+  static const MachineRepresentation value =
       MachineTypeOf<T>::value.representation();
 };
 template <class T>
 struct MachineRepresentationOf<
-    T, std::enable_if_t<std::is_base_of_v<MaybeObject, T>>> {
-  static constexpr MachineRepresentation value =
+    T, typename std::enable_if<std::is_base_of<MaybeObject, T>::value>::type> {
+  static const MachineRepresentation value =
       MachineTypeOf<T>::value.representation();
 };
 template <>
 struct MachineRepresentationOf<ExternalReference> {
-  static constexpr MachineRepresentation value =
-      RawPtrT::kMachineRepresentation;
+  static const MachineRepresentation value = RawPtrT::kMachineRepresentation;
 };
 
 template <typename T>
@@ -242,12 +220,12 @@ constexpr MachineRepresentation PhiMachineRepresentationOf =
 
 template <class T>
 struct is_valid_type_tag {
-  static const bool value = is_taggable_v<T> ||
+  static const bool value = std::is_base_of<Object, T>::value ||
                             std::is_base_of<UntaggedT, T>::value ||
                             std::is_base_of<MaybeObject, T>::value ||
                             std::is_same<ExternalReference, T>::value;
-  static const bool is_tagged =
-      is_taggable_v<T> || std::is_base_of<MaybeObject, T>::value;
+  static const bool is_tagged = std::is_base_of<Object, T>::value ||
+                                std::is_base_of<MaybeObject, T>::value;
 };
 
 template <class T1, class T2>
@@ -258,6 +236,9 @@ struct is_valid_type_tag<PairT<T1, T2>> {
 };
 
 template <class T1, class T2>
+struct UnionT;
+
+template <class T1, class T2>
 struct is_valid_type_tag<UnionT<T1, T2>> {
   static const bool is_tagged =
       is_valid_type_tag<T1>::is_tagged && is_valid_type_tag<T2>::is_tagged;
@@ -266,9 +247,11 @@ struct is_valid_type_tag<UnionT<T1, T2>> {
 
 template <class T1, class T2>
 struct UnionT {
-  static_assert(CommonMachineType(MachineTypeOf<T1>::value,
-                                  MachineTypeOf<T2>::value)
-                        .representation() != MachineRepresentation::kNone,
+  static constexpr MachineType kMachineType =
+      CommonMachineType(MachineTypeOf<T1>::value, MachineTypeOf<T2>::value);
+  static const MachineRepresentation kMachineRepresentation =
+      kMachineType.representation();
+  static_assert(kMachineRepresentation != MachineRepresentation::kNone,
                 "no common representation");
   static_assert(is_valid_type_tag<T1>::is_tagged &&
                     is_valid_type_tag<T2>::is_tagged,
@@ -283,31 +266,33 @@ using ContextOrEmptyContext = UnionT<Context, Smi>;
 // A pointer to a builtin function, used by Torque's function pointers.
 using BuiltinPtr = Smi;
 
+template <class T, class U>
+struct is_subtype {
+  static const bool value =
+      std::disjunction<std::is_base_of<U, T>,
+                       std::conjunction<std::is_same<U, MaybeObject>,
+                                        std::is_convertible<T, Object>>>::value;
+};
 template <class T1, class T2, class U>
-struct is_subtype<UnionT<T1, T2>, U>
-    : public std::conjunction<is_subtype<T1, U>, is_subtype<T2, U>> {};
+struct is_subtype<UnionT<T1, T2>, U> {
+  static const bool value =
+      is_subtype<T1, U>::value && is_subtype<T2, U>::value;
+};
 template <class T, class U1, class U2>
-struct is_subtype<T, UnionT<U1, U2>>
-    : public std::disjunction<is_subtype<T, U1>, is_subtype<T, U2>> {};
+struct is_subtype<T, UnionT<U1, U2>> {
+  static const bool value =
+      is_subtype<T, U1>::value || is_subtype<T, U2>::value;
+};
 template <class T1, class T2, class U1, class U2>
-struct is_subtype<UnionT<T1, T2>, UnionT<U1, U2>>
-    : public std::conjunction<is_subtype<T1, UnionT<U1, U2>>,
-                              is_subtype<T2, UnionT<U1, U2>>> {};
+struct is_subtype<UnionT<T1, T2>, UnionT<U1, U2>> {
+  static const bool value =
+      (is_subtype<T1, U1>::value || is_subtype<T1, U2>::value) &&
+      (is_subtype<T2, U1>::value || is_subtype<T2, U2>::value);
+};
 template <>
 struct is_subtype<ExternalReference, RawPtrT> {
   static const bool value = true;
 };
-// All subtypes of Object are also subtypes of MaybeObject.
-template <typename T>
-struct is_subtype<T, MaybeObject, std::enable_if_t<!is_union_t<T>::value>>
-    : public std::disjunction<std::is_base_of<MaybeObject, T>,
-                              is_subtype<T, Object>> {};
-// All subtypes of HeapObject are also subtypes of HeapObjectReference.
-template <typename T>
-struct is_subtype<T, HeapObjectReference,
-                  std::enable_if_t<!is_union_t<T>::value>>
-    : public std::disjunction<std::is_base_of<HeapObjectReference, T>,
-                              is_subtype<T, HeapObject>> {};
 
 template <class T, class U>
 struct types_have_common_values {
@@ -373,13 +358,13 @@ struct types_have_common_values<UnionT<T1, T2>, UnionT<U1, U2>> {
 template <class T>
 class TNode {
  public:
-  template <class U, typename = std::enable_if_t<is_subtype<U, T>::value>>
-  TNode(const TNode<U>& other) V8_NOEXCEPT : node_(other.node_) {
+  template <class U,
+            typename std::enable_if<is_subtype<U, T>::value, int>::type = 0>
+  TNode(const TNode<U>& other) V8_NOEXCEPT : node_(other) {
     LazyTemplateChecks();
   }
-
-  TNode(const TNode& other) V8_NOEXCEPT : node_(other.node_) {}
-  TNode() : node_(nullptr) {}
+  TNode(const TNode& other) V8_NOEXCEPT : node_(other) { LazyTemplateChecks(); }
+  TNode() : TNode(nullptr) {}
 
   TNode operator=(TNode other) {
     DCHECK_NOT_NULL(other.node_);
@@ -389,17 +374,12 @@ class TNode {
 
   operator compiler::Node*() const { return node_; }
 
-  explicit operator bool() const { return node_ != nullptr; }
-
   static TNode UncheckedCast(compiler::Node* node) { return TNode(node); }
 
  protected:
-  template <typename U>
-  friend class TNode;
-
   explicit TNode(compiler::Node* node) : node_(node) { LazyTemplateChecks(); }
   // These checks shouldn't be checked before TNode is actually used.
-  void LazyTemplateChecks() const {
+  void LazyTemplateChecks() {
     static_assert(is_valid_type_tag<T>::value, "invalid type tag");
   }
 
