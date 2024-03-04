@@ -27,7 +27,7 @@ if __name__ == "__main__":
     read_version(fin);
     while True:
       id, bs = read_varuintN(fin)
-      if id is None:
+      if id == None:
         break
       payload_length, bs = read_varuintN(fin)
       if id == CUSTOM_SECTION_ID:

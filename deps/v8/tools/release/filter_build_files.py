@@ -18,6 +18,7 @@ import glob
 import itertools
 import json
 import os
+import re
 import sys
 
 EXECUTABLE_FILES = [

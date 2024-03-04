@@ -1,4 +1,4 @@
-// Flags: --enable-sharedarraybuffer-per-context
+// Flags: --no-harmony-sharedarraybuffer
 
 'use strict';
 

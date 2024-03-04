@@ -531,6 +531,10 @@ export class TickProcessor extends LogReader {
         parsers: [parseInt, parseInt,],
         processor: this.processCodeMove
       },
+      'code-delete': {
+        parsers: [parseInt],
+        processor: this.processCodeDelete
+      },
       'code-source-info': {
         parsers: [parseInt, parseInt, parseInt, parseInt, parseString,
           parseString, parseString],
@@ -542,7 +546,7 @@ export class TickProcessor extends LogReader {
       },
       'sfi-move': {
         parsers: [parseInt, parseInt],
-        processor: this.processSFIMove
+        processor: this.processFunctionMove
       },
       'active-runtime-timer': {
         parsers: [parseString],
@@ -723,9 +727,9 @@ export class TickProcessor extends LogReader {
 
   processCodeCreation(type, kind, timestamp, start, size, name, maybe_func) {
     if (type != 'RegExp' && maybe_func.length) {
-      const sfiAddr = parseInt(maybe_func[0]);
+      const funcAddr = parseInt(maybe_func[0]);
       const state = Profile.parseState(maybe_func[1]);
-      this.profile_.addFuncCode(type, name, timestamp, start, size, sfiAddr, state);
+      this.profile_.addFuncCode(type, name, timestamp, start, size, funcAddr, state);
     } else {
       this.profile_.addCode(type, name, timestamp, start, size);
     }
@@ -757,8 +761,8 @@ export class TickProcessor extends LogReader {
     this.profile_.addScriptSource(script, url, source);
   }
 
-  processSFIMove(from, to) {
-    this.profile_.moveSharedFunctionInfo(from, to);
+  processFunctionMove(from, to) {
+    this.profile_.moveFunc(from, to);
   }
 
   includeTick(vmState) {

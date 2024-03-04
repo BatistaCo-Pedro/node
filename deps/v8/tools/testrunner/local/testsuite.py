@@ -29,9 +29,7 @@
 import imp
 import itertools
 import os
-
 from contextlib import contextmanager
-from pathlib import Path
 
 from . import statusfile
 from . import utils
@@ -108,14 +106,21 @@ class TestLoader(object):
     logic before the test creation."""
     return filename
 
+  # TODO: not needed for every TestLoader, extract it into a subclass.
+  def _path_to_name(self, path):
+    if utils.IsWindows():
+      return path.replace(os.path.sep, "/")
+
+    return path
+
   def _create_test(self, path, suite, **kwargs):
     """Converts paths into test objects using the given options"""
-    return self.test_class(suite, path, path.as_posix(), **kwargs)
+    return self.test_class(suite, path, self._path_to_name(path), **kwargs)
 
   def list_tests(self):
     """Loads and returns the test objects for a TestSuite"""
     # TODO: detect duplicate tests.
-    for filename in map(Path, self._list_test_filenames()):
+    for filename in self._list_test_filenames():
       if self._should_filter_by_name(filename):
         continue
 
@@ -151,7 +156,7 @@ class GenericTestLoader(TestLoader):
 
   def __find_extension(self, filename):
     for extension in self.extensions:
-      if filename.name.endswith(extension):
+      if filename.endswith(extension):
         return extension
 
     return False
@@ -161,10 +166,10 @@ class GenericTestLoader(TestLoader):
       return True
 
     for suffix in self.excluded_suffixes:
-      if filename.name.endswith(suffix):
+      if filename.endswith(suffix):
         return True
 
-    if filename.name in self.excluded_files:
+    if os.path.basename(filename) in self.excluded_files:
       return True
 
     return False
@@ -174,14 +179,14 @@ class GenericTestLoader(TestLoader):
     if not extension:
       return filename
 
-    return filename.parent / filename.name[:-len(extension)]
+    return filename[:-len(extension)]
 
   def _to_relpath(self, abspath, test_root):
-    return abspath.relative_to(test_root)
+    return os.path.relpath(abspath, test_root)
 
   def _list_test_filenames(self):
     for test_dir in sorted(self.test_dirs):
-      test_root = self.test_root / test_dir
+      test_root = os.path.join(self.test_root, test_dir)
       for dirname, dirs, files in os.walk(test_root, followlinks=True):
         dirs.sort()
         for dir in dirs:
@@ -190,7 +195,8 @@ class GenericTestLoader(TestLoader):
 
         files.sort()
         for filename in files:
-          abspath = Path(dirname) / filename
+          abspath = os.path.join(dirname, filename)
+
           yield self._to_relpath(abspath, test_root)
 
 
@@ -241,13 +247,13 @@ def _load_testsuite_module(name, root):
 class TestSuite(object):
   @staticmethod
   def Load(ctx, root, test_config):
-    name = root.name
+    name = root.split(os.path.sep)[-1]
     with _load_testsuite_module(name, root) as module:
       return module.TestSuite(ctx, name, root, test_config)
 
   def __init__(self, ctx, name, root, test_config):
     self.name = name  # string
-    self.root = root  # pathlib path
+    self.root = root  # string containing path
     self.test_config = test_config
     self.tests = None  # list of TestCase objects
     self.statusfile = None

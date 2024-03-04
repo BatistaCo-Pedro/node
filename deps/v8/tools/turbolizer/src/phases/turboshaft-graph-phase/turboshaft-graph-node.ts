@@ -16,18 +16,18 @@ export class TurboshaftGraphNode extends Node<TurboshaftGraphEdge<TurboshaftGrap
   sourcePosition: SourcePosition;
   bytecodePosition: BytecodePosition;
   origin: NodeOrigin;
-  opEffects: String;
+  opPropertiesType: OpPropertiesType;
 
   constructor(id: number, title: string, block: TurboshaftGraphBlock,
               sourcePosition: SourcePosition, bytecodePosition: BytecodePosition,
-              origin: NodeOrigin, opEffects: String) {
+              origin: NodeOrigin, opPropertiesType: OpPropertiesType) {
     super(id);
     this.title = title;
     this.block = block;
     this.sourcePosition = sourcePosition;
     this.bytecodePosition = bytecodePosition;
     this.origin = origin;
-    this.opEffects = opEffects;
+    this.opPropertiesType = opPropertiesType;
     this.visible = true;
   }
 
@@ -45,22 +45,17 @@ export class TurboshaftGraphNode extends Node<TurboshaftGraphEdge<TurboshaftGrap
   }
 
   public getTitle(): string {
-    let title = `${this.id} ${this.title}`;
-    title += `\nEffects: ${this.opEffects}`;
+    let title = `${this.id} ${this.title} ${this.opPropertiesType}`;
     if (this.origin) {
       title += `\nOrigin: ${this.origin.toString()}`;
     }
     if (this.inputs.length > 0) {
-      title += `\nInputs: ${this.inputs.map(i => formatInput(i.source)).join(", ")}`;
+      title += `\nInputs: ${this.inputs.map(i => i.source.id).join(", ")}`;
     }
     if (this.outputs.length > 0) {
       title += `\nOutputs: ${this.outputs.map(i => i.target.id).join(", ")}`;
     }
     return title;
-
-    function formatInput(input: TurboshaftGraphNode) {
-      return `[${input.block}] ${input.displayLabel}`;
-    }
   }
 
   public getHistoryLabel(): string {
@@ -81,4 +76,13 @@ export class TurboshaftGraphNode extends Node<TurboshaftGraphEdge<TurboshaftGrap
     if (this.id !== that.id) return false;
     return this.title === that.title;
   }
+}
+
+export enum OpPropertiesType {
+  Pure = "Pure",
+  Reading = "Reading",
+  Writing = "Writing",
+  CanDeopt = "CanDeopt",
+  AnySideEffects = "AnySideEffects",
+  BlockTerminator = "BlockTerminator"
 }

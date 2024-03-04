@@ -5,8 +5,6 @@ prefix v8-updates
 # sample-test                        : PASS,FLAKY
 
 [true] # This section applies to all platforms
-# https://github.com/nodejs/node/issues/50079
-test-linux-perf: SKIP
 
 [$system==win32]
 

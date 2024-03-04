@@ -83,8 +83,8 @@ WASI::WASI(Environment* env,
   int err = uvwasi_init(&uvw_, options);
   if (err != UVWASI_ESUCCESS) {
     Local<Value> exception;
-    CHECK(
-        WASIException(env->context(), err, "uvwasi_init").ToLocal(&exception));
+    if (!WASIException(env->context(), err, "uvwasi_init").ToLocal(&exception))
+      return;
 
     env->isolate()->ThrowException(exception);
   }

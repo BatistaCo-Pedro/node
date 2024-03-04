@@ -272,6 +272,7 @@ def printtest(flags):
   anyAlternative = any([alternativeFn1, alternativeFn2, alternativeFn3,
       alternativeFn4, alternativeFn5])
   specificAlternative = any([alternativeFn2, alternativeFn3])
+  rareAlternative = not specificAlternative
 
   # If try returns and throws, then don't catchWithLocal, endReturnLocal, or
   # deopt, or do any alternative.
@@ -355,7 +356,7 @@ def printtest(flags):
   resultTo = "local +=" if tryResultToLocal else "return"
   if tryReturns and not (tryThrows and not tryFirstReturns):
     write(  "      {} 4 + {increaseAndReturn15};".format(resultTo, **fragments))
-    if result is None:
+    if result == None:
       counter += 1
       if tryResultToLocal:
         local += 19
@@ -363,19 +364,19 @@ def printtest(flags):
         result = ("return", 19)
   if tryThrows:
     write(  "      {} 4 + {increaseAndThrow42};".format(resultTo, **fragments))
-    if result is None:
+    if result == None:
       counter += 1
       result = ("throw", 42)
   if tryReturns and tryThrows and not tryFirstReturns:
     write(  "      {} 4 + {increaseAndReturn15};".format(resultTo, **fragments))
-    if result is None:
+    if result == None:
       counter += 1
       if tryResultToLocal:
         local += 19
       else:
         result = ("return", 19)
   write(    "      counter++;")
-  if result is None:
+  if result == None:
     counter += 1
 
   if doCatch:
@@ -426,15 +427,15 @@ def printtest(flags):
 
   write(    "    }")
   write(    "    counter++;")
-  if result is None:
+  if result == None:
     counter += 1
   if endReturnLocal:
     write(  "    return 5 + local;")
-    if result is None:
+    if result == None:
       result = ('return', 5 + local)
   write(    "  }")
 
-  if result is None:
+  if result == None:
     write(  "  resetOptAndAssertResultEquals(undefined, f);")
   else:
     tag, value = result
@@ -463,11 +464,11 @@ def rotateshard():
   global FILE, NUM_TESTS_IN_SHARD, SHARD_SIZE
   if MODE != 'shard':
     return
-  if FILE is not None and NUM_TESTS_IN_SHARD < SHARD_SIZE:
+  if FILE != None and NUM_TESTS_IN_SHARD < SHARD_SIZE:
     return
-  if FILE is not None:
+  if FILE != None:
     finishshard()
-    assert FILE is None
+    assert FILE == None
   FILE = open(SHARD_FILENAME_TEMPLATE.format(shard=SHARD_NUM), 'w')
   write_shard_header()
   NUM_TESTS_IN_SHARD = 0
@@ -533,6 +534,7 @@ allFlagCombinations = [
 ]
 
 if __name__ == '__main__':
+  global MODE
   if sys.argv[1:] == []:
     MODE = 'stdout'
     print("// Printing all shards together to stdout.")

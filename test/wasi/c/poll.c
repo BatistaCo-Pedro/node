@@ -10,11 +10,11 @@ int main(void) {
   time_t before, now;
   int ret;
   char* platform;
-  int is_aix_or_os400;
+  int is_aix;
   int is_win;
 
   platform = getenv("NODE_PLATFORM");
-  is_aix_or_os400 = platform != NULL && (0 == strcmp(platform, "aix") || 0 == strcmp(platform, "os400"));
+  is_aix = platform != NULL && 0 == strcmp(platform, "aix");
   is_win = platform != NULL && 0 == strcmp(platform, "win32");
 
   // Test sleep() behavior.
@@ -64,7 +64,7 @@ int main(void) {
   ret = poll(fds, 1, 2000);
   assert(ret == 1);
 
-  if (is_aix_or_os400)
+  if (is_aix)
     assert(fds[0].revents == POLLIN);
   else
     assert(fds[0].revents == (POLLHUP | POLLIN));

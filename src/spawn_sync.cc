@@ -22,7 +22,6 @@
 #include "spawn_sync.h"
 #include "debug_utils-inl.h"
 #include "env-inl.h"
-#include "node_external_reference.h"
 #include "node_internals.h"
 #include "string_bytes.h"
 #include "util-inl.h"
@@ -367,10 +366,6 @@ void SyncProcessRunner::Initialize(Local<Object> target,
   SetMethod(context, target, "spawn", Spawn);
 }
 
-void SyncProcessRunner::RegisterExternalReferences(
-    ExternalReferenceRegistry* registry) {
-  registry->Register(Spawn);
-}
 
 void SyncProcessRunner::Spawn(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
@@ -1112,5 +1107,3 @@ void SyncProcessRunner::KillTimerCloseCallback(uv_handle_t* handle) {
 
 NODE_BINDING_CONTEXT_AWARE_INTERNAL(spawn_sync,
                                     node::SyncProcessRunner::Initialize)
-NODE_BINDING_EXTERNAL_REFERENCE(
-    spawn_sync, node::SyncProcessRunner::RegisterExternalReferences)

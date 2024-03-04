@@ -1,4 +1,4 @@
-export interface ConstantsBinding {
+declare function InternalBinding(binding: 'constants'): {
   os: {
     UV_UDP_REUSEADDR: 4;
     dlopen: {
@@ -186,8 +186,6 @@ export interface ConstantsBinding {
     COPYFILE_FICLONE: 2;
     UV_FS_COPYFILE_FICLONE_FORCE: 4;
     COPYFILE_FICLONE_FORCE: 4;
-    EXTENSIONLESS_FORMAT_JAVASCRIPT: 0;
-    EXTENSIONLESS_FORMAT_WASM: 1;
   };
   crypto: {
     OPENSSL_VERSION_NUMBER: 269488319;
@@ -384,4 +382,4 @@ export interface ConstantsBinding {
     TRACE_EVENT_PHASE_LEAVE_CONTEXT: 41;
     TRACE_EVENT_PHASE_LINK_IDS: 61;
   };
-}
+};

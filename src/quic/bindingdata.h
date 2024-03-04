@@ -23,8 +23,8 @@ class Endpoint;
 class Packet;
 
 enum class Side {
-  CLIENT,
-  SERVER,
+  CLIENT = NGTCP2_CRYPTO_SIDE_CLIENT,
+  SERVER = NGTCP2_CRYPTO_SIDE_SERVER,
 };
 
 enum class EndpointLabel {
@@ -103,6 +103,7 @@ constexpr size_t kMaxVectorCount = 16;
   V(session_version_negotiation, SessionVersionNegotiation)                    \
   V(session_path_validation, SessionPathValidation)                            \
   V(stream_close, StreamClose)                                                 \
+  V(stream_error, StreamError)                                                 \
   V(stream_created, StreamCreated)                                             \
   V(stream_reset, StreamReset)                                                 \
   V(stream_headers, StreamHeaders)                                             \
@@ -118,23 +119,18 @@ constexpr size_t kMaxVectorCount = 16;
   V(address_lru_size, "addressLRUSize")                                        \
   V(alpn, "alpn")                                                              \
   V(application_options, "application")                                        \
-  V(bbr, "bbr")                                                                \
   V(ca, "ca")                                                                  \
   V(certs, "certs")                                                            \
   V(cc_algorithm, "cc")                                                        \
   V(crl, "crl")                                                                \
   V(ciphers, "ciphers")                                                        \
-  V(cubic, "cubic")                                                            \
   V(disable_active_migration, "disableActiveMigration")                        \
   V(disable_stateless_reset, "disableStatelessReset")                          \
-  V(enable_connect_protocol, "enableConnectProtocol")                          \
-  V(enable_datagrams, "enableDatagrams")                                       \
   V(enable_tls_trace, "tlsTrace")                                              \
   V(endpoint, "Endpoint")                                                      \
   V(endpoint_udp, "Endpoint::UDP")                                             \
   V(failure, "failure")                                                        \
   V(groups, "groups")                                                          \
-  V(handshake_timeout, "handshakeTimeout")                                     \
   V(hostname, "hostname")                                                      \
   V(http3_alpn, &NGHTTP3_ALPN_H3[1])                                           \
   V(initial_max_data, "initialMaxData")                                        \
@@ -159,10 +155,7 @@ constexpr size_t kMaxVectorCount = 16;
   V(max_payload_size, "maxPayloadSize")                                        \
   V(max_retries, "maxRetries")                                                 \
   V(max_stateless_resets, "maxStatelessResetsPerHost")                         \
-  V(max_stream_window, "maxStreamWindow")                                      \
-  V(max_window, "maxWindow")                                                   \
   V(min_version, "minVersion")                                                 \
-  V(no_udp_payload_size_shaping, "noUdpPayloadSizeShaping")                    \
   V(packetwrap, "PacketWrap")                                                  \
   V(preferred_address_strategy, "preferredAddressPolicy")                      \
   V(qlog, "qlog")                                                              \
@@ -170,7 +163,6 @@ constexpr size_t kMaxVectorCount = 16;
   V(qpack_encoder_max_dtable_capacity, "qpackEncoderMaxDTableCapacity")        \
   V(qpack_max_dtable_capacity, "qpackMaxDTableCapacity")                       \
   V(reject_unauthorized, "rejectUnauthorized")                                 \
-  V(reno, "reno")                                                              \
   V(retry_token_expiration, "retryTokenExpiration")                            \
   V(request_peer_certificate, "requestPeerCertificate")                        \
   V(reset_token_secret, "resetTokenSecret")                                    \
@@ -203,7 +195,7 @@ class BindingData final
       public mem::NgLibMemoryManager<BindingData, ngtcp2_mem> {
  public:
   SET_BINDING_ID(quic_binding_data)
-  static void InitPerContext(Realm* realm, v8::Local<v8::Object> target);
+  static void Initialize(Environment* env, v8::Local<v8::Object> target);
   static void RegisterExternalReferences(ExternalReferenceRegistry* registry);
 
   static BindingData& Get(Environment* env);
@@ -225,7 +217,7 @@ class BindingData final
   // bridge out to the JS API.
   static void SetCallbacks(const v8::FunctionCallbackInfo<v8::Value>& args);
 
-  std::vector<Packet*> packet_freelist;
+  std::vector<BaseObjectPtr<BaseObject>> packet_freelist;
 
   std::unordered_map<Endpoint*, BaseObjectPtr<BaseObject>> listening_endpoints;
 
@@ -312,8 +304,6 @@ struct CallbackScopeBase {
   ~CallbackScopeBase();
 };
 
-// Maintains a strong reference to BaseObject type ptr to keep it alive during
-// a MakeCallback during which it might be destroyed.
 template <typename T>
 struct CallbackScope final : public CallbackScopeBase {
   BaseObjectPtr<T> ref;

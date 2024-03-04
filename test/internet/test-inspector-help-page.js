@@ -18,7 +18,7 @@ function check(url, cb) {
     assert(res.statusCode >= 200 && res.statusCode < 400);
 
     if (res.statusCode >= 300)
-      return check(new URL(res.headers.location, url), cb);
+      return check(res.headers.location, cb);
 
     let result = '';
 
@@ -28,7 +28,7 @@ function check(url, cb) {
     });
 
     res.on('end', common.mustCall(() => {
-      assert.match(result, />Debugging Node\.js</);
+      assert.match(result, />Debugging Guide</);
       cb();
     }));
   })).on('error', common.mustNotCall);

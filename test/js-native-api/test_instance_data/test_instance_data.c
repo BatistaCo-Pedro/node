@@ -1,8 +1,7 @@
-#include <js_native_api.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <js_native_api.h>
 #include "../common.h"
-#include "../entry_point.h"
 
 typedef struct {
   size_t value;

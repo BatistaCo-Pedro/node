@@ -1,11 +1,11 @@
 'use strict';
 
 require('../common');
-const assert = require('node:assert');
+const assert = require('assert');
 
 const {
   Worker, MessageChannel
-} = require('node:worker_threads');
+} = require('worker_threads');
 
 const channel = new MessageChannel();
 const workerData = { mesage: channel.port1 };
@@ -54,36 +54,8 @@ const meowScript = () => 'meow';
     workerData,
     transferList: []
   }), {
-    constructor: DOMException,
-    name: 'DataCloneError',
-    code: 25,
+    code: 'ERR_MISSING_TRANSFERABLE_IN_TRANSFER_LIST',
     message: 'Object that needs transfer was found in message but not ' +
              'listed in transferList'
   });
-}
-
-{
-  // Should not crash when MessagePort is transferred to another context.
-  // https://github.com/nodejs/node/issues/49075
-  const channel = new MessageChannel();
-  new Worker(`
-    const { runInContext, createContext } = require('node:vm')
-    const { workerData } = require('worker_threads');
-    const context = createContext(Object.create(null));
-    context.messagePort = workerData.messagePort;
-    runInContext(
-      \`messagePort.postMessage("Meow")\`,
-      context,
-      { displayErrors: true }
-    );
-    `, {
-    eval: true,
-    workerData: { messagePort: channel.port2 },
-    transferList: [channel.port2]
-  });
-  channel.port1.on(
-    'message',
-    (message) =>
-      assert.strictEqual(message, 'Meow')
-  );
 }

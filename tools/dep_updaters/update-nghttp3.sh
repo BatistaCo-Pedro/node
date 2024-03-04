@@ -59,7 +59,7 @@ autoreconf -i
 
 ./configure --prefix="$PWD/build" --enable-lib-only
 
-replace_dir "$DEPS_DIR/ngtcp2/nghttp3/lib" "lib"
+cp -R lib/* "$DEPS_DIR/ngtcp2/nghttp3/lib/"
 
 # Update the version number on maintaining-dependencies.md
 # and print the new version as the last line of the script as we need

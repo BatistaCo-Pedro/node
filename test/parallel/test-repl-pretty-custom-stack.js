@@ -42,9 +42,8 @@ const origPrepareStackTrace = Error.prepareStackTrace;
 Error.prepareStackTrace = (err, stack) => {
   if (err instanceof SyntaxError)
     return err.toString();
-  // Insert the error at the beginning of the stack
-  stack.unshift(err);
-  return stack.join('--->\n');
+  stack.push(err);
+  return stack.reverse().join('--->\n');
 };
 
 process.on('uncaughtException', (e) => {
@@ -79,10 +78,3 @@ const tests = [
 ];
 
 tests.forEach(run);
-
-// Verify that the stack can be generated when Error.prepareStackTrace is deleted.
-delete Error.prepareStackTrace;
-run({
-  command: 'throw new TypeError(\'Whoops!\')',
-  expected: 'Uncaught TypeError: Whoops!\n'
-});

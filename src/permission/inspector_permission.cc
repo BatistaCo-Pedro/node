@@ -8,14 +8,13 @@ namespace permission {
 
 // Currently, Inspector manage a single state
 // Once denied, it's always denied
-void InspectorPermission::Apply(Environment* env,
-                                const std::vector<std::string>& allow,
+void InspectorPermission::Apply(const std::vector<std::string>& allow,
                                 PermissionScope scope) {
   deny_all_ = true;
 }
 
 bool InspectorPermission::is_granted(PermissionScope perm,
-                                     const std::string_view& param) const {
+                                     const std::string_view& param) {
   return deny_all_ == false;
 }
 

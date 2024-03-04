@@ -5,7 +5,6 @@
 # found in the LICENSE file.
 
 from functools import reduce
-from pathlib import Path
 
 import datetime
 import json
@@ -16,6 +15,10 @@ from testrunner.testproc.rerun import RerunProc
 from testrunner.testproc.timeout import TimeoutProc
 from testrunner.testproc.progress import ResultsTracker, ProgressProc
 from testrunner.testproc.shard import ShardProc
+
+# Adds testrunner to the path hence it has to be imported at the beggining.
+TOOLS_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(TOOLS_PATH)
 
 import testrunner.base_runner as base_runner
 
@@ -32,10 +35,10 @@ from testrunner.testproc.variant import VariantProc
 VARIANTS = ['default']
 
 MORE_VARIANTS = [
+  'jitless',
   'stress',
   'stress_js_bg_compile_wasm_code_gc',
   'stress_incremental_marking',
-  'future',
 ]
 
 VARIANT_ALIASES = {
@@ -50,7 +53,7 @@ VARIANT_ALIASES = {
         MORE_VARIANTS + VARIANTS,
     # Additional variants, run on a subset of bots.
     'extra': [
-        'jitless', 'nooptimization', 'no_wasm_traps', 'instruction_scheduling',
+        'nooptimization', 'future', 'no_wasm_traps', 'instruction_scheduling',
         'always_sparkplug', 'turboshaft'
     ],
 }
@@ -148,12 +151,12 @@ class StandardTestRunner(base_runner.BaseTestRunner):
                       help='Path to a file for storing flakiness json.')
 
   def _predictable_wrapper(self):
-    return self.v8_root / 'tools' / 'predictable_wrapper.py'
+    return os.path.join(self.v8_root, 'tools', 'predictable_wrapper.py')
 
   def _process_options(self):
     if self.options.sancov_dir:
-      self.sancov_dir = Path(self.options.sancov_dir)
-      if not self.sancov_dir.exists():
+      self.sancov_dir = self.options.sancov_dir
+      if not os.path.exists(self.sancov_dir):
         print('sancov-dir %s doesn\'t exist' % self.sancov_dir)
         raise base_runner.TestRunnerError()
 
@@ -191,7 +194,7 @@ class StandardTestRunner(base_runner.BaseTestRunner):
       self.options.slow_tests = 'skip'
       self.options.pass_fail_tests = 'skip'
 
-    if self.build_config.verify_predictable:
+    if self.build_config.predictable:
       self.options.variants = 'default'
       self.options.extra_flags.append('--predictable')
       self.options.extra_flags.append('--verify-predictable')
@@ -216,7 +219,7 @@ class StandardTestRunner(base_runner.BaseTestRunner):
         raise base_runner.TestRunnerError()
     CheckTestMode('slow test', self.options.slow_tests)
     CheckTestMode('pass|fail test', self.options.pass_fail_tests)
-    if not self.build_config.i18n:
+    if self.build_config.no_i18n:
       base_runner.TEST_MAP['bot_default'].remove('intl')
       base_runner.TEST_MAP['default'].remove('intl')
       # TODO(machenbach): uncomment after infra side lands.
@@ -266,7 +269,9 @@ class StandardTestRunner(base_runner.BaseTestRunner):
       ])
 
   def _get_statusfile_variables(self):
-    variables = super(StandardTestRunner, self)._get_statusfile_variables()
+    variables = (
+        super(StandardTestRunner, self)._get_statusfile_variables())
+
     variables.update({
       'gc_stress': self.options.gc_stress or self.options.random_gc_stress,
       'gc_fuzzer': self.options.random_gc_stress,
@@ -285,7 +290,7 @@ class StandardTestRunner(base_runner.BaseTestRunner):
     loader = LoadProc(tests, initial_batch_size=self.options.j * 2)
     results = ResultsTracker.create(self.options)
     outproc_factory = None
-    if self.build_config.verify_predictable:
+    if self.build_config.predictable:
       outproc_factory = predictable.get_outproc
     execproc = ExecutionProc(ctx, jobs, outproc_factory)
     sigproc = self._create_signal_proc()
@@ -342,7 +347,7 @@ class StandardTestRunner(base_runner.BaseTestRunner):
         'Duration: %s' % format_duration(test['duration']),
       ]
 
-    assert Path(self.options.json_test_results).exists()
+    assert os.path.exists(self.options.json_test_results)
     with open(self.options.json_test_results, "r") as f:
       output = json.load(f)
     lines = []
@@ -361,7 +366,7 @@ class StandardTestRunner(base_runner.BaseTestRunner):
     print("\n".join(lines))
 
   def _create_predictable_filter(self):
-    if not self.build_config.verify_predictable:
+    if not self.build_config.predictable:
       return None
     return predictable.PredictableFilterProc()
 

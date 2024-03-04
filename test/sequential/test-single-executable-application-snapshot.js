@@ -3,7 +3,7 @@
 require('../common');
 
 const {
-  generateSEA,
+  injectAndCodeSign,
   skipIfSingleExecutableIsNotSupported,
 } = require('../common/sea');
 
@@ -12,11 +12,8 @@ skipIfSingleExecutableIsNotSupported();
 // This tests the snapshot support in single executable applications.
 
 const tmpdir = require('../common/tmpdir');
-const { writeFileSync, existsSync } = require('fs');
-const {
-  spawnSyncAndExit,
-  spawnSyncAndExitWithoutError
-} = require('../common/child_process');
+const { copyFileSync, writeFileSync, existsSync } = require('fs');
+const { spawnSync } = require('child_process');
 const assert = require('assert');
 
 const configFile = tmpdir.resolve('sea-config.json');
@@ -35,17 +32,16 @@ const outputFile = tmpdir.resolve(process.platform === 'win32' ? 'sea.exe' : 'se
   }
   `);
 
-  spawnSyncAndExit(
+  const child = spawnSync(
     process.execPath,
     ['--experimental-sea-config', 'sea-config.json'],
     {
       cwd: tmpdir.path
-    },
-    {
-      status: 1,
-      signal: null,
-      stderr: /snapshot\.js does not invoke v8\.startupSnapshot\.setDeserializeMainFunction\(\)/
     });
+
+  assert.match(
+    child.stderr.toString(),
+    /snapshot\.js does not invoke v8\.startupSnapshot\.setDeserializeMainFunction\(\)/);
 }
 
 {
@@ -69,40 +65,24 @@ const outputFile = tmpdir.resolve(process.platform === 'win32' ? 'sea.exe' : 'se
   }
   `);
 
-  spawnSyncAndExitWithoutError(
+  let child = spawnSync(
     process.execPath,
     ['--experimental-sea-config', 'sea-config.json'],
     {
-      cwd: tmpdir.path,
-      env: {
-        NODE_DEBUG_NATIVE: 'SEA',
-        ...process.env,
-      },
-    },
-    {
-      stderr: /Single executable application is an experimental feature/
+      cwd: tmpdir.path
     });
+  assert.match(
+    child.stderr.toString(),
+    /Single executable application is an experimental feature/);
 
   assert(existsSync(seaPrepBlob));
 
-  generateSEA(outputFile, process.execPath, seaPrepBlob);
+  copyFileSync(process.execPath, outputFile);
+  injectAndCodeSign(outputFile, seaPrepBlob);
 
-  spawnSyncAndExitWithoutError(
-    outputFile,
-    {
-      env: {
-        NODE_DEBUG_NATIVE: 'SEA,MKSNAPSHOT',
-        ...process.env,
-      }
-    },
-    {
-      trim: true,
-      stdout: 'Hello from snapshot',
-      stderr(output) {
-        assert.doesNotMatch(
-          output,
-          /Single executable application is an experimental feature/);
-      }
-    }
-  );
+  child = spawnSync(outputFile);
+  assert.strictEqual(child.stdout.toString().trim(), 'Hello from snapshot');
+  assert.doesNotMatch(
+    child.stderr.toString(),
+    /Single executable application is an experimental feature/);
 }

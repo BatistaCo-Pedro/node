@@ -324,16 +324,10 @@ class MessagePort : public HandleWrap {
 // See e.g. FileHandle in internal/fs/promises.js for an example.
 class JSTransferable : public BaseObject {
  public:
-  static BaseObjectPtr<JSTransferable> Wrap(Environment* env,
-                                            v8::Local<v8::Object> target);
+  static JSTransferable* Wrap(Environment* env, v8::Local<v8::Object> target);
   static bool IsJSTransferable(Environment* env,
                                v8::Local<v8::Context> context,
                                v8::Local<v8::Object> object);
-
-  JSTransferable(Environment* env,
-                 v8::Local<v8::Object> obj,
-                 v8::Local<v8::Object> target);
-  ~JSTransferable();
 
   BaseObject::TransferMode GetTransferMode() const override;
   std::unique_ptr<TransferData> TransferForMessaging() override;
@@ -351,6 +345,10 @@ class JSTransferable : public BaseObject {
   v8::Local<v8::Object> target() const;
 
  private:
+  JSTransferable(Environment* env,
+                 v8::Local<v8::Object> obj,
+                 v8::Local<v8::Object> target);
+
   template <TransferMode mode>
   std::unique_ptr<TransferData> TransferOrClone() const;
 
@@ -379,7 +377,7 @@ class JSTransferable : public BaseObject {
 };
 
 v8::Local<v8::FunctionTemplate> GetMessagePortConstructorTemplate(
-    IsolateData* isolate_data);
+    Environment* env);
 
 }  // namespace worker
 }  // namespace node

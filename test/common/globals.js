@@ -123,7 +123,6 @@ const webIdlExposedWindow = new Set([
   'Headers',
   'Request',
   'Response',
-  'WebSocket',
 ]);
 
 const nodeGlobals = new Set([

@@ -1,4 +1,4 @@
-// Flags: --import ./test/fixtures/es-module-loaders/builtin-named-exports.mjs
+// Flags: --experimental-loader ./test/fixtures/es-module-loaders/builtin-named-exports-loader.mjs
 import '../common/index.mjs';
 import { readFile, __fromLoader } from 'fs';
 import assert from 'assert';

@@ -4,16 +4,11 @@
 
 > Stability: 1 - Experimental
 
-<strong class="critical">The `node:wasi` module does not currently provide the
-comprehensive file system security properties provided by some WASI runtimes.
-Full support for secure file system sandboxing may or may not be implemented in
-future. In the mean time, do not rely on it to run untrusted code. </strong>
-
 <!-- source_link=lib/wasi.js -->
 
 The WASI API provides an implementation of the [WebAssembly System Interface][]
-specification. WASI gives WebAssembly applications access to the underlying
-operating system via a collection of POSIX-like functions.
+specification. WASI gives sandboxed WebAssembly applications access to the
+underlying operating system via a collection of POSIX-like functions.
 
 ```mjs
 import { readFile } from 'node:fs/promises';
@@ -25,7 +20,7 @@ const wasi = new WASI({
   args: argv,
   env,
   preopens: {
-    '/local': '/some/real/path/that/wasm/can/access',
+    '/sandbox': '/some/real/path/that/wasm/can/access',
   },
 });
 
@@ -49,7 +44,7 @@ const wasi = new WASI({
   args: argv,
   env,
   preopens: {
-    '/local': '/some/real/path/that/wasm/can/access',
+    '/sandbox': '/some/real/path/that/wasm/can/access',
   },
 });
 
@@ -102,32 +97,6 @@ Use [wabt](https://github.com/WebAssembly/wabt) to compile `.wat` to `.wasm`
 wat2wasm demo.wat
 ```
 
-## Security
-
-<!-- YAML
-added:
-  - v21.2.0
-  - v20.11.0
-changes:
-  - version:
-    - v21.2.0
-    - v20.11.0
-    pr-url: https://github.com/nodejs/node/pull/50396
-    description: Clarify WASI security properties.
--->
-
-WASI provides a capabilities-based model through which applications are provided
-their own custom `env`, `preopens`, `stdin`, `stdout`, `stderr`, and `exit`
-capabilities.
-
-**The current Node.js threat model does not provide secure sandboxing as is
-present in some WASI runtimes.**
-
-While the capability features are supported, they do not form a security model
-in Node.js. For example, the file system sandboxing can be escaped with various
-techniques. The project is exploring whether these security guarantees could be
-added in future.
-
 ## Class: `WASI`
 
 <!-- YAML
@@ -138,7 +107,9 @@ added:
 
 The `WASI` class provides the WASI system call API and additional convenience
 methods for working with WASI-based applications. Each `WASI` instance
-represents a distinct environment.
+represents a distinct sandbox environment. For security purposes, each `WASI`
+instance must have its command-line arguments, environment variables, and
+sandbox directory structure configured explicitly.
 
 ### `new WASI([options])`
 
@@ -165,9 +136,9 @@ changes:
   * `env` {Object} An object similar to `process.env` that the WebAssembly
     application will see as its environment. **Default:** `{}`.
   * `preopens` {Object} This object represents the WebAssembly application's
-    local directory structure. The string keys of `preopens` are treated as
-    directories within the file system. The corresponding values in `preopens`
-    are the real paths to those directories on the host machine.
+    sandbox directory structure. The string keys of `preopens` are treated as
+    directories within the sandbox. The corresponding values in `preopens` are
+    the real paths to those directories on the host machine.
   * `returnOnExit` {boolean} By default, when WASI applications call
     `__wasi_proc_exit()`  `wasi.start()` will return with the exit code
     specified rather than terminating the process. Setting this option to

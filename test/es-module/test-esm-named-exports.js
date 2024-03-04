@@ -1,4 +1,4 @@
-// Flags: --import ./test/fixtures/es-module-loaders/builtin-named-exports.mjs
+// Flags: --experimental-loader ./test/fixtures/es-module-loaders/builtin-named-exports-loader.mjs
 'use strict';
 
 require('../common');

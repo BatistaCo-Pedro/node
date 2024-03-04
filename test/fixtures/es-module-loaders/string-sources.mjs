@@ -23,7 +23,7 @@ const SOURCES = {
 export function resolve(specifier, context, next) {
   if (specifier.startsWith('test:')) {
     return {
-      importAttributes: context.importAttributes,
+      importAssertions: context.importAssertions,
       shortCircuit: true,
       url: specifier,
     };

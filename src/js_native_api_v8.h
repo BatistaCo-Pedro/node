@@ -4,7 +4,7 @@
 #include "js_native_api_types.h"
 #include "js_native_api_v8_internals.h"
 
-inline napi_status napi_clear_last_error(node_api_nogc_env env);
+inline napi_status napi_clear_last_error(napi_env env);
 
 namespace v8impl {
 
@@ -105,9 +105,6 @@ struct napi_env__ {
     CallIntoModule([&](napi_env env) { cb(env, data, hint); });
   }
 
-  // Invoke finalizer from V8 garbage collector.
-  void InvokeFinalizerFromGC(v8impl::RefTracker* finalizer);
-
   // Enqueue the finalizer to the napi_env's own queue of the second pass
   // weak callback.
   // Implementation should drain the queue at the time it is safe to call
@@ -133,19 +130,6 @@ struct napi_env__ {
     delete this;
   }
 
-  void CheckGCAccess() {
-    if (module_api_version == NAPI_VERSION_EXPERIMENTAL && in_gc_finalizer) {
-      v8impl::OnFatalError(
-          nullptr,
-          "Finalizer is calling a function that may affect GC state.\n"
-          "The finalizers are run directly from GC and must not affect GC "
-          "state.\n"
-          "Use `node_api_post_finalizer` from inside of the finalizer to work "
-          "around this issue.\n"
-          "It schedules the call as a new task in the event loop.");
-    }
-  }
-
   v8::Isolate* const isolate;  // Shortcut for context()->GetIsolate()
   v8impl::Persistent<v8::Context> context_persistent;
 
@@ -164,7 +148,6 @@ struct napi_env__ {
   int refs = 1;
   void* instance_data = nullptr;
   int32_t module_api_version = NODE_API_DEFAULT_MODULE_API_VERSION;
-  bool in_gc_finalizer = false;
 
  protected:
   // Should not be deleted directly. Delete with `napi_env__::DeleteMe()`
@@ -172,8 +155,7 @@ struct napi_env__ {
   virtual ~napi_env__() = default;
 };
 
-inline napi_status napi_clear_last_error(node_api_nogc_env nogc_env) {
-  napi_env env = const_cast<napi_env>(nogc_env);
+inline napi_status napi_clear_last_error(napi_env env) {
   env->last_error.error_code = napi_ok;
   env->last_error.engine_error_code = 0;
   env->last_error.engine_reserved = nullptr;
@@ -181,11 +163,10 @@ inline napi_status napi_clear_last_error(node_api_nogc_env nogc_env) {
   return napi_ok;
 }
 
-inline napi_status napi_set_last_error(node_api_nogc_env nogc_env,
+inline napi_status napi_set_last_error(napi_env env,
                                        napi_status error_code,
                                        uint32_t engine_error_code = 0,
                                        void* engine_reserved = nullptr) {
-  napi_env env = const_cast<napi_env>(nogc_env);
   env->last_error.error_code = error_code;
   env->last_error.engine_error_code = engine_error_code;
   env->last_error.engine_reserved = engine_reserved;
@@ -214,12 +195,6 @@ inline napi_status napi_set_last_error(node_api_nogc_env nogc_env,
     }                                                                          \
   } while (0)
 
-#define CHECK_ENV_NOT_IN_GC(env)                                               \
-  do {                                                                         \
-    CHECK_ENV((env));                                                          \
-    (env)->CheckGCAccess();                                                    \
-  } while (0)
-
 #define CHECK_ARG(env, arg)                                                    \
   RETURN_STATUS_IF_FALSE((env), ((arg) != nullptr), napi_invalid_arg)
 
@@ -235,7 +210,7 @@ inline napi_status napi_set_last_error(node_api_nogc_env nogc_env,
 
 // NAPI_PREAMBLE is not wrapped in do..while: try_catch must have function scope
 #define NAPI_PREAMBLE(env)                                                     \
-  CHECK_ENV_NOT_IN_GC((env));                                                  \
+  CHECK_ENV((env));                                                            \
   RETURN_STATUS_IF_FALSE(                                                      \
       (env), (env)->last_exception.IsEmpty(), napi_pending_exception);         \
   RETURN_STATUS_IF_FALSE((env),                                                \
@@ -380,28 +355,8 @@ enum class Ownership {
   kUserland,
 };
 
-// Wrapper around Finalizer that can be tracked.
-class TrackedFinalizer : public Finalizer, public RefTracker {
- protected:
-  TrackedFinalizer(napi_env env,
-                   napi_finalize finalize_callback,
-                   void* finalize_data,
-                   void* finalize_hint);
-
- public:
-  static TrackedFinalizer* New(napi_env env,
-                               napi_finalize finalize_callback,
-                               void* finalize_data,
-                               void* finalize_hint);
-  ~TrackedFinalizer() override;
-
- protected:
-  void Finalize() override;
-  void FinalizeCore(bool deleteMe);
-};
-
-// Wrapper around TrackedFinalizer that implements reference counting.
-class RefBase : public TrackedFinalizer {
+// Wrapper around Finalizer that implements reference counting.
+class RefBase : public Finalizer, public RefTracker {
  protected:
   RefBase(napi_env env,
           uint32_t initial_refcount,
@@ -417,6 +372,7 @@ class RefBase : public TrackedFinalizer {
                       napi_finalize finalize_callback,
                       void* finalize_data,
                       void* finalize_hint);
+  virtual ~RefBase();
 
   void* Data();
   uint32_t Ref();

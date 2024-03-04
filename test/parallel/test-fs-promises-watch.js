@@ -79,42 +79,42 @@ assert.rejects(
     // eslint-disable-next-line no-unused-vars, no-empty
     for await (const _ of watch(1)) { }
   },
-  { code: 'ERR_INVALID_ARG_TYPE' }).then(common.mustCall());
+  { code: 'ERR_INVALID_ARG_TYPE' });
 
 assert.rejects(
   async () => {
     // eslint-disable-next-line no-unused-vars, no-empty
     for await (const _ of watch(__filename, 1)) { }
   },
-  { code: 'ERR_INVALID_ARG_TYPE' }).then(common.mustCall());
+  { code: 'ERR_INVALID_ARG_TYPE' });
 
 assert.rejects(
   async () => {
     // eslint-disable-next-line no-unused-vars, no-empty
     for await (const _ of watch('', { persistent: 1 })) { }
   },
-  { code: 'ERR_INVALID_ARG_TYPE' }).then(common.mustCall());
+  { code: 'ERR_INVALID_ARG_TYPE' });
 
 assert.rejects(
   async () => {
     // eslint-disable-next-line no-unused-vars, no-empty
     for await (const _ of watch('', { recursive: 1 })) { }
   },
-  { code: 'ERR_INVALID_ARG_TYPE' }).then(common.mustCall());
+  { code: 'ERR_INVALID_ARG_TYPE' });
 
 assert.rejects(
   async () => {
     // eslint-disable-next-line no-unused-vars, no-empty
     for await (const _ of watch('', { encoding: 1 })) { }
   },
-  { code: 'ERR_INVALID_ARG_VALUE' }).then(common.mustCall());
+  { code: 'ERR_INVALID_ARG_VALUE' });
 
 assert.rejects(
   async () => {
     // eslint-disable-next-line no-unused-vars, no-empty
     for await (const _ of watch('', { signal: 1 })) { }
   },
-  { code: 'ERR_INVALID_ARG_TYPE' }).then(common.mustCall());
+  { code: 'ERR_INVALID_ARG_TYPE' });
 
 (async () => {
   const ac = new AbortController();

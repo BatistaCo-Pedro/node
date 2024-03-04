@@ -37,10 +37,10 @@ const v4not = [
   '192.168.0.2000000000',
 ];
 
-for (const ip of v4) {
+v4.forEach((ip) => {
   assert.strictEqual(net.isIPv4(ip), true);
-}
+});
 
-for (const ip of v4not) {
+v4not.forEach((ip) => {
   assert.strictEqual(net.isIPv4(ip), false);
-}
+});

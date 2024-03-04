@@ -178,9 +178,9 @@
  callback called twice in future tick (*ms)
   Error [ERR_TEST_FAILURE]: callback invoked multiple times
       * {
-    code: 'ERR_TEST_FAILURE',
     failureType: 'multipleCallbackInvocations',
-    cause: 'callback invoked multiple times'
+    cause: 'callback invoked multiple times',
+    code: 'ERR_TEST_FAILURE'
   }
 
  callback async throw (*ms)
@@ -263,36 +263,14 @@
   
   {
     bar: 1,
-    baz: {
-      date: 1970-01-01T00:00:00.000Z,
-      null: null,
-      number: 1,
-      string: 'Hello',
-      undefined: undefined
-    },
-    boo: [
-      1
-    ],
     foo: 1
   }
   
   should loosely deep-equal
   
-  {
-    baz: {
-      date: 1970-01-01T00:00:00.000Z,
-      null: null,
-      number: 1,
-      string: 'Hello',
-      undefined: undefined
-    },
-    boo: [
-      1
-    ],
-    circular: <ref *1> {
-      bar: 2,
-      c: [Circular *1]
-    }
+  <ref *1> {
+    bar: 2,
+    c: [Circular *1]
   }
       * {
     generatedMessage: true,
@@ -471,9 +449,9 @@
  callback called twice in future tick (*ms)
   Error [ERR_TEST_FAILURE]: callback invoked multiple times
       * {
-    code: 'ERR_TEST_FAILURE',
     failureType: 'multipleCallbackInvocations',
-    cause: 'callback invoked multiple times'
+    cause: 'callback invoked multiple times',
+    code: 'ERR_TEST_FAILURE'
   }
 
 *
@@ -550,36 +528,14 @@
   
   {
     bar: 1,
-    baz: {
-      date: 1970-01-01T00:00:00.000Z,
-      null: null,
-      number: 1,
-      string: 'Hello',
-      undefined: undefined
-    },
-    boo: [
-      1
-    ],
     foo: 1
   }
   
   should loosely deep-equal
   
-  {
-    baz: {
-      date: 1970-01-01T00:00:00.000Z,
-      null: null,
-      number: 1,
-      string: 'Hello',
-      undefined: undefined
-    },
-    boo: [
-      1
-    ],
-    circular: <ref *1> {
-      bar: 2,
-      c: [Circular *1]
-    }
+  <ref *1> {
+    bar: 2,
+    c: [Circular *1]
   }
       * {
     generatedMessage: true,

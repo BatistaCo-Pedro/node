@@ -35,23 +35,13 @@ const fn4 = tmpdir.resolve('write4.txt');
 const expected = 'ümlaut.';
 const constants = fs.constants;
 
-const {
-  createExternalizableString,
-  externalizeString,
-  isOneByteString,
-} = global;
+const { externalizeString, isOneByteString } = global;
 
 // Account for extra globals exposed by --expose_externalize_string.
-common.allowGlobals(
-  createExternalizableString,
-  externalizeString,
-  isOneByteString,
-  global.x,
-);
+common.allowGlobals(externalizeString, isOneByteString, global.x);
 
 {
-  // Must be a unique string.
-  const expected = createExternalizableString('ümlaut sechzig');
+  const expected = 'ümlaut sechzig';  // Must be a unique string.
   externalizeString(expected);
   assert.strictEqual(isOneByteString(expected), true);
   const fd = fs.openSync(fn, 'w');
@@ -61,8 +51,7 @@ common.allowGlobals(
 }
 
 {
-  // Must be a unique string.
-  const expected = createExternalizableString('ümlaut neunzig');
+  const expected = 'ümlaut neunzig';  // Must be a unique string.
   externalizeString(expected);
   assert.strictEqual(isOneByteString(expected), true);
   const fd = fs.openSync(fn, 'w');
@@ -72,8 +61,7 @@ common.allowGlobals(
 }
 
 {
-  // Must be a unique string.
-  const expected = createExternalizableString('Zhōngwén 1');
+  const expected = 'Zhōngwén 1';  // Must be a unique string.
   externalizeString(expected);
   assert.strictEqual(isOneByteString(expected), false);
   const fd = fs.openSync(fn, 'w');
@@ -83,8 +71,7 @@ common.allowGlobals(
 }
 
 {
-  // Must be a unique string.
-  const expected = createExternalizableString('Zhōngwén 2');
+  const expected = 'Zhōngwén 2';  // Must be a unique string.
   externalizeString(expected);
   assert.strictEqual(isOneByteString(expected), false);
   const fd = fs.openSync(fn, 'w');

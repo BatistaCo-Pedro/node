@@ -258,8 +258,7 @@ try:
   has_gcert = True
 
   cmd = [
-      "pprof", "-symbolize=local", "-flame",
-      f"-add_comment={shlex.join(sys.argv)}",
+      "pprof", "-flame", f"-add_comment={shlex.join(sys.argv)}",
       str(result.absolute())
   ]
   print("# Processing and uploading to pprofresult")
@@ -269,6 +268,6 @@ except subprocess.CalledProcessError as e:
   if has_gcert:
     raise Exception("Could not generate pprof results") from e
   print("# Please run `gcert` for generating pprof results")
-  print(f"pprof -symbolize=local -flame {result}")
+  print(f"pprof -flame {result}")
 except KeyboardInterrupt:
   exit(1)

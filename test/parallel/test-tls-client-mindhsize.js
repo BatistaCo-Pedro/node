@@ -74,23 +74,16 @@ testDHE1024();
 assert.throws(() => test(512, true, common.mustNotCall()),
               /DH parameter is less than 1024 bits/);
 
-for (const minDHSize of [0, -1, -Infinity, NaN]) {
-  assert.throws(() => {
-    tls.connect({ minDHSize });
-  }, {
-    code: 'ERR_OUT_OF_RANGE',
-    name: 'RangeError',
-  });
-}
+let errMessage = /minDHSize is not a positive number/;
+[0, -1, -Infinity, NaN].forEach((minDHSize) => {
+  assert.throws(() => tls.connect({ minDHSize }),
+                errMessage);
+});
 
-for (const minDHSize of [true, false, null, undefined, {}, [], '', '1']) {
-  assert.throws(() => {
-    tls.connect({ minDHSize });
-  }, {
-    code: 'ERR_INVALID_ARG_TYPE',
-    name: 'TypeError',
-  });
-}
+errMessage = /minDHSize is not a number/;
+[true, false, null, undefined, {}, [], '', '1'].forEach((minDHSize) => {
+  assert.throws(() => tls.connect({ minDHSize }), errMessage);
+});
 
 process.on('exit', function() {
   assert.strictEqual(nsuccess, 1);

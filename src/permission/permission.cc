@@ -130,12 +130,11 @@ void Permission::EnablePermissions() {
   }
 }
 
-void Permission::Apply(Environment* env,
-                       const std::vector<std::string>& allow,
+void Permission::Apply(const std::vector<std::string>& allow,
                        PermissionScope scope) {
   auto permission = nodes_.find(scope);
   if (permission != nodes_.end()) {
-    permission->second->Apply(env, allow, scope);
+    permission->second->Apply(allow, scope);
   }
 }
 

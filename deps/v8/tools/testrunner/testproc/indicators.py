@@ -261,7 +261,7 @@ class CompactProgressIndicator(ProgressIndicator):
       else:
         if test.is_fail:
           self.printFormatted('failure', "--- UNEXPECTED PASS ---")
-          if test.expected_failure_reason is not None:
+          if test.expected_failure_reason != None:
             self.printFormatted('failure', test.expected_failure_reason)
         else:
           self.printFormatted('failure', "--- FAILED ---")

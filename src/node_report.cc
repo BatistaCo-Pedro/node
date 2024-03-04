@@ -27,7 +27,7 @@
 constexpr int NODE_REPORT_VERSION = 3;
 constexpr int NANOS_PER_SEC = 1000 * 1000 * 1000;
 constexpr double SEC_PER_MICROS = 1e-6;
-constexpr int MAX_FRAME_COUNT = node::kMaxFrameCountForLogging;
+constexpr int MAX_FRAME_COUNT = 10;
 
 namespace node {
 using node::worker::Worker;
@@ -61,10 +61,8 @@ static void WriteNodeReport(Isolate* isolate,
                             const std::string& filename,
                             std::ostream& out,
                             Local<Value> error,
-                            bool compact,
-                            bool exclude_network = false);
-static void PrintVersionInformation(JSONWriter* writer,
-                                    bool exclude_network = false);
+                            bool compact);
+static void PrintVersionInformation(JSONWriter* writer);
 static void PrintJavaScriptErrorStack(JSONWriter* writer,
                                       Isolate* isolate,
                                       Local<Value> error,
@@ -95,8 +93,7 @@ static void WriteNodeReport(Isolate* isolate,
                             const std::string& filename,
                             std::ostream& out,
                             Local<Value> error,
-                            bool compact,
-                            bool exclude_network) {
+                            bool compact) {
   // Obtain the current time and the pid.
   TIME_TYPE tm_struct;
   DiagnosticFilename::LocalTime(&tm_struct);
@@ -177,7 +174,7 @@ static void WriteNodeReport(Isolate* isolate,
   }
 
   // Report Node.js and OS version information
-  PrintVersionInformation(&writer, exclude_network);
+  PrintVersionInformation(&writer);
   writer.json_objectend();
 
   if (isolate != nullptr) {
@@ -259,7 +256,7 @@ static void WriteNodeReport(Isolate* isolate,
 }
 
 // Report Node.js version, OS version and machine information.
-static void PrintVersionInformation(JSONWriter* writer, bool exclude_network) {
+static void PrintVersionInformation(JSONWriter* writer) {
   std::ostringstream buf;
   // Report Node version
   buf << "v" << NODE_VERSION_STRING;
@@ -303,7 +300,7 @@ static void PrintVersionInformation(JSONWriter* writer, bool exclude_network) {
   }
 
   PrintCpuInfo(writer);
-  if (!exclude_network) PrintNetworkInterfaceInfo(writer);
+  PrintNetworkInterfaceInfo(writer);
 
   char host[UV_MAXHOSTNAMESIZE];
   size_t host_size = sizeof(host);
@@ -461,13 +458,14 @@ static void PrintEmptyJavaScriptStack(JSONWriter* writer) {
 static void PrintJavaScriptStack(JSONWriter* writer,
                                  Isolate* isolate,
                                  const char* trigger) {
-  HandleScope scope(isolate);
-  Local<v8::StackTrace> stack;
-  if (!GetCurrentStackTrace(isolate, MAX_FRAME_COUNT).ToLocal(&stack)) {
+  // Can not capture the stacktrace when the isolate is in a OOM state or no
+  // context is entered.
+  if (!strcmp(trigger, "OOMError") || !isolate->InContext()) {
     PrintEmptyJavaScriptStack(writer);
     return;
   }
 
+  HandleScope scope(isolate);
   RegisterState state;
   state.pc = nullptr;
   state.fp = &state;
@@ -477,6 +475,18 @@ static void PrintJavaScriptStack(JSONWriter* writer,
   SampleInfo info;
   void* samples[MAX_FRAME_COUNT];
   isolate->GetStackSample(state, samples, MAX_FRAME_COUNT, &info);
+
+  constexpr StackTrace::StackTraceOptions stack_trace_options =
+      static_cast<StackTrace::StackTraceOptions>(
+          StackTrace::kDetailed |
+          StackTrace::kExposeFramesAcrossSecurityOrigins);
+  Local<StackTrace> stack = StackTrace::CurrentStackTrace(
+      isolate, MAX_FRAME_COUNT, stack_trace_options);
+
+  if (stack->GetFrameCount() == 0) {
+    PrintEmptyJavaScriptStack(writer);
+    return;
+  }
 
   writer->json_keyvalue("message", trigger);
   writer->json_arraystart("stack");
@@ -920,19 +930,8 @@ std::string TriggerNodeReport(Isolate* isolate,
     compact = per_process::cli_options->report_compact;
   }
 
-  bool exclude_network = env != nullptr ? env->options()->report_exclude_network
-                                        : per_process::cli_options->per_isolate
-                                              ->per_env->report_exclude_network;
-
-  report::WriteNodeReport(isolate,
-                          env,
-                          message,
-                          trigger,
-                          filename,
-                          *outstream,
-                          error,
-                          compact,
-                          exclude_network);
+  report::WriteNodeReport(
+      isolate, env, message, trigger, filename, *outstream, error, compact);
 
   // Do not close stdout/stderr, only close files we opened.
   if (outfile.is_open()) {
@@ -983,11 +982,8 @@ void GetNodeReport(Isolate* isolate,
   if (isolate != nullptr) {
     env = Environment::GetCurrent(isolate);
   }
-  bool exclude_network = env != nullptr ? env->options()->report_exclude_network
-                                        : per_process::cli_options->per_isolate
-                                              ->per_env->report_exclude_network;
   report::WriteNodeReport(
-      isolate, env, message, trigger, "", out, error, false, exclude_network);
+      isolate, env, message, trigger, "", out, error, false);
 }
 
 // External function to trigger a report, writing to a supplied stream.
@@ -1000,11 +996,8 @@ void GetNodeReport(Environment* env,
   if (env != nullptr) {
     isolate = env->isolate();
   }
-  bool exclude_network = env != nullptr ? env->options()->report_exclude_network
-                                        : per_process::cli_options->per_isolate
-                                              ->per_env->report_exclude_network;
   report::WriteNodeReport(
-      isolate, env, message, trigger, "", out, error, false, exclude_network);
+      isolate, env, message, trigger, "", out, error, false);
 }
 
 }  // namespace node

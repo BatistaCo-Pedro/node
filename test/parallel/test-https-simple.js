@@ -45,13 +45,13 @@ const serverCallback = common.mustCall(function(req, res) {
 });
 
 const invalid_options = [ 'foo', 42, true, [] ];
-for (const option of invalid_options) {
+invalid_options.forEach((option) => {
   assert.throws(() => {
     new https.Server(option);
   }, {
     code: 'ERR_INVALID_ARG_TYPE',
   });
-}
+});
 
 const server = https.createServer(options, serverCallback);
 

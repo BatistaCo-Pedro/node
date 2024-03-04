@@ -49,10 +49,6 @@
 #include "uv.h"
 #include "v8.h"
 
-#if HAVE_OPENSSL
-#include <openssl/evp.h>
-#endif
-
 #include <array>
 #include <atomic>
 #include <cstdint>
@@ -151,15 +147,8 @@ class NODE_EXTERN_PRIVATE IsolateData : public MemoryRetainer {
   void MemoryInfo(MemoryTracker* tracker) const override;
   IsolateDataSerializeInfo Serialize(v8::SnapshotCreator* creator);
 
-  bool is_building_snapshot() const { return snapshot_config_.has_value(); }
-  const SnapshotConfig* snapshot_config() const {
-    return snapshot_config_.has_value() ? &(snapshot_config_.value()) : nullptr;
-  }
-  void set_snapshot_config(const SnapshotConfig* config) {
-    if (config != nullptr) {
-      snapshot_config_ = *config;  // Copy the config.
-    }
-  }
+  bool is_building_snapshot() const { return is_building_snapshot_; }
+  void set_is_building_snapshot(bool value) { is_building_snapshot_ = value; }
 
   uint16_t* embedder_id_for_cppgc() const;
   uint16_t* embedder_id_for_non_cppgc() const;
@@ -248,13 +237,11 @@ class NODE_EXTERN_PRIVATE IsolateData : public MemoryRetainer {
   uv_loop_t* const event_loop_;
   NodeArrayBufferAllocator* const node_allocator_;
   MultiIsolatePlatform* platform_;
-
   const SnapshotData* snapshot_data_;
-  std::optional<SnapshotConfig> snapshot_config_;
-
   std::unique_ptr<v8::CppHeap> cpp_heap_;
   std::shared_ptr<PerIsolateOptions> options_;
   worker::Worker* worker_context_ = nullptr;
+  bool is_building_snapshot_ = false;
   PerIsolateWrapperData* wrapper_data_;
 
   static Mutex isolate_data_mutex_;
@@ -539,7 +526,6 @@ struct SnapshotMetadata {
   std::string node_platform;
   // Result of v8::ScriptCompiler::CachedDataVersionTag().
   uint32_t v8_cache_version_tag;
-  SnapshotFlags flags;
 };
 
 struct SnapshotData {
@@ -589,10 +575,17 @@ v8::Maybe<ExitCode> SpinEventLoopInternal(Environment* env);
 v8::Maybe<ExitCode> EmitProcessExitInternal(Environment* env);
 
 /**
+ * EmbeddedEnvironment is the JavaScript engine-neutral part of an
+ * embedded environment controlled by a C/C++ caller of libnode
+ */
+class EmbeddedEnvironment {};
+
+/**
  * Environment is a per-isolate data structure that represents an execution
  * environment. Each environment has a principal realm. An environment can
  * create multiple subsidiary synthetic realms.
  */
+
 class Environment : public MemoryRetainer {
  public:
   Environment(const Environment&) = delete;
@@ -760,6 +753,14 @@ class Environment : public MemoryRetainer {
   builtins::BuiltinLoader* builtin_loader();
 
   std::unordered_multimap<int, loader::ModuleWrap*> hash_to_module_map;
+  std::unordered_map<uint32_t, loader::ModuleWrap*> id_to_module_map;
+  std::unordered_map<uint32_t, contextify::ContextifyScript*>
+      id_to_script_map;
+  std::unordered_map<uint32_t, contextify::CompiledFnEntry*> id_to_function_map;
+
+  inline uint32_t get_next_module_id();
+  inline uint32_t get_next_script_id();
+  inline uint32_t get_next_function_id();
 
   EnabledDebugList* enabled_debug_list() { return &enabled_debug_list_; }
 
@@ -793,6 +794,7 @@ class Environment : public MemoryRetainer {
   inline void set_has_serialized_options(bool has_serialized_options);
 
   inline bool is_main_thread() const;
+  inline bool is_embedded_env() const;
   inline bool no_native_addons() const;
   inline bool should_not_register_esm_loader() const;
   inline bool should_create_inspector() const;
@@ -881,9 +883,6 @@ class Environment : public MemoryRetainer {
   inline inspector::Agent* inspector_agent() const {
     return inspector_agent_.get();
   }
-  inline void StopInspector() {
-    inspector_agent_.reset();
-  }
 
   inline bool is_in_inspector_console_call() const;
   inline void set_is_in_inspector_console_call(bool value);
@@ -951,9 +950,6 @@ class Environment : public MemoryRetainer {
   inline void RemoveCleanupHook(CleanupQueue::Callback cb, void* arg);
   void RunCleanup();
 
-  static void TracePromises(v8::PromiseHookType type,
-                            v8::Local<v8::Promise> promise,
-                            v8::Local<v8::Value> parent);
   static size_t NearHeapLimitCallback(void* data,
                                       size_t current_heap_limit,
                                       size_t initial_heap_limit);
@@ -1002,11 +998,14 @@ class Environment : public MemoryRetainer {
 
 #endif  // HAVE_INSPECTOR
 
-  inline const EmbedderPreloadCallback& embedder_preload() const;
-  inline void set_embedder_preload(EmbedderPreloadCallback fn);
+  inline const StartExecutionCallback& embedder_entry_point() const;
+  inline void set_embedder_entry_point(StartExecutionCallback&& fn);
 
   inline void set_process_exit_handler(
       std::function<void(Environment*, ExitCode)>&& handler);
+
+  inline EmbeddedEnvironment* get_embedded();
+  inline void set_embedded(EmbeddedEnvironment* env);
 
   void RunAndClearNativeImmediates(bool only_refed = false);
   void RunAndClearInterrupts();
@@ -1035,19 +1034,8 @@ class Environment : public MemoryRetainer {
     kExitInfoFieldCount
   };
 
-#if HAVE_OPENSSL
-#if OPENSSL_VERSION_MAJOR >= 3
-  // We declare another alias here to avoid having to include crypto_util.h
-  using EVPMDPointer = DeleteFnPtr<EVP_MD, EVP_MD_free>;
-  std::vector<EVPMDPointer> evp_md_cache;
-#endif  // OPENSSL_VERSION_MAJOR >= 3
-  std::unordered_map<std::string, size_t> alias_to_md_id_map;
-  std::vector<std::string> supported_hash_algorithms;
-#endif  // HAVE_OPENSSL
-
  private:
-  inline void ThrowError(v8::Local<v8::Value> (*fun)(v8::Local<v8::String>,
-                                                     v8::Local<v8::Value>),
+  inline void ThrowError(v8::Local<v8::Value> (*fun)(v8::Local<v8::String>),
                          const char* errmsg);
   void TrackContext(v8::Local<v8::Context> context);
   void UntrackContext(v8::Local<v8::Context> context);
@@ -1119,7 +1107,6 @@ class Environment : public MemoryRetainer {
   uint32_t module_id_counter_ = 0;
   uint32_t script_id_counter_ = 0;
   uint32_t function_id_counter_ = 0;
-  uint32_t trace_promise_id_counter_ = 0;
 
   AliasedInt32Array exit_info_;
 
@@ -1210,12 +1197,15 @@ class Environment : public MemoryRetainer {
   std::unique_ptr<PrincipalRealm> principal_realm_ = nullptr;
 
   builtins::BuiltinLoader builtin_loader_;
-  EmbedderPreloadCallback embedder_preload_;
+  StartExecutionCallback embedder_entry_point_;
 
   // Used by allocate_managed_buffer() and release_managed_buffer() to keep
   // track of the BackingStore for a given pointer.
   std::unordered_map<char*, std::unique_ptr<v8::BackingStore>>
       released_allocated_buffers_;
+
+  // Used for embedded instances
+  EmbeddedEnvironment* embedded_;
 };
 
 }  // namespace node

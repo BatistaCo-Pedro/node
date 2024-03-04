@@ -7,11 +7,10 @@ import os
 import sys
 import unittest
 
-from pathlib import Path
-
 # Needed because the test runner contains relative imports.
-TOOLS_PATH = Path(__file__).resolve().parents[2]
-sys.path.append(str(TOOLS_PATH))
+TOOLS_PATH = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(TOOLS_PATH)
 
 from testrunner.local.command import PosixCommand
 from testrunner.local.context import DefaultOSContext
@@ -22,8 +21,8 @@ from testrunner.test_config import TestConfig
 class TestSuiteTest(unittest.TestCase):
 
   def setUp(self):
-    test_dir = Path(__file__).resolve().parent
-    self.test_root = test_dir / "fake_testsuite"
+    test_dir = os.path.dirname(__file__)
+    self.test_root = os.path.join(test_dir, "fake_testsuite")
     self.test_config = TestConfig(
         command_prefix=[],
         extra_flags=[],
@@ -36,8 +35,7 @@ class TestSuiteTest(unittest.TestCase):
         run_skipped=False,
         shard_count=1,
         shard_id=0,
-        shell_dir=Path('fake_testsuite/fake_d8'),
-        target_os='macos',
+        shell_dir='fake_testsuite/fake_d8',
         timeout=10,
         verbose=False,
     )

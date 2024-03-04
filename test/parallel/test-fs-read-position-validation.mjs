@@ -75,7 +75,8 @@ async function testInvalid(code, position) {
 
   await testValid(2n ** 63n - 1n - BigInt(length), [ 'EFBIG', 'EOVERFLOW' ]);
   await testInvalid('ERR_OUT_OF_RANGE', 2n ** 63n);
-  await testInvalid('ERR_OUT_OF_RANGE', 2n ** 63n - BigInt(length));
+
+  // TODO(LiviaMedeiros): test `2n ** 63n - BigInt(length)`
 
   await testInvalid('ERR_OUT_OF_RANGE', NaN);
   await testInvalid('ERR_OUT_OF_RANGE', -Infinity);

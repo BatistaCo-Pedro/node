@@ -223,7 +223,7 @@ int SelectALPNCallback(
     const unsigned char* in,
     unsigned int inlen,
     void* arg) {
-  TLSWrap* w = static_cast<TLSWrap*>(SSL_get_app_data(s));
+  TLSWrap* w = static_cast<TLSWrap*>(arg);
   if (w->alpn_callback_enabled_) {
     Environment* env = w->env();
     HandleScope handle_scope(env->isolate());
@@ -1293,8 +1293,7 @@ void TLSWrap::EnableALPNCb(const FunctionCallbackInfo<Value>& args) {
   wrap->alpn_callback_enabled_ = true;
 
   SSL* ssl = wrap->ssl_.get();
-  SSL_CTX* ssl_ctx = SSL_get_SSL_CTX(ssl);
-  SSL_CTX_set_alpn_select_cb(ssl_ctx, SelectALPNCallback, nullptr);
+  SSL_CTX_set_alpn_select_cb(SSL_get_SSL_CTX(ssl), SelectALPNCallback, wrap);
 }
 
 void TLSWrap::GetServername(const FunctionCallbackInfo<Value>& args) {
@@ -1590,8 +1589,7 @@ void TLSWrap::SetALPNProtocols(const FunctionCallbackInfo<Value>& args) {
   } else {
     w->alpn_protos_ = std::vector<unsigned char>(
         protos.data(), protos.data() + protos.length());
-    SSL_CTX* ssl_ctx = SSL_get_SSL_CTX(ssl);
-    SSL_CTX_set_alpn_select_cb(ssl_ctx, SelectALPNCallback, nullptr);
+    SSL_CTX_set_alpn_select_cb(SSL_get_SSL_CTX(ssl), SelectALPNCallback, w);
   }
 }
 

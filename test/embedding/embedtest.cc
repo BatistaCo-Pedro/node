@@ -68,7 +68,6 @@ int RunNodeInstance(MultiIsolatePlatform* platform,
   //           --embedder-snapshot-blob blob-path
   //           --embedder-snapshot-create
   //           [--embedder-snapshot-as-file]
-  //           [--without-code-cache]
   // Running snapshot:
   // embedtest --embedder-snapshot-blob blob-path
   //           [--embedder-snapshot-as-file]
@@ -81,7 +80,6 @@ int RunNodeInstance(MultiIsolatePlatform* platform,
   std::vector<std::string> filtered_args;
   bool is_building_snapshot = false;
   bool snapshot_as_file = false;
-  std::optional<node::SnapshotConfig> snapshot_config;
   std::string snapshot_blob_path;
   for (size_t i = 0; i < args.size(); ++i) {
     const std::string& arg = args[i];
@@ -89,16 +87,9 @@ int RunNodeInstance(MultiIsolatePlatform* platform,
       is_building_snapshot = true;
     } else if (arg == "--embedder-snapshot-as-file") {
       snapshot_as_file = true;
-    } else if (arg == "--without-code-cache") {
-      if (!snapshot_config.has_value()) {
-        snapshot_config = node::SnapshotConfig{};
-      }
-      snapshot_config.value().flags = static_cast<node::SnapshotFlags>(
-          static_cast<uint32_t>(snapshot_config.value().flags) |
-          static_cast<uint32_t>(node::SnapshotFlags::kWithoutCodeCache));
     } else if (arg == "--embedder-snapshot-blob") {
       assert(i + 1 < args.size());
-      snapshot_blob_path = args[i + 1];
+      snapshot_blob_path = args[i + i];
       i++;
     } else {
       filtered_args.push_back(arg);
@@ -130,32 +121,22 @@ int RunNodeInstance(MultiIsolatePlatform* platform,
 
   if (is_building_snapshot) {
     // It contains at least the binary path, the code to snapshot,
-    // and --embedder-snapshot-create (which is filtered, so at least
-    // 2 arguments should remain after filtering).
-    assert(filtered_args.size() >= 2);
-    // Insert an anonymous filename as process.argv[1].
+    // and --embedder-snapshot-create. Insert an anonymous filename
+    // as process.argv[1].
+    assert(filtered_args.size() >= 3);
     filtered_args.insert(filtered_args.begin() + 1,
                          node::GetAnonymousMainPath());
   }
 
   std::vector<std::string> errors;
-  std::unique_ptr<CommonEnvironmentSetup> setup;
-
-  if (snapshot) {
-    setup = CommonEnvironmentSetup::CreateFromSnapshot(
-        platform, &errors, snapshot.get(), filtered_args, exec_args);
-  } else if (is_building_snapshot) {
-    if (snapshot_config.has_value()) {
-      setup = CommonEnvironmentSetup::CreateForSnapshotting(
-          platform, &errors, filtered_args, exec_args, snapshot_config.value());
-    } else {
-      setup = CommonEnvironmentSetup::CreateForSnapshotting(
-          platform, &errors, filtered_args, exec_args);
-    }
-  } else {
-    setup = CommonEnvironmentSetup::Create(
-        platform, &errors, filtered_args, exec_args);
-  }
+  std::unique_ptr<CommonEnvironmentSetup> setup =
+      snapshot
+          ? CommonEnvironmentSetup::CreateFromSnapshot(
+                platform, &errors, snapshot.get(), filtered_args, exec_args)
+      : is_building_snapshot ? CommonEnvironmentSetup::CreateForSnapshotting(
+                                   platform, &errors, filtered_args, exec_args)
+                             : CommonEnvironmentSetup::Create(
+                                   platform, &errors, filtered_args, exec_args);
   if (!setup) {
     for (const std::string& err : errors)
       fprintf(stderr, "%s: %s\n", binary_path.c_str(), err.c_str());
@@ -172,26 +153,19 @@ int RunNodeInstance(MultiIsolatePlatform* platform,
     Context::Scope context_scope(setup->context());
 
     MaybeLocal<Value> loadenv_ret;
-    if (snapshot) {  // Deserializing snapshot
+    if (snapshot) {
       loadenv_ret = node::LoadEnvironment(env, node::StartExecutionCallback{});
-    } else if (is_building_snapshot) {
-      // Environment created for snapshotting must set process.argv[1] to
-      // the name of the main script, which was inserted above.
-      loadenv_ret = node::LoadEnvironment(
-          env,
-          "const assert = require('assert');"
-          "assert(require('v8').startupSnapshot.isBuildingSnapshot());"
-          "globalThis.embedVars = { nön_ascıı: '🏳️‍🌈' };"
-          "globalThis.require = require;"
-          "require('vm').runInThisContext(process.argv[2]);");
     } else {
       loadenv_ret = node::LoadEnvironment(
           env,
-          "const publicRequire = require('module').createRequire(process.cwd() "
-          "+ '/');"
-          "globalThis.require = publicRequire;"
+          // Snapshots do not support userland require()s (yet)
+          "if (!require('v8').startupSnapshot.isBuildingSnapshot()) {"
+          "  const publicRequire ="
+          "    require('module').createRequire(process.cwd() + '/');"
+          "  globalThis.require = publicRequire;"
+          "} else globalThis.require = require;"
           "globalThis.embedVars = { nön_ascıı: '🏳️‍🌈' };"
-          "require('vm').runInThisContext(process.argv[1]);");
+          "require('vm').runInThisContext(process.argv[2]);");
     }
 
     if (loadenv_ret.IsEmpty())  // There has been a JS exception.

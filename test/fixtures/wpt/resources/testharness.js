@@ -1426,16 +1426,12 @@
         function assert_wrapper(...args) {
             let status = Test.statuses.TIMEOUT;
             let stack = null;
-            let new_assert_index = null;
             try {
                 if (settings.debug) {
                     console.debug("ASSERT", name, tests.current_test && tests.current_test.name, args);
                 }
                 if (tests.output) {
                     tests.set_assert(name, args);
-                    // Remember the newly pushed assert's index, because `apply`
-                    // below might push new asserts.
-                    new_assert_index = tests.asserts_run.length - 1;
                 }
                 const rv = f.apply(undefined, args);
                 status = Test.statuses.PASS;
@@ -1449,7 +1445,7 @@
                     stack = get_stack();
                 }
                 if (tests.output) {
-                    tests.set_assert_status(new_assert_index, status, stack);
+                    tests.set_assert_status(status, stack);
                 }
             }
         }
@@ -1497,7 +1493,7 @@
     /**
      * Assert that ``actual`` is the same value as ``expected``.
      *
-     * For objects this compares by object identity; for primitives
+     * For objects this compares by cobject identity; for primitives
      * this distinguishes between 0 and -0, and has correct handling
      * of NaN.
      *
@@ -2729,9 +2725,8 @@
      * speed when the condition is quickly met.
      *
      * @param {Function} cond A function taking no arguments and
-     *                        returning a boolean or a Promise. The callback is
-     *                        called when this function returns true, or the
-     *                        returned Promise is resolved with true.
+     *                        returning a boolean. The callback is called
+     *                        when this function returns true.
      * @param {Function} func A function taking no arguments to call once
      *                        the condition is met.
      * @param {string} [description] Error message to add to assert in case of
@@ -2747,23 +2742,17 @@
         var remaining = Math.ceil(timeout_full / interval);
         var test_this = this;
 
-        const step = test_this.step_func((result) => {
-            if (result) {
+        var wait_for_inner = test_this.step_func(() => {
+            if (cond()) {
                 func();
             } else {
-                if (remaining === 0) {
+                if(remaining === 0) {
                     assert(false, "step_wait_func", description,
                            "Timed out waiting on condition");
                 }
                 remaining--;
                 setTimeout(wait_for_inner, interval);
             }
-        });
-
-        var wait_for_inner = test_this.step_func(() => {
-            Promise.resolve(cond()).then(
-                step,
-                test_this.unreached_func("step_wait_func"));
         });
 
         wait_for_inner();
@@ -2791,9 +2780,8 @@
      * }, "Navigating a popup to about:blank");
      *
      * @param {Function} cond A function taking no arguments and
-     *                        returning a boolean or a Promise. The callback is
-     *                        called when this function returns true, or the
-     *                        returned Promise is resolved with true.
+     *                        returning a boolean. The callback is called
+     *                        when this function returns true.
      * @param {Function} func A function taking no arguments to call once
      *                        the condition is met.
      * @param {string} [description] Error message to add to assert in case of
@@ -2829,7 +2817,7 @@
      * }, "");
      *
      * @param {Function} cond A function taking no arguments and
-     *                        returning a boolean or a Promise.
+     *                        returning a boolean.
      * @param {string} [description] Error message to add to assert in case of
      *                              failure.
      * @param {number} timeout Timeout in ms. This is multiplied by the global
@@ -3685,8 +3673,8 @@
         this.asserts_run.push(new AssertRecord(this.current_test, assert_name, args))
     }
 
-    Tests.prototype.set_assert_status = function(index, status, stack) {
-        let assert_record = this.asserts_run[index];
+    Tests.prototype.set_assert_status = function(status, stack) {
+        let assert_record = this.asserts_run[this.asserts_run.length - 1];
         assert_record.status = status;
         assert_record.stack = stack;
     }

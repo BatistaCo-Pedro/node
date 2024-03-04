@@ -2,13 +2,9 @@
 
 const common = require('../common');
 const fixtures = require('../common/fixtures');
-const tmpdir = require('../common/tmpdir');
-const { inspect } = require('util');
 
-const { readFileSync, copyFileSync } = require('fs');
-const {
-  spawnSyncAndExitWithoutError,
-} = require('../common/child_process');
+const { readFileSync } = require('fs');
+const { execFileSync } = require('child_process');
 
 function skipIfSingleExecutableIsNotSupported() {
   if (!process.config.variables.single_executable_application)
@@ -45,85 +41,48 @@ function skipIfSingleExecutableIsNotSupported() {
       common.skip('On s390x, postject fails with `memory access out of bounds`.');
     }
   }
-
-  tmpdir.refresh();
-
-  // The SEA tests involve making a copy of the executable and writing some fixtures
-  // to the tmpdir. To be safe, ensure that at least 120MB disk space is available.
-  if (!tmpdir.hasEnoughSpace(120 * 1024 * 1024)) {
-    common.skip('Available disk space < 120MB');
-  }
 }
 
-function generateSEA(targetExecutable, sourceExecutable, seaBlob, verifyWorkflow = false) {
-  try {
-    copyFileSync(sourceExecutable, targetExecutable);
-  } catch (e) {
-    const message = `Cannot copy ${sourceExecutable} to ${targetExecutable}: ${inspect(e)}`;
-    if (verifyWorkflow) {
-      throw new Error(message);
-    }
-    common.skip(message);
-  }
-  console.log(`Copied ${sourceExecutable} to ${targetExecutable}`);
-
+function injectAndCodeSign(targetExecutable, resource) {
   const postjectFile = fixtures.path('postject-copy', 'node_modules', 'postject', 'dist', 'cli.js');
-  try {
-    spawnSyncAndExitWithoutError(process.execPath, [
-      postjectFile,
-      targetExecutable,
-      'NODE_SEA_BLOB',
-      seaBlob,
-      '--sentinel-fuse', 'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2',
-      ...process.platform === 'darwin' ? [ '--macho-segment-name', 'NODE_SEA' ] : [],
-    ]);
-  } catch (e) {
-    const message = `Cannot inject ${seaBlob} into ${targetExecutable}: ${inspect(e)}`;
-    if (verifyWorkflow) {
-      throw new Error(message);
-    }
-    common.skip(message);
-  }
-  console.log(`Injected ${seaBlob} into ${targetExecutable}`);
+  execFileSync(process.execPath, [
+    postjectFile,
+    targetExecutable,
+    'NODE_SEA_BLOB',
+    resource,
+    '--sentinel-fuse', 'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2',
+    ...process.platform === 'darwin' ? [ '--macho-segment-name', 'NODE_SEA' ] : [],
+  ]);
 
   if (process.platform === 'darwin') {
-    try {
-      spawnSyncAndExitWithoutError('codesign', [ '--sign', '-', targetExecutable ], {});
-      spawnSyncAndExitWithoutError('codesign', [ '--verify', targetExecutable ], {});
-    } catch (e) {
-      const message = `Cannot sign ${targetExecutable}: ${inspect(e)}`;
-      if (verifyWorkflow) {
-        throw new Error(message);
-      }
-      common.skip(message);
-    }
-    console.log(`Signed ${targetExecutable}`);
+    execFileSync('codesign', [ '--sign', '-', targetExecutable ]);
+    execFileSync('codesign', [ '--verify', targetExecutable ]);
   } else if (process.platform === 'win32') {
+    let signtoolFound = false;
     try {
-      spawnSyncAndExitWithoutError('where', [ 'signtool' ], {});
-    } catch (e) {
-      const message = `Cannot find signtool: ${inspect(e)}`;
-      if (verifyWorkflow) {
-        throw new Error(message);
-      }
-      common.skip(message);
+      execFileSync('where', [ 'signtool' ]);
+      signtoolFound = true;
+    } catch (err) {
+      console.log(err.message);
     }
-    let stderr;
-    try {
-      ({ stderr } = spawnSyncAndExitWithoutError('signtool', [ 'sign', '/fd', 'SHA256', targetExecutable ], {}));
-      spawnSyncAndExitWithoutError('signtool', 'verify', '/pa', 'SHA256', targetExecutable, {});
-    } catch (e) {
-      const message = `Cannot sign ${targetExecutable}: ${inspect(e)}\n${stderr}`;
-      if (verifyWorkflow) {
-        throw new Error(message);
+    if (signtoolFound) {
+      let certificatesFound = false;
+      try {
+        execFileSync('signtool', [ 'sign', '/fd', 'SHA256', targetExecutable ]);
+        certificatesFound = true;
+      } catch (err) {
+        if (!/SignTool Error: No certificates were found that met all the given criteria/.test(err)) {
+          throw err;
+        }
       }
-      common.skip(message);
+      if (certificatesFound) {
+        execFileSync('signtool', 'verify', '/pa', 'SHA256', targetExecutable);
+      }
     }
-    console.log(`Signed ${targetExecutable}`);
   }
 }
 
 module.exports = {
   skipIfSingleExecutableIsNotSupported,
-  generateSEA,
+  injectAndCodeSign,
 };

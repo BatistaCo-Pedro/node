@@ -17,36 +17,14 @@ ALL_VARIANT_FLAGS = {
     "sparkplug": [["--sparkplug"]],
     "maglev": [["--maglev"]],
     "maglev_future": [["--maglev", "--maglev-future"]],
-    "maglev_no_turbofan": [[
-        "--maglev", "--no-turbofan",
-        "--optimize-on-next-call-optimizes-to-maglev"
-    ]],
     "stress_maglev": [[
         "--maglev", "--stress-maglev",
         "--optimize-on-next-call-optimizes-to-maglev"
     ]],
-    "stress_maglev_future": [[
-        "--maglev", "--maglev-future", "--stress-maglev",
-        "--optimize-on-next-call-optimizes-to-maglev"
-    ]],
-    "stress_maglev_no_turbofan": [[
-        "--maglev", "--no-turbofan", "--stress-maglev",
-        "--optimize-on-next-call-optimizes-to-maglev"
-    ]],
-    # We test both the JS and Wasm Turboshaft pipelines under the same variant.
-    # For extended Wasm Turboshaft coverage, we add --no-liftoff to the options.
-    "turboshaft": [[
-        "--turboshaft",
-        "--turboshaft-future",
-        "--turboshaft-wasm",
-        "--no-liftoff",
-        # We need this to correctly bailout for call_indirect with subtyping
-        # until we turn it on by default, or remove the bailout.
-        "--wasm-final-types"
-    ]],
+    "turboshaft": [["--turboshaft"]],
     "concurrent_sparkplug": [["--concurrent-sparkplug", "--sparkplug"]],
     "always_sparkplug": [["--always-sparkplug", "--sparkplug"]],
-    "minor_ms": [["--minor-ms"]],
+    "minor_mc": [["--minor-mc"]],
     "no_lfa": [["--no-lazy-feedback-allocation"]],
     # No optimization means disable all optimizations. OptimizeFunctionOnNextCall
     # would not force optimization too. It turns into a Nop. Please see
@@ -58,10 +36,9 @@ ALL_VARIANT_FLAGS = {
     # compilation. "Liftoff-only" and eager compilation is not a problem,
     # because test functions do typically not get optimized to TurboFan anyways.
     "nooptimization": [[
-        "--no-turbofan", "--no-maglev", "--liftoff", "--no-wasm-tier-up",
+        "--no-turbofan", "--liftoff", "--no-wasm-tier-up",
         "--no-wasm-lazy-compilation"
     ]],
-    "rehash_snapshot": [["--rehash-snapshot"]],
     "slow_path": [["--force-slow-path"]],
     "stress": [[
         "--no-liftoff", "--stress-lazy-source-positions",
@@ -112,8 +89,8 @@ INCOMPATIBLE_FLAGS_PER_VARIANT = {
     ],
     "stress_concurrent_inlining": [
         "--single-threaded", "--predictable", "--lazy-feedback-allocation",
-        "--assert-types", "--turboshaft-assert-types",
-        "--no-concurrent-recompilation", "--no-turbofan", "--jitless"
+        "--assert-types", "--no-concurrent-recompilation", "--no-turbofan",
+        "--jitless"
     ],
     # The fast API tests initialize an embedder object that never needs to be
     # serialized to the snapshot, so we don't have a
@@ -121,37 +98,14 @@ INCOMPATIBLE_FLAGS_PER_VARIANT = {
     # stress_snapshot.
     "stress_snapshot": ["--expose-fast-api"],
     "stress": [
-        # 'stress' disables Liftoff, which conflicts with flags that require
-        # Liftoff support.
-        "--liftoff-only",
+        "--liftoff-only", "--wasm-speculative-inlining",
         "--wasm-dynamic-tiering"
     ],
     "sparkplug": ["--jitless", "--no-sparkplug"],
-    "turboshaft": [
-        # 'turboshaft' disables Liftoff, which conflicts with flags that require
-        # Liftoff support.
-        "--liftoff-only",
-        "--wasm-dynamic-tiering"
-    ],
     "concurrent_sparkplug": ["--jitless"],
     "maglev": ["--jitless", "--no-maglev"],
     "maglev_future": ["--jitless", "--no-maglev", "--no-maglev-future"],
-    "maglev_no_turbofan": [
-        "--jitless",
-        "--no-maglev",
-        "--turbofan",
-        "--always-turbofan",
-        "--stress-concurrent-inlining",
-    ],
     "stress_maglev": ["--jitless"],
-    "stress_maglev_future": ["--jitless", "--no-maglev", "--no-maglev-future"],
-    "stress_maglev_no_turbofan": [
-        "--jitless",
-        "--no-maglev",
-        "--turbofan",
-        "--always-turbofan",
-        "--stress-concurrent-inlining",
-    ],
     "always_sparkplug": ["--jitless", "--no-sparkplug"],
     "code_serializer": [
         "--cache=after-execute", "--cache=full-code-cache", "--cache=none"
@@ -160,10 +114,6 @@ INCOMPATIBLE_FLAGS_PER_VARIANT = {
     "assert_types": [
         "--concurrent-recompilation", "--stress_concurrent_inlining",
         "--no-assert-types"
-    ],
-    "--turboshaft-assert-types": [
-        "--concurrent-recompilation", "--stress_concurrent_inlining",
-        "--no-turboshaft-assert-types"
     ],
 }
 
@@ -179,7 +129,7 @@ INCOMPATIBLE_FLAGS_PER_VARIANT = {
 # applies when the code_comments build variable is NOT set.
 INCOMPATIBLE_FLAGS_PER_BUILD_VARIABLE = {
     "!code_comments": ["--code-comments"],
-    "!DEBUG_defined": [
+    "!is_DEBUG_defined": [
         "--check_handle_count",
         "--code_stats",
         "--dump_wasm_module",
@@ -202,6 +152,7 @@ INCOMPATIBLE_FLAGS_PER_BUILD_VARIABLE = {
         "--trace_wasm_compiler",
         "--trace_wasm_decoder",
         "--trace_wasm_instances",
+        "--trace_wasm_interpreter",
         "--trace_wasm_lazy_compilation",
         "--trace_wasm_native_heap",
         "--trace_wasm_serialization",
@@ -220,11 +171,11 @@ INCOMPATIBLE_FLAGS_PER_BUILD_VARIABLE = {
     "!has_maglev": ["--maglev"],
     "!has_turbofan":
         kIncompatibleFlagsForNoTurbofan,
-    "has_jitless":
+    "jitless_build_mode":
         INCOMPATIBLE_FLAGS_PER_VARIANT["jitless"],
     "lite_mode": ["--max-semi-space-size=*"] +
                  INCOMPATIBLE_FLAGS_PER_VARIANT["jitless"],
-    "verify_predictable": [
+    "predictable": [
         "--parallel-compile-tasks-for-eager-toplevel",
         "--parallel-compile-tasks-for-lazy", "--concurrent-recompilation",
         "--stress-concurrent-allocation", "--stress-concurrent-inlining"
@@ -275,11 +226,6 @@ def _variant_order_key(v):
 
 ALL_VARIANTS = sorted(ALL_VARIANT_FLAGS.keys(),
                       key=_variant_order_key)
-
-# For internal integrity checking.
-REQUIRED_BUILD_VARIABLES = [
-    var.lstrip('!') for var in INCOMPATIBLE_FLAGS_PER_BUILD_VARIABLE.keys()
-]
 
 # Check {SLOW,FAST}_VARIANTS entries
 for variants in [SLOW_VARIANTS, FAST_VARIANTS]:

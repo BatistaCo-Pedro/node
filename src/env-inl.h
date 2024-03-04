@@ -393,6 +393,16 @@ inline AliasedInt32Array& Environment::stream_base_state() {
   return stream_base_state_;
 }
 
+inline uint32_t Environment::get_next_module_id() {
+  return module_id_counter_++;
+}
+inline uint32_t Environment::get_next_script_id() {
+  return script_id_counter_++;
+}
+inline uint32_t Environment::get_next_function_id() {
+  return function_id_counter_++;
+}
+
 ShouldNotAbortOnUncaughtScope::ShouldNotAbortOnUncaughtScope(
     Environment* env)
     : env_(env) {
@@ -430,12 +440,12 @@ inline builtins::BuiltinLoader* Environment::builtin_loader() {
   return &builtin_loader_;
 }
 
-inline const EmbedderPreloadCallback& Environment::embedder_preload() const {
-  return embedder_preload_;
+inline const StartExecutionCallback& Environment::embedder_entry_point() const {
+  return embedder_entry_point_;
 }
 
-inline void Environment::set_embedder_preload(EmbedderPreloadCallback fn) {
-  embedder_preload_ = std::move(fn);
+inline void Environment::set_embedder_entry_point(StartExecutionCallback&& fn) {
+  embedder_entry_point_ = std::move(fn);
 }
 
 inline double Environment::new_async_id() {
@@ -642,6 +652,10 @@ inline bool Environment::is_main_thread() const {
   return worker_context() == nullptr;
 }
 
+inline bool Environment::is_embedded_env() const {
+  return embedded_ != nullptr;
+}
+
 inline bool Environment::no_native_addons() const {
   return (flags_ & EnvironmentFlags::kNoNativeAddons) ||
           !options_->allow_native_addons;
@@ -776,10 +790,10 @@ inline void Environment::ThrowRangeError(const char* errmsg) {
 }
 
 inline void Environment::ThrowError(
-    v8::Local<v8::Value> (*fun)(v8::Local<v8::String>, v8::Local<v8::Value>),
+    v8::Local<v8::Value> (*fun)(v8::Local<v8::String>),
     const char* errmsg) {
   v8::HandleScope handle_scope(isolate());
-  isolate()->ThrowException(fun(OneByteString(isolate(), errmsg), {}));
+  isolate()->ThrowException(fun(OneByteString(isolate(), errmsg)));
 }
 
 inline void Environment::ThrowErrnoException(int errorno,
@@ -810,6 +824,13 @@ void Environment::RemoveCleanupHook(CleanupQueue::Callback fn, void* arg) {
 void Environment::set_process_exit_handler(
     std::function<void(Environment*, ExitCode)>&& handler) {
   process_exit_handler_ = std::move(handler);
+}
+
+inline EmbeddedEnvironment* Environment::get_embedded() {
+  return embedded_;
+}
+inline void Environment::set_embedded(EmbeddedEnvironment* env) {
+  embedded_ = env;
 }
 
 #define VP(PropertyName, StringValue) V(v8::Private, PropertyName)

@@ -73,7 +73,7 @@ bool ApplyRSAOptions(const ManagedEVPPKey& pkey,
 }
 
 std::unique_ptr<BackingStore> Node_SignFinal(Environment* env,
-                                             EVPMDCtxPointer&& mdctx,
+                                             EVPMDPointer&& mdctx,
                                              const ManagedEVPPKey& pkey,
                                              int padding,
                                              Maybe<int> pss_salt_len) {
@@ -391,7 +391,7 @@ Sign::SignResult Sign::SignFinal(
   if (!mdctx_)
     return SignResult(kSignNotInitialised);
 
-  EVPMDCtxPointer mdctx = std::move(mdctx_);
+  EVPMDPointer mdctx = std::move(mdctx_);
 
   if (!ValidateDSAParameters(pkey.get()))
     return SignResult(kSignPrivateKey);
@@ -511,7 +511,7 @@ SignBase::Error Verify::VerifyFinal(const ManagedEVPPKey& pkey,
   unsigned char m[EVP_MAX_MD_SIZE];
   unsigned int m_len;
   *verify_result = false;
-  EVPMDCtxPointer mdctx = std::move(mdctx_);
+  EVPMDPointer mdctx = std::move(mdctx_);
 
   if (!EVP_DigestFinal_ex(mdctx.get(), m, &m_len))
     return kSignPublicKey;
@@ -696,7 +696,7 @@ bool SignTraits::DeriveBits(
     const SignConfiguration& params,
     ByteSource* out) {
   ClearErrorOnReturn clear_error_on_return;
-  EVPMDCtxPointer context(EVP_MD_CTX_new());
+  EVPMDPointer context(EVP_MD_CTX_new());
   EVP_PKEY_CTX* ctx = nullptr;
 
   switch (params.mode) {

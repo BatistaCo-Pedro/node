@@ -123,6 +123,7 @@ if (process.argv.length === 2 &&
 }
 
 const isWindows = process.platform === 'win32';
+const isAIX = process.platform === 'aix';
 const isSunOS = process.platform === 'sunos';
 const isFreeBSD = process.platform === 'freebsd';
 const isOpenBSD = process.platform === 'openbsd';
@@ -273,7 +274,7 @@ function platformTimeout(ms) {
   if (process.features.debug)
     ms = multipliers.two * ms;
 
-  if (exports.isAIX || exports.isIBMi)
+  if (isAIX)
     return multipliers.two * ms; // Default localhost speed is slower on AIX
 
   if (isPi)
@@ -719,8 +720,9 @@ function expectsError(validator, exact) {
       assert.fail(`Expected one argument, got ${inspect(args)}`);
     }
     const error = args.pop();
+    const descriptor = Object.getOwnPropertyDescriptor(error, 'message');
     // The error message should be non-enumerable
-    assert.strictEqual(Object.prototype.propertyIsEnumerable.call(error, 'message'), false);
+    assert.strictEqual(descriptor.enumerable, false);
 
     assert.throws(() => { throw error; }, validator);
     return true;
@@ -813,7 +815,7 @@ function invalidArgTypeHelper(input) {
   if (input == null) {
     return ` Received ${input}`;
   }
-  if (typeof input === 'function') {
+  if (typeof input === 'function' && input.name) {
     return ` Received function ${input.name}`;
   }
   if (typeof input === 'object') {
@@ -903,45 +905,6 @@ function spawnPromisified(...args) {
   });
 }
 
-function getPrintedStackTrace(stderr) {
-  const lines = stderr.split('\n');
-
-  let state = 'initial';
-  const result = {
-    message: [],
-    nativeStack: [],
-    jsStack: [],
-  };
-  for (let i = 0; i < lines.length; ++i) {
-    const line = lines[i].trim();
-    if (line.length === 0) {
-      continue;  // Skip empty lines.
-    }
-
-    switch (state) {
-      case 'initial':
-        result.message.push(line);
-        if (line.includes('Native stack trace')) {
-          state = 'native-stack';
-        } else {
-          result.message.push(line);
-        }
-        break;
-      case 'native-stack':
-        if (line.includes('JavaScript stack trace')) {
-          state = 'js-stack';
-        } else {
-          result.nativeStack.push(line);
-        }
-        break;
-      case 'js-stack':
-        result.jsStack.push(line);
-        break;
-    }
-  }
-  return result;
-}
-
 const common = {
   allowGlobals,
   buildType,
@@ -955,7 +918,6 @@ const common = {
   getArrayBufferViews,
   getBufferSources,
   getCallSite,
-  getPrintedStackTrace,
   getTTYfd,
   hasIntl,
   hasCrypto,
@@ -964,6 +926,7 @@ const common = {
   hasQuic,
   hasMultiLocalhost,
   invalidArgTypeHelper,
+  isAIX,
   isAlive,
   isAsan,
   isDumbTerminal,
@@ -1034,12 +997,7 @@ const common = {
   },
 
   // On IBMi, process.platform and os.platform() both return 'aix',
-  // when built with Python versions earlier than 3.9.
   // It is not enough to differentiate between IBMi and real AIX system.
-  get isAIX() {
-    return require('os').type() === 'AIX';
-  },
-
   get isIBMi() {
     return require('os').type() === 'OS400';
   },

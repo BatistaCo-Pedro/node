@@ -54,22 +54,18 @@ log_and_verify_sha256sum "uvwasi" "$UVWASI_ZIP.zip"
 
 echo "Moving existing GYP build file"
 mv "$DEPS_DIR/uvwasi/"*.gyp "$WORKSPACE/"
-
-echo "Moving existing GN build file"
-mv "$DEPS_DIR/uvwasi/"*.gn "$DEPS_DIR/uvwasi/"*.gni "$WORKSPACE/"
-
 rm -rf "$DEPS_DIR/uvwasi/"
 
 echo "Unzipping..."
 unzip "$UVWASI_ZIP.zip" -d "$DEPS_DIR/uvwasi/"
 rm "$UVWASI_ZIP.zip"
 
-mv "$WORKSPACE/"*.gyp "$WORKSPACE/"*.gn "$WORKSPACE/"*.gni "$DEPS_DIR/uvwasi/"
+mv "$WORKSPACE/"*.gyp "$DEPS_DIR/uvwasi/"
 cd "$DEPS_DIR/uvwasi/"
 
 echo "Copying new files to deps folder"
-replace_dir "$DEPS_DIR/uvwasi/include" "$UVWASI_ZIP/include"
-replace_dir "$DEPS_DIR/uvwasi/src" "$UVWASI_ZIP/src"
+cp -r "$UVWASI_ZIP/include" "$DEPS_DIR/uvwasi/"
+cp -r "$UVWASI_ZIP/src" "$DEPS_DIR/uvwasi/"
 cp "$UVWASI_ZIP/LICENSE" "$DEPS_DIR/uvwasi/"
 rm -rf "$UVWASI_ZIP"
 
@@ -79,4 +75,4 @@ echo ""
 # Update the version number on maintaining-dependencies.md
 # and print the new version as the last line of the script as we need
 # to add it to $GITHUB_ENV variable
-finalize_version_update "uvwasi" "$NEW_VERSION"
+finalize_version_update "acorn" "$NEW_VERSION"

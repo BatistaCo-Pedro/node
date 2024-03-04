@@ -225,12 +225,12 @@ export class ChildRange {
         return new RangeToolTip(`${C.INTERVAL_TEXT_FOR_STACK}${registerIndex}`, true);
       default:
         if (this.op instanceof SequenceBlockOperand && this.op.type == "constant") {
-          return new RangeToolTip(C.INTERVAL_TEXT_FOR_CONST, false);
+          new RangeToolTip(C.INTERVAL_TEXT_FOR_CONST, false);
         } else {
           if (this.op instanceof SequenceBlockOperand && this.op.text) {
-            return new RangeToolTip(this.op.text, true);
+            new RangeToolTip(this.op.text, true);
           } else if (typeof this.op === "string") {
-            return new RangeToolTip(this.op, true);
+            new RangeToolTip(this.op, true);
           }
         }
     }

@@ -28,7 +28,7 @@ function testValid(position, allowedErrors = []) {
   }
 }
 
-function testInvalid(code, position) {
+function testInvalid(code, position, internalCatch = false) {
   let fdSync;
   try {
     fdSync = fs.openSync(filepath, 'r');
@@ -61,7 +61,8 @@ function testInvalid(code, position) {
 
   testValid(2n ** 63n - 1n - BigInt(length), [ 'EFBIG', 'EOVERFLOW' ]);
   testInvalid('ERR_OUT_OF_RANGE', 2n ** 63n);
-  testInvalid('ERR_OUT_OF_RANGE', 2n ** 63n - BigInt(length));
+
+  // TODO(LiviaMedeiros): test `2n ** 63n - BigInt(length)`
 
   testInvalid('ERR_OUT_OF_RANGE', NaN);
   testInvalid('ERR_OUT_OF_RANGE', -Infinity);

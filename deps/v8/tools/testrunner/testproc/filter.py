@@ -78,8 +78,12 @@ class NameFilterProc(base.TestProcFilter):
     globs = self._globs.get(test.suite.name, [])
     for g in globs:
       if g == '*': return False
-      if fnmatch.fnmatch(test.name, g):
+      if fnmatch.fnmatch(test.path, g):
         return False
-
     exact_matches = self._exact_matches.get(test.suite.name, {})
-    return test.name not in exact_matches
+    if test.path in exact_matches: return False
+    if os.sep != '/':
+      unix_path = test.path.replace(os.sep, '/')
+      if unix_path in exact_matches: return False
+    # Filter out everything else.
+    return True

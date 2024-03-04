@@ -6,16 +6,14 @@
  */
 
 const common = require('../common');
-const { runAndBreathe } = require('../common/gc');
 const assert = require('assert');
 const { isMainThread, Worker } = require('worker_threads');
 
-runAndBreathe(() => {
+for (let i = 0; i < 100; i++) {
   const realm = new ShadowRealm();
   realm.evaluate('new TextEncoder(); 1;');
-}, 100).then(common.mustCall());
+}
 
-// Test it in worker too.
 if (isMainThread) {
   const worker = new Worker(__filename);
   worker.on('exit', common.mustCall((code) => {

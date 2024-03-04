@@ -114,7 +114,6 @@ class Worker : public AsyncWrap {
 
   std::unique_ptr<MessagePortData> child_port_data_;
   std::shared_ptr<KVStore> env_vars_;
-  EmbedderPreloadCallback embedder_preload_;
 
   // A raw flag that is used by creator and worker threads to
   // sync up on pre-mature termination of worker  - while in the

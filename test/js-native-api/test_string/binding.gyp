@@ -3,12 +3,11 @@
     {
       "target_name": "test_string",
       "sources": [
+        "../entry_point.c",
         "test_string.c",
         "test_null.c",
-      ],
-      "defines": [
-        "NAPI_EXPERIMENTAL",
-      ],
-    },
-  ],
+        "../common.c",
+      ]
+    }
+  ]
 }

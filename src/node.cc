@@ -131,10 +131,7 @@
 
 namespace node {
 
-using v8::Array;
-using v8::Context;
 using v8::EscapableHandleScope;
-using v8::Function;
 using v8::Isolate;
 using v8::Local;
 using v8::MaybeLocal;
@@ -261,18 +258,11 @@ void Environment::InitializeDiagnostics() {
   if (options_->trace_uncaught)
     isolate_->SetCaptureStackTraceForUncaughtExceptions(true);
   if (options_->trace_atomics_wait) {
-    ProcessEmitDeprecationWarning(
-        Environment::GetCurrent(isolate_),
-        "The flag --trace-atomics-wait is deprecated.",
-        "DEP0165");
     isolate_->SetAtomicsWaitCallback(AtomicsWaitCallback, this);
     AddCleanupHook([](void* data) {
       Environment* env = static_cast<Environment*>(data);
       env->isolate()->SetAtomicsWaitCallback(nullptr, nullptr);
     }, this);
-  }
-  if (options_->trace_promises) {
-    isolate_->SetPromiseHook(TracePromises);
   }
 }
 
@@ -285,29 +275,6 @@ MaybeLocal<Value> StartExecution(Environment* env, const char* main_script_id) {
   return scope.EscapeMaybe(realm->ExecuteBootstrapper(main_script_id));
 }
 
-// Convert the result returned by an intermediate main script into
-// StartExecutionCallbackInfo. Currently the result is an array containing
-// [process, requireFunction, cjsRunner]
-std::optional<StartExecutionCallbackInfo> CallbackInfoFromArray(
-    Local<Context> context, Local<Value> result) {
-  CHECK(result->IsArray());
-  Local<Array> args = result.As<Array>();
-  CHECK_EQ(args->Length(), 3);
-  Local<Value> process_obj, require_fn, runcjs_fn;
-  if (!args->Get(context, 0).ToLocal(&process_obj) ||
-      !args->Get(context, 1).ToLocal(&require_fn) ||
-      !args->Get(context, 2).ToLocal(&runcjs_fn)) {
-    return std::nullopt;
-  }
-  CHECK(process_obj->IsObject());
-  CHECK(require_fn->IsFunction());
-  CHECK(runcjs_fn->IsFunction());
-  node::StartExecutionCallbackInfo info{process_obj.As<Object>(),
-                                        require_fn.As<Function>(),
-                                        runcjs_fn.As<Function>()};
-  return info;
-}
-
 MaybeLocal<Value> StartExecution(Environment* env, StartExecutionCallback cb) {
   InternalCallbackScope callback_scope(
       env,
@@ -315,35 +282,19 @@ MaybeLocal<Value> StartExecution(Environment* env, StartExecutionCallback cb) {
       { 1, 0 },
       InternalCallbackScope::kSkipAsyncHooks);
 
-  // Only snapshot builder or embedder applications set the
-  // callback.
   if (cb != nullptr) {
     EscapableHandleScope scope(env->isolate());
+    // TODO(addaleax): pass the callback to the main script more directly,
+    // e.g. by making StartExecution(env, builtin) parametrizable
+    env->set_embedder_entry_point(std::move(cb));
+    auto reset_entry_point =
+        OnScopeLeave([&]() { env->set_embedder_entry_point({}); });
 
-    Local<Value> result;
-    if (env->isolate_data()->is_building_snapshot()) {
-      if (!StartExecution(env, "internal/main/mksnapshot").ToLocal(&result)) {
-        return MaybeLocal<Value>();
-      }
-    } else {
-      if (!StartExecution(env, "internal/main/embedding").ToLocal(&result)) {
-        return MaybeLocal<Value>();
-      }
-    }
+    const char* entry = env->isolate_data()->is_building_snapshot()
+                            ? "internal/main/mksnapshot"
+                            : "internal/main/embedding";
 
-    auto info = CallbackInfoFromArray(env->context(), result);
-    if (!info.has_value()) {
-      MaybeLocal<Value>();
-    }
-#if HAVE_INSPECTOR
-    if (env->options()->debug_options().break_first_line) {
-      env->inspector_agent()->PauseOnNextJavascriptStatement("Break on start");
-    }
-#endif
-
-    env->performance_state()->Mark(
-        performance::NODE_PERFORMANCE_MILESTONE_BOOTSTRAP_COMPLETE);
-    return scope.EscapeMaybe(cb(info.value()));
+    return scope.EscapeMaybe(StartExecution(env, entry));
   }
 
   CHECK(!env->isolate_data()->is_building_snapshot());
@@ -802,13 +753,6 @@ static ExitCode ProcessGlobalArgsInternal(std::vector<std::string>* args,
                 "--no-harmony-import-assertions") == v8_args.end()) {
     v8_args.emplace_back("--harmony-import-assertions");
   }
-  // TODO(aduh95): remove this when the harmony-import-attributes flag
-  // is removed in V8.
-  if (std::find(v8_args.begin(),
-                v8_args.end(),
-                "--no-harmony-import-attributes") == v8_args.end()) {
-    v8_args.emplace_back("--harmony-import-attributes");
-  }
 
   auto env_opts = per_process::cli_options->per_isolate->per_env;
   if (std::find(v8_args.begin(), v8_args.end(),
@@ -894,39 +838,16 @@ static ExitCode InitializeNodeWithArgsInternal(
   V8::SetFlagsFromString(NODE_V8_OPTIONS, sizeof(NODE_V8_OPTIONS) - 1);
 #endif
 
-  if (!!(flags & ProcessInitializationFlags::kGeneratePredictableSnapshot) ||
-      per_process::cli_options->per_isolate->build_snapshot) {
-    v8::V8::SetFlagsFromString("--predictable");
-    v8::V8::SetFlagsFromString("--random_seed=42");
-  }
-
-  // Specify this explicitly to avoid being affected by V8 changes to the
-  // default value.
-  V8::SetFlagsFromString("--rehash-snapshot");
-
   HandleEnvOptions(per_process::cli_options->per_isolate->per_env);
 
   std::string node_options;
-  auto file_paths = node::Dotenv::GetPathFromArgs(*argv);
+  auto file_path = node::Dotenv::GetPathFromArgs(*argv);
 
-  if (!file_paths.empty()) {
+  if (file_path.has_value()) {
+    auto cwd = Environment::GetCwd(Environment::GetExecPath(*argv));
+    std::string path = cwd + kPathSeparator + file_path.value();
     CHECK(!per_process::v8_initialized);
-
-    for (const auto& file_path : file_paths) {
-      switch (per_process::dotenv_file.ParsePath(file_path)) {
-        case Dotenv::ParseResult::Valid:
-          break;
-        case Dotenv::ParseResult::InvalidContent:
-          errors->push_back(file_path + ": invalid format");
-          break;
-        case Dotenv::ParseResult::FileError:
-          errors->push_back(file_path + ": not found");
-          break;
-        default:
-          UNREACHABLE();
-      }
-    }
-
+    per_process::dotenv_file.ParsePath(path);
     per_process::dotenv_file.AssignNodeOptionsIfAvailable(&node_options);
   }
 
@@ -987,14 +908,9 @@ static ExitCode InitializeNodeWithArgsInternal(
 
     // Initialize ICU.
     // If icu_data_dir is empty here, it will load the 'minimal' data.
-    std::string icu_error;
-    if (!i18n::InitializeICUDirectory(per_process::cli_options->icu_data_dir,
-                                      &icu_error)) {
-      errors->push_back(icu_error +
-                        ": Could not initialize ICU. "
-                        "Check the directory specified by NODE_ICU_DATA or "
-                        "--icu-data-dir contains " U_ICUDATA_NAME ".dat and "
-                        "it's readable\n");
+    if (!i18n::InitializeICUDirectory(per_process::cli_options->icu_data_dir)) {
+      errors->push_back("could not initialize ICU "
+                        "(check NODE_ICU_DATA or --icu-data-dir parameters)\n");
       return ExitCode::kInvalidCommandLineArgument;
     }
     per_process::metadata.versions.InitializeIntlVersions();
@@ -1034,7 +950,7 @@ InitializeOncePerProcessInternal(const std::vector<std::string>& args,
   if (!(flags & ProcessInitializationFlags::kNoParseGlobalDebugVariables)) {
     // Initialized the enabled list for Debug() calls with system
     // environment variables.
-    per_process::enabled_debug_list.Parse(per_process::system_environment);
+    per_process::enabled_debug_list.Parse();
   }
 
   PlatformInit(flags);
@@ -1262,39 +1178,10 @@ ExitCode GenerateAndWriteSnapshotData(const SnapshotData** snapshot_data_ptr,
   // nullptr indicates there's no snapshot data.
   DCHECK_NULL(*snapshot_data_ptr);
 
-  SnapshotConfig snapshot_config;
-  const std::string& config_path =
-      per_process::cli_options->per_isolate->build_snapshot_config;
-  // For snapshot config read from JSON, we fix up process.argv[1] using the
-  // "builder" field.
-  std::vector<std::string> args_maybe_patched;
-  args_maybe_patched.reserve(result->args().size() + 1);
-  if (!config_path.empty()) {
-    std::optional<SnapshotConfig> optional_config =
-        ReadSnapshotConfig(config_path.c_str());
-    if (!optional_config.has_value()) {
-      return ExitCode::kGenericUserError;
-    }
-    snapshot_config = std::move(optional_config.value());
-    DCHECK(snapshot_config.builder_script_path.has_value());
-    args_maybe_patched.emplace_back(result->args()[0]);
-    args_maybe_patched.emplace_back(
-        snapshot_config.builder_script_path.value());
-    if (result->args().size() > 1) {
-      args_maybe_patched.insert(args_maybe_patched.end(),
-                                result->args().begin() + 1,
-                                result->args().end());
-    }
-  } else {
-    snapshot_config.builder_script_path = result->args()[1];
-    args_maybe_patched = result->args();
-  }
-  DCHECK(snapshot_config.builder_script_path.has_value());
-  const std::string& builder_script =
-      snapshot_config.builder_script_path.value();
   // node:embedded_snapshot_main indicates that we are using the
   // embedded snapshot and we are not supposed to clean it up.
-  if (builder_script == "node:embedded_snapshot_main") {
+  const std::string& main_script = result->args()[1];
+  if (main_script == "node:embedded_snapshot_main") {
     *snapshot_data_ptr = SnapshotBuilder::GetEmbeddedSnapshotData();
     if (*snapshot_data_ptr == nullptr) {
       // The Node.js binary is built without embedded snapshot
@@ -1306,25 +1193,24 @@ ExitCode GenerateAndWriteSnapshotData(const SnapshotData** snapshot_data_ptr,
       return exit_code;
     }
   } else {
-    // Otherwise, load and run the specified builder script.
+    // Otherwise, load and run the specified main script.
     std::unique_ptr<SnapshotData> generated_data =
         std::make_unique<SnapshotData>();
-    std::string builder_script_content;
-    int r = ReadFileSync(&builder_script_content, builder_script.c_str());
+    std::string main_script_content;
+    int r = ReadFileSync(&main_script_content, main_script.c_str());
     if (r != 0) {
       FPrintF(stderr,
-              "Cannot read builder script %s for building snapshot. %s: %s",
-              builder_script,
+              "Cannot read main script %s for building snapshot. %s: %s",
+              main_script,
               uv_err_name(r),
               uv_strerror(r));
       return ExitCode::kGenericUserError;
     }
 
     exit_code = node::SnapshotBuilder::Generate(generated_data.get(),
-                                                args_maybe_patched,
+                                                result->args(),
                                                 result->exec_args(),
-                                                builder_script_content,
-                                                snapshot_config);
+                                                main_script_content);
     if (exit_code == ExitCode::kNoFailure) {
       *snapshot_data_ptr = generated_data.release();
     } else {
@@ -1445,20 +1331,16 @@ static ExitCode StartInternal(int argc, char** argv) {
   });
 
   uv_loop_configure(uv_default_loop(), UV_METRICS_IDLE_TIME);
+
   std::string sea_config = per_process::cli_options->experimental_sea_config;
   if (!sea_config.empty()) {
-#if !defined(DISABLE_SINGLE_EXECUTABLE_APPLICATION)
     return sea::BuildSingleExecutableBlob(
         sea_config, result->args(), result->exec_args());
-#else
-    fprintf(stderr, "Single executable application is disabled.\n");
-    return ExitCode::kGenericUserError;
-#endif  // !defined(DISABLE_SINGLE_EXECUTABLE_APPLICATION)
   }
+
   // --build-snapshot indicates that we are in snapshot building mode.
   if (per_process::cli_options->per_isolate->build_snapshot) {
-    if (per_process::cli_options->per_isolate->build_snapshot_config.empty() &&
-        result->args().size() < 2) {
+    if (result->args().size() < 2) {
       fprintf(stderr,
               "--build-snapshot must be used with an entry point script.\n"
               "Usage: node --build-snapshot /path/to/entry.js\n");

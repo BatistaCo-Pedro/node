@@ -451,7 +451,7 @@ const candidateGreedyOptions = [
   '--foo',
 ];
 
-for (const value of candidateGreedyOptions) {
+candidateGreedyOptions.forEach((value) => {
   test(`greedy: when short option with value '${value}' then eaten`, () => {
     const args = ['-w', value];
     const options = { with: { type: 'string', short: 'w' } };
@@ -469,7 +469,7 @@ for (const value of candidateGreedyOptions) {
     const result = parseArgs({ args, options, strict: false });
     assert.deepStrictEqual(result, expectedResult);
   });
-}
+});
 
 test('strict: when candidate option value is plain text then does not throw', () => {
   const args = ['--with', 'abc'];

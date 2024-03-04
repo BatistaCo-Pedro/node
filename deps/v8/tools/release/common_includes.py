@@ -30,12 +30,14 @@ import argparse
 import datetime
 from distutils.version import LooseVersion
 import glob
+import imp
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import textwrap
 import time
 import urllib
 
@@ -129,7 +131,7 @@ def NormalizeVersionTags(version_tags):
   # Remove tags/ prefix because of packed refs.
   for current_tag in version_tags:
     version_tag = SanitizeVersionTag(current_tag)
-    if version_tag is not None:
+    if version_tag != None:
       normalized_version_tags.append(version_tag)
 
   return normalized_version_tags

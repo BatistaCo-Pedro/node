@@ -8,10 +8,8 @@ import { BaseArgumentsProcessor} from "./arguments.mjs";
 class ArgumentsProcessor extends BaseArgumentsProcessor {
   getArgsDispatch() {
     return {
-      '--range': [
-          'range', 'auto,auto',
-          'Specify the range limit as [start],[end]'
-        ],
+      '--range': ['range', 'auto,auto',
+          'Specify the range limit as [start],[end]'],
     };
   }
   getDefaultResults() {

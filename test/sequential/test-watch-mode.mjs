@@ -30,9 +30,9 @@ function createTmpFile(content = 'console.log("running");', ext = '.js', basenam
 }
 
 async function runWriteSucceed({
-  file, watchedFile, watchFlag = '--watch', args = [file], completed = 'Completed running', restarts = 2, options = {}
+  file, watchedFile, args = [file], completed = 'Completed running', restarts = 2
 }) {
-  const child = spawn(execPath, [watchFlag, '--no-warnings', ...args], { encoding: 'utf8', stdio: 'pipe', ...options });
+  const child = spawn(execPath, ['--watch', '--no-warnings', ...args], { encoding: 'utf8', stdio: 'pipe' });
   let completes = 0;
   let cancelRestarts = () => {};
   let stderr = '';
@@ -62,7 +62,7 @@ async function runWriteSucceed({
     child.kill();
     cancelRestarts();
   }
-  return { stdout, stderr, pid: child.pid };
+  return { stdout, stderr };
 }
 
 async function failWriteSucceed({ file, watchedFile }) {
@@ -88,22 +88,6 @@ async function failWriteSucceed({ file, watchedFile }) {
 tmpdir.refresh();
 
 describe('watch mode', { concurrency: true, timeout: 60_000 }, () => {
-  it('should watch changes to a file', async () => {
-    const file = createTmpFile();
-    const { stderr, stdout } = await runWriteSucceed({ file, watchedFile: file, watchFlag: '--watch=true', options: {
-      timeout: 10000
-    } });
-
-    assert.strictEqual(stderr, '');
-    assert.deepStrictEqual(stdout, [
-      'running',
-      `Completed running ${inspect(file)}`,
-      `Restarting ${inspect(file)}`,
-      'running',
-      `Completed running ${inspect(file)}`,
-    ]);
-  });
-
   it('should watch changes to a file - event loop ended', async () => {
     const file = createTmpFile();
     const { stderr, stdout } = await runWriteSucceed({ file, watchedFile: file });
@@ -275,14 +259,13 @@ console.log(values.random);
     ]);
   });
 
-  it('should load --require modules in the watched process, and not in the orchestrator process', async () => {
+  it('should not load --require modules in main process', async () => {
     const file = createTmpFile();
-    const required = createTmpFile('process._rawDebug(\'pid\', process.pid);');
+    const required = createTmpFile('setImmediate(() => process.exit(0));');
     const args = ['--require', required, file];
-    const { stdout, pid } = await runWriteSucceed({ file, watchedFile: file, args });
+    const { stderr, stdout } = await runWriteSucceed({ file, watchedFile: file, args });
 
-    const importPid = parseInt(stdout[0].split(' ')[1], 10);
-    assert.notStrictEqual(pid, importPid);
+    assert.strictEqual(stderr, '');
     assert.deepStrictEqual(stdout, [
       'running',
       `Completed running ${inspect(file)}`,
@@ -292,14 +275,13 @@ console.log(values.random);
     ]);
   });
 
-  it('should load --import modules in the watched process, and not in the orchestrator process', async () => {
+  it('should not load --import modules in main process', async () => {
     const file = createTmpFile();
-    const imported = "data:text/javascript,process._rawDebug('pid', process.pid);";
+    const imported = pathToFileURL(createTmpFile('setImmediate(() => process.exit(0));'));
     const args = ['--import', imported, file];
-    const { stdout, pid } = await runWriteSucceed({ file, watchedFile: file, args });
+    const { stderr, stdout } = await runWriteSucceed({ file, watchedFile: file, args });
 
-    const importPid = parseInt(stdout[0].split(' ')[1], 10);
-    assert.notStrictEqual(pid, importPid);
+    assert.strictEqual(stderr, '');
     assert.deepStrictEqual(stdout, [
       'running',
       `Completed running ${inspect(file)}`,

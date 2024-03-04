@@ -45,9 +45,6 @@ trap cleanup INT TERM EXIT
 
 cd "$WORKSPACE"
 
-echo "Replacing existing llhttp (except GYP and GN build files)"
-mv "$DEPS_DIR/llhttp/"*.gn "$DEPS_DIR/llhttp/"*.gni "$WORKSPACE/"
-
 if echo "$NEW_VERSION" | grep -qs "/" ; then # Download a release
   REPO="git@github.com:$NEW_VERSION.git"
   BRANCH=$2
@@ -76,8 +73,6 @@ else
   rm -rf "$DEPS_DIR/llhttp"
   cp -a "llhttp-release-v$NEW_VERSION" "$DEPS_DIR/llhttp"
 fi
-
-mv "$WORKSPACE/"*.gn "$WORKSPACE/"*.gni "$DEPS_DIR/llhttp"
 
 # Update the version number on maintaining-dependencies.md
 # and print the new version as the last line of the script as we need

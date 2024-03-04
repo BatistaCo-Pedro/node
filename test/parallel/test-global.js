@@ -30,7 +30,7 @@ const assert = require('assert');
 const { builtinModules } = require('module');
 
 // Load all modules to actually cover most code parts.
-for (const moduleName of builtinModules) {
+builtinModules.forEach((moduleName) => {
   if (!moduleName.includes('/')) {
     try {
       // This could throw for e.g., crypto if the binary is not compiled
@@ -40,7 +40,7 @@ for (const moduleName of builtinModules) {
       // Continue regardless of error.
     }
   }
-}
+});
 
 {
   const expected = [

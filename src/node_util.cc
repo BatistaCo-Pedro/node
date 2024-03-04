@@ -1,5 +1,4 @@
 #include "base_object-inl.h"
-#include "node_dotenv.h"
 #include "node_errors.h"
 #include "node_external_reference.h"
 #include "util-inl.h"
@@ -37,6 +36,9 @@ using v8::StackTrace;
 using v8::String;
 using v8::Uint32;
 using v8::Value;
+
+// Used in ToUSVString().
+constexpr char16_t kUnicodeReplacementCharacter = 0xFFFD;
 
 // If a UTF-16 character is a low/trailing surrogate.
 CHAR_TEST(16, IsUnicodeTrail, (ch & 0xFC00) == 0xDC00)
@@ -238,14 +240,38 @@ static uint32_t FastGuessHandleType(Local<Value> receiver, const uint32_t fd) {
 
 CFunction fast_guess_handle_type_(CFunction::Make(FastGuessHandleType));
 
-static void ParseEnv(const FunctionCallbackInfo<Value>& args) {
+static void ToUSVString(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
-  CHECK_EQ(args.Length(), 1);  // content
+  CHECK_GE(args.Length(), 2);
   CHECK(args[0]->IsString());
-  Utf8Value content(env->isolate(), args[0]);
-  Dotenv dotenv{};
-  dotenv.ParseContent(content.ToStringView());
-  args.GetReturnValue().Set(dotenv.ToObject(env));
+  CHECK(args[1]->IsNumber());
+
+  TwoByteValue value(env->isolate(), args[0]);
+
+  int64_t start = args[1]->IntegerValue(env->context()).FromJust();
+  CHECK_GE(start, 0);
+
+  for (size_t i = start; i < value.length(); i++) {
+    char16_t c = value[i];
+    if (!IsUnicodeSurrogate(c)) {
+      continue;
+    } else if (IsUnicodeSurrogateTrail(c) || i == value.length() - 1) {
+      value[i] = kUnicodeReplacementCharacter;
+    } else {
+      char16_t d = value[i + 1];
+      if (IsUnicodeTrail(d)) {
+        i++;
+      } else {
+        value[i] = kUnicodeReplacementCharacter;
+      }
+    }
+  }
+
+  args.GetReturnValue().Set(
+      String::NewFromTwoByte(env->isolate(),
+                             *value,
+                             v8::NewStringType::kNormal,
+                             value.length()).ToLocalChecked());
 }
 
 void RegisterExternalReferences(ExternalReferenceRegistry* registry) {
@@ -262,7 +288,7 @@ void RegisterExternalReferences(ExternalReferenceRegistry* registry) {
   registry->Register(GuessHandleType);
   registry->Register(FastGuessHandleType);
   registry->Register(fast_guess_handle_type_.GetTypeInfo());
-  registry->Register(ParseEnv);
+  registry->Register(ToUSVString);
 }
 
 void Initialize(Local<Object> target,
@@ -360,7 +386,6 @@ void Initialize(Local<Object> target,
       context, target, "getConstructorName", GetConstructorName);
   SetMethodNoSideEffect(context, target, "getExternalValue", GetExternalValue);
   SetMethod(context, target, "sleep", Sleep);
-  SetMethod(context, target, "parseEnv", ParseEnv);
 
   SetMethod(
       context, target, "arrayBufferViewHasBuffer", ArrayBufferViewHasBuffer);
@@ -378,6 +403,8 @@ void Initialize(Local<Object> target,
                             "guessHandleType",
                             GuessHandleType,
                             &fast_guess_handle_type_);
+
+  SetMethodNoSideEffect(context, target, "toUSVString", ToUSVString);
 }
 
 }  // namespace util

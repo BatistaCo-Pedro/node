@@ -1,7 +1,6 @@
 #include <js_native_api.h>
-#include <string.h>
 #include "../common.h"
-#include "../entry_point.h"
+#include <string.h>
 
 static napi_value RunCallback(napi_env env, napi_callback_info info) {
   size_t argc = 2;

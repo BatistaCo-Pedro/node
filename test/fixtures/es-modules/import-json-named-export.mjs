@@ -1,1 +1,1 @@
-import { ofLife } from '../experimental.json' with { type: 'json' };
+import { ofLife } from '../experimental.json' assert { type: 'json' };

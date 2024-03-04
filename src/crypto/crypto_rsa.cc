@@ -577,9 +577,7 @@ Maybe<bool> GetRsaKeyDetail(
       int64_t salt_length = 20;
 
       if (params->hashAlgorithm != nullptr) {
-        const ASN1_OBJECT* hash_obj;
-        X509_ALGOR_get0(&hash_obj, nullptr, nullptr, params->hashAlgorithm);
-        hash_nid = OBJ_obj2nid(hash_obj);
+        hash_nid = OBJ_obj2nid(params->hashAlgorithm->algorithm);
       }
 
       if (target
@@ -592,13 +590,9 @@ Maybe<bool> GetRsaKeyDetail(
       }
 
       if (params->maskGenAlgorithm != nullptr) {
-        const ASN1_OBJECT* mgf_obj;
-        X509_ALGOR_get0(&mgf_obj, nullptr, nullptr, params->maskGenAlgorithm);
-        mgf_nid = OBJ_obj2nid(mgf_obj);
+        mgf_nid = OBJ_obj2nid(params->maskGenAlgorithm->algorithm);
         if (mgf_nid == NID_mgf1) {
-          const ASN1_OBJECT* mgf1_hash_obj;
-          X509_ALGOR_get0(&mgf1_hash_obj, nullptr, nullptr, params->maskHash);
-          mgf1_hash_nid = OBJ_obj2nid(mgf1_hash_obj);
+          mgf1_hash_nid = OBJ_obj2nid(params->maskHash->algorithm);
         }
       }
 

@@ -80,7 +80,6 @@
 
 #include <functional>
 #include <memory>
-#include <optional>
 #include <ostream>
 
 // We cannot use __POSIX__ in this header because that's only defined when
@@ -266,8 +265,6 @@ enum Flags : uint32_t {
   // cppgc::InitializeProcess() before creating a Node.js environment
   // and call cppgc::ShutdownProcess() before process shutdown.
   kNoInitializeCppgc = 1 << 13,
-  // Initialize the process for predictable snapshot generation.
-  kGeneratePredictableSnapshot = 1 << 14,
 
   // Emulate the behavior of InitializeNodeWithArgs() when passing
   // a flags argument to the InitializeOncePerProcess() replacement
@@ -660,33 +657,6 @@ enum Flags : uint64_t {
 };
 }  // namespace EnvironmentFlags
 
-enum class SnapshotFlags : uint32_t {
-  kDefault = 0,
-  // Whether code cache should be generated as part of the snapshot.
-  // Code cache reduces the time spent on compiling functions included
-  // in the snapshot at the expense of a bigger snapshot size and
-  // potentially breaking portability of the snapshot.
-  kWithoutCodeCache = 1 << 0,
-};
-
-struct SnapshotConfig {
-  SnapshotFlags flags = SnapshotFlags::kDefault;
-
-  // When builder_script_path is std::nullopt, the snapshot is generated as a
-  // built-in snapshot instead of a custom one, and it's expected that the
-  // built-in snapshot only contains states that reproduce in every run of the
-  // application. The event loop won't be run when generating a built-in
-  // snapshot, so asynchronous operations should be avoided.
-  //
-  // When builder_script_path is an std::string, it should match args[1]
-  // passed to CreateForSnapshotting(). The embedder is also expected to use
-  // LoadEnvironment() to run a script matching this path. In that case the
-  // snapshot is generated as a custom snapshot and the event loop is run, so
-  // the snapshot builder can execute asynchronous operations as long as they
-  // are run to completion when the snapshot is taken.
-  std::optional<std::string> builder_script_path;
-};
-
 struct InspectorParentHandle {
   virtual ~InspectorParentHandle() = default;
 };
@@ -731,33 +701,12 @@ struct StartExecutionCallbackInfo {
 
 using StartExecutionCallback =
     std::function<v8::MaybeLocal<v8::Value>(const StartExecutionCallbackInfo&)>;
-using EmbedderPreloadCallback =
-    std::function<void(Environment* env,
-                       v8::Local<v8::Value> process,
-                       v8::Local<v8::Value> require)>;
 
-// Run initialization for the environment.
-//
-// The |preload| function, usually used by embedders to inject scripts,
-// will be run by Node.js before Node.js executes the entry point.
-// The function is guaranteed to run before the user land module loader running
-// any user code, so it is safe to assume that at this point, no user code has
-// been run yet.
-// The function will be executed with preload(process, require), and the passed
-// require function has access to internal Node.js modules. There is no
-// stability guarantee about the internals exposed to the internal require
-// function. Expect breakages when updating Node.js versions if the embedder
-// imports internal modules with the internal require function.
-// Worker threads created in the environment will also respect The |preload|
-// function, so make sure the function is thread-safe.
 NODE_EXTERN v8::MaybeLocal<v8::Value> LoadEnvironment(
     Environment* env,
-    StartExecutionCallback cb,
-    EmbedderPreloadCallback preload = nullptr);
+    StartExecutionCallback cb);
 NODE_EXTERN v8::MaybeLocal<v8::Value> LoadEnvironment(
-    Environment* env,
-    std::string_view main_script_source_utf8,
-    EmbedderPreloadCallback preload = nullptr);
+    Environment* env, std::string_view main_script_source_utf8);
 NODE_EXTERN void FreeEnvironment(Environment* env);
 
 // Set a callback that is called when process.exit() is called from JS,
@@ -860,14 +809,26 @@ NODE_EXTERN struct uv_loop_s* GetCurrentEventLoop(v8::Isolate* isolate);
 
 // Runs the main loop for a given Environment. This roughly performs the
 // following steps:
-// 1. Call uv_run() on the event loop until it is drained.
+// 1. Call uv_run() on the event loop until it is drained or the optional
+//   condition returns false.
 // 2. Call platform->DrainTasks() on the associated platform/isolate.
 //   3. If the event loop is alive again, go to Step 1.
-// 4. Call EmitProcessBeforeExit().
-//   5. If the event loop is alive again, go to Step 1.
-// 6. Call EmitProcessExit() and forward the return value.
+// Returns false if the environment died and true if it can be reused.
+// This function only works if `env` has an associated `MultiIsolatePlatform`.
+NODE_EXTERN v8::Maybe<int> SpinEventLoopWithoutCleanup(
+    Environment* env, const std::function<bool(void)>& condition);
+NODE_EXTERN v8::Maybe<int> SpinEventLoopWithoutCleanup(Environment* env);
+
+// Runs the main loop for a given Environment and performs environment
+// shutdown when the loop exits. This roughly performs the
+// following steps:
+// 1. Call SpinEventLoopWithoutCleanup()
+// 2. Call EmitProcessBeforeExit().
+//   3. If the event loop is alive again, go to Step 1.
+// 4. Call EmitProcessExit() and forward the return value.
 // If at any point node::Stop() is called, the function will attempt to return
-// as soon as possible, returning an empty `Maybe`.
+// as soon as possible, returning an empty `Maybe`. Ohterwise it will return
+// a reference to the exit value.
 // This function only works if `env` has an associated `MultiIsolatePlatform`.
 NODE_EXTERN v8::Maybe<int> SpinEventLoop(Environment* env);
 
@@ -919,8 +880,7 @@ class NODE_EXTERN CommonEnvironmentSetup {
       MultiIsolatePlatform* platform,
       std::vector<std::string>* errors,
       const std::vector<std::string>& args = {},
-      const std::vector<std::string>& exec_args = {},
-      const SnapshotConfig& snapshot_config = {});
+      const std::vector<std::string>& exec_args = {});
   EmbedderSnapshotData::Pointer CreateSnapshot();
 
   struct uv_loop_s* event_loop() const;
@@ -955,8 +915,7 @@ class NODE_EXTERN CommonEnvironmentSetup {
       std::vector<std::string>*,
       const EmbedderSnapshotData*,
       uint32_t flags,
-      std::function<Environment*(const CommonEnvironmentSetup*)>,
-      const SnapshotConfig* config = nullptr);
+      std::function<Environment*(const CommonEnvironmentSetup*)>);
 };
 
 // Implementation for CommonEnvironmentSetup::Create

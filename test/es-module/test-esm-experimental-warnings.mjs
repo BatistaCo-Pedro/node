@@ -24,18 +24,14 @@ describe('ESM: warn for obsolete hooks provided', { concurrency: true }, () => {
 
   describe('experimental warnings for enabled experimental feature', () => {
     for (
-      const [experiment, ...args] of [
-        [
-          /`--experimental-loader` may be removed in the future/,
-          '--experimental-loader',
-          fileURL('es-module-loaders', 'hooks-custom.mjs'),
-        ],
+      const [experiment, arg] of [
+        [/Custom ESM Loaders/, `--experimental-loader=${fileURL('es-module-loaders', 'hooks-custom.mjs')}`],
         [/Network Imports/, '--experimental-network-imports'],
       ]
     ) {
       it(`should print for ${experiment.toString().replaceAll('/', '')}`, async () => {
         const { code, signal, stderr } = await spawnPromisified(execPath, [
-          ...args,
+          arg,
           '--input-type=module',
           '--eval',
           `import ${JSON.stringify(fileURL('es-module-loaders', 'module-named-exports.mjs'))}`,

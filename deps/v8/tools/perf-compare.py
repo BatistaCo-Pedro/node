@@ -19,7 +19,9 @@ import json
 import math
 from argparse import ArgumentParser
 import os
+import shutil
 import sys
+import tempfile
 
 PERCENT_CONSIDERED_SIGNIFICANT = 0.5
 PROBABILITY_CONSIDERED_SIGNIFICANT = 0.02
@@ -172,7 +174,7 @@ class BenchmarkSuite:
 
   def getBenchmark(self, benchmark_name):
     benchmark_object = self.benchmarks_.get(benchmark_name)
-    if benchmark_object is None:
+    if benchmark_object == None:
       benchmark_object = Benchmark(benchmark_name)
       self.benchmarks_[benchmark_name] = benchmark_object
     return benchmark_object
@@ -189,6 +191,7 @@ class ResultTableRenderer:
 
   def FlushOutput(self):
     string_data = "\n".join(self.print_output_)
+    print_output = []
     if self.output_file_:
       # create a file
       with open(self.output_file_, "w") as text_file:
@@ -333,7 +336,7 @@ table tr th :last-child, table tr td :last-child {
     main_run = None
     for run_name in run_names:
       self.Print("  <th>%s</th>" % run_name)
-      if main_run is None:
+      if main_run == None:
         main_run = run_name
       else:
         self.Print("  <th>%</th>")
@@ -355,14 +358,14 @@ table tr th :last-child, table tr td :last-child {
 
 
   def PrintResult(self, run):
-    if run is None:
+    if run == None:
       self.PrintEmptyCell()
       return
     self.Print("    <td>%3.1f</td>" % run.result())
 
 
   def PrintComparison(self, run, main_run):
-    if run is None or main_run is None:
+    if run == None or main_run == None:
       self.PrintEmptyCell()
       return
     diff = run.Compare(main_run)
@@ -425,7 +428,7 @@ def Render(args):
         benchmark_name = "/".join(trace["graphs"][1:])
 
         benchmark_suite_object = benchmark_suites.get(suite_name)
-        if benchmark_suite_object is None:
+        if benchmark_suite_object == None:
           benchmark_suite_object = BenchmarkSuite(suite_name)
           benchmark_suites[suite_name] = benchmark_suite_object
 
@@ -454,7 +457,7 @@ def Render(args):
       for run_name in run_names:
         result = benchmark_object.getResult(run_name)
         renderer.PrintResult(result)
-        if main_run is None:
+        if main_run == None:
           main_run = run_name
           main_result = result
         else:

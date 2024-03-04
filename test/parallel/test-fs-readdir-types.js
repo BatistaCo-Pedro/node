@@ -29,7 +29,7 @@ tmpdir.refresh();
 
 // Create the necessary files
 files.forEach(function(currentFile) {
-  fs.writeFileSync(`${readdirDir}/${currentFile}`, '', 'utf8');
+  fs.closeSync(fs.openSync(`${readdirDir}/${currentFile}`, 'w'));
 });
 
 
@@ -95,7 +95,7 @@ binding.readdir = common.mustCall((path, encoding, types, req, ctx) => {
     };
     oldReaddir(path, encoding, types, req);
   } else {
-    const results = oldReaddir(path, encoding, types);
+    const results = oldReaddir(path, encoding, types, req, ctx);
     results[1] = results[1].map(() => UNKNOWN);
     return results;
   }

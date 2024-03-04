@@ -22,7 +22,7 @@ const { getEventListeners } = require('events');
       server.close();
     });
 
-    for (const destroyCallback of destroyCallbacks) {
+    destroyCallbacks.forEach((destroyCallback) => {
       const client = h2.connect(`http://localhost:${server.address().port}`);
       client.on('connect', common.mustCall(() => {
         const socket = client[kSocket];
@@ -45,7 +45,7 @@ const { getEventListeners } = require('events');
 
         countdown.dec();
       }));
-    }
+    });
   }));
 }
 

@@ -1907,9 +1907,7 @@ has less then 64 KiB of data because no `highWaterMark` option is provided to
 ##### `readable[Symbol.asyncDispose]()`
 
 <!-- YAML
-added:
- - v20.4.0
- - v18.18.0
+added: v20.4.0
 -->
 
 > Stability: 1 - Experimental
@@ -2015,9 +2013,7 @@ added:
   - v17.4.0
   - v16.14.0
 changes:
-  - version:
-    - v20.7.0
-    - v18.19.0
+  - version: REPLACEME
     pr-url: https://github.com/nodejs/node/pull/49249
     description: added `highWaterMark` in options.
 -->
@@ -2070,9 +2066,7 @@ added:
   - v17.4.0
   - v16.14.0
 changes:
-  - version:
-    - v20.7.0
-    - v18.19.0
+  - version: REPLACEME
     pr-url: https://github.com/nodejs/node/pull/49249
     description: added `highWaterMark` in options.
 -->
@@ -2651,8 +2645,10 @@ changes:
                  finished before the call to `finished(stream, cb)`.
 -->
 
-* `stream` {Stream|ReadableStream|WritableStream} A readable and/or writable
-  stream/webstream.
+* `stream` {Stream|ReadableStream|WritableStream}
+
+A readable and/or writable stream/webstream.
+
 * `options` {Object}
   * `error` {boolean} If set to `false`, then a call to `emit('error', err)` is
     not treated as finished. **Default:** `true`.
@@ -2668,8 +2664,10 @@ changes:
     listeners added by this function will also be removed.
   * `cleanup` {boolean} remove all registered stream listeners.
     **Default:** `false`.
+
 * `callback` {Function} A callback function that takes an optional error
   argument.
+
 * Returns: {Function} A cleanup function which removes all registered
   listeners.
 
@@ -2824,11 +2822,6 @@ const server = http.createServer((req, res) => {
 added: v16.9.0
 changes:
   - version:
-    - v21.1.0
-    - v20.10.0
-    pr-url: https://github.com/nodejs/node/pull/50187
-    description: Added support for stream class.
-  - version:
     - v19.8.0
     - v18.16.0
     pr-url: https://github.com/nodejs/node/pull/46675
@@ -2838,7 +2831,7 @@ changes:
 > Stability: 1 - `stream.compose` is experimental.
 
 * `streams` {Stream\[]|Iterable\[]|AsyncIterable\[]|Function\[]|
-  ReadableStream\[]|WritableStream\[]|TransformStream\[]|Duplex\[]|Function}
+  ReadableStream\[]|WritableStream\[]|TransformStream\[]}
 * Returns: {stream.Duplex}
 
 Combines two or more streams into a `Duplex` stream that writes to the
@@ -3282,8 +3275,9 @@ changes:
 -->
 
 * `signal` {AbortSignal} A signal representing possible cancellation
-* `stream` {Stream|ReadableStream|WritableStream} A stream to attach a signal
-  to.
+* `stream` {Stream|ReadableStream|WritableStream}
+
+A stream to attach a signal to.
 
 Attaches an AbortSignal to a readable or writeable stream. This lets code
 control stream destruction using an `AbortController`.

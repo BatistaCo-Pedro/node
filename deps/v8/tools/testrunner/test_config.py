@@ -19,7 +19,6 @@ class TestConfig(object):
                shard_count,
                shard_id,
                shell_dir,
-               target_os,
                timeout,
                verbose,
                regenerate_expected_files=False):
@@ -36,7 +35,6 @@ class TestConfig(object):
     self.shard_count = shard_count
     self.shard_id = shard_id
     self.shell_dir = shell_dir
-    self.target_os = target_os
     self.timeout = timeout
     self.verbose = verbose
     self.regenerate_expected_files = regenerate_expected_files

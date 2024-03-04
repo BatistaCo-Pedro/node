@@ -46,7 +46,6 @@ namespace node {
   V(llhttp)                                                                    \
   V(uvwasi)                                                                    \
   V(acorn)                                                                     \
-  V(simdjson)                                                                  \
   V(simdutf)                                                                   \
   V(ada)                                                                       \
   NODE_VERSIONS_KEY_UNDICI(V)                                                  \

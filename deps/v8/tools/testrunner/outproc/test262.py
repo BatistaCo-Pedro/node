@@ -7,23 +7,20 @@ import re
 from . import base
 
 
-def _is_failure_output(output, is_async):
-  return (output.exit_code != 0 or 'FAILED!' in output.stdout or
-          (is_async and 'Test262:AsyncTestComplete' not in output.stdout))
+def _is_failure_output(output):
+  return (
+    output.exit_code != 0 or
+    'FAILED!' in output.stdout
+  )
 
 
 class ExceptionOutProc(base.OutProc):
   """Output processor for tests with expected exception."""
-
-  def __init__(self,
-               expected_outcomes,
-               expected_exception=None,
-               negative=False,
-               is_async=False):
+  def __init__(
+      self, expected_outcomes, expected_exception=None, negative=False):
     super(ExceptionOutProc, self).__init__(expected_outcomes)
     self._expected_exception = expected_exception
     self._negative = negative
-    self._async = is_async
 
   @property
   def negative(self):
@@ -32,7 +29,7 @@ class ExceptionOutProc(base.OutProc):
   def _is_failure_output(self, output):
     if self._expected_exception != self._parse_exception(output.stdout):
       return True
-    return _is_failure_output(output, self._async)
+    return _is_failure_output(output)
 
   def _parse_exception(self, string):
     # somefile:somelinenumber: someerror[: sometext]
@@ -47,13 +44,11 @@ class ExceptionOutProc(base.OutProc):
 
 class NoExceptionOutProc(base.OutProc):
   """Output processor optimized for tests without expected exception."""
-
-  def __init__(self, expected_outcomes, is_async=False):
+  def __init__(self, expected_outcomes):
     super(NoExceptionOutProc, self).__init__(expected_outcomes)
-    self._async = is_async
 
   def _is_failure_output(self, output):
-    return _is_failure_output(output, self._async)
+    return _is_failure_output(output)
 
 
 class PassNoExceptionOutProc(base.PassOutProc):
@@ -61,10 +56,8 @@ class PassNoExceptionOutProc(base.PassOutProc):
   Output processor optimized for tests expected to PASS without expected
   exception.
   """
-
-  def __init__(self, is_async=False):
-    super(PassNoExceptionOutProc, self).__init__()
-    self._async = is_async
-
   def _is_failure_output(self, output):
-    return _is_failure_output(output, self._async)
+    return _is_failure_output(output)
+
+
+PASS_NO_EXCEPTION = PassNoExceptionOutProc()

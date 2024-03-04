@@ -204,8 +204,8 @@ DOM.defineCustomElement('view/profiler-panel',
     const secondaryCodeEntries = [];
     const deopts = [];
     const codeCreation = typeof mainCode == 'number' ? [] : [mainCode.logEntry];
-    if (mainCode.sfi?.codeEntries.size > 1) {
-      for (let dynamicCode of mainCode.sfi.codeEntries) {
+    if (mainCode.func?.codeEntries.size > 1) {
+      for (let dynamicCode of mainCode.func.codeEntries) {
         for (let related of dynamicCode.logEntry.relatedEntries()) {
           if (related instanceof DeoptLogEntry) deopts.push(related);
         }

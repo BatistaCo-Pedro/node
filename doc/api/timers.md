@@ -66,9 +66,7 @@ invoked. Calling `immediate.unref()` multiple times will have no effect.
 ### `immediate[Symbol.dispose]()`
 
 <!-- YAML
-added:
- - v20.5.0
- - v18.18.0
+added: v20.5.0
 -->
 
 > Stability: 1 - Experimental
@@ -172,9 +170,7 @@ thread. This allows enhanced compatibility with browser
 ### `timeout[Symbol.dispose]()`
 
 <!-- YAML
-added:
- - v20.5.0
- - v18.18.0
+added: v20.5.0
 -->
 
 > Stability: 1 - Experimental

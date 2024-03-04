@@ -89,10 +89,6 @@ export class SequenceView extends TextView {
 
   public initializeContent(sequence: SequencePhase, rememberedSelection: SelectionStorage): void {
     this.divNode.innerHTML = "";
-    const view = this;
-    this.divNode.onclick = (e: MouseEvent) => {
-      if (view.showRangeView) view.rangeView.focusHandler.clearCoordsInFocus();
-    };
     this.sequence = sequence;
     this.searchInfo = new Array<string>();
     this.phaseSelectEl = document.getElementById("phase-select") as HTMLSelectElement;
@@ -226,17 +222,7 @@ export class SequenceView extends TextView {
   private elementForOperandWithSpan(span: HTMLSpanElement, text: string, isVirtual: boolean):
     HTMLElement {
     const selectionText = isVirtual ? `virt_${text}` : text;
-    const onclick = this.mkOperandLinkHandler(selectionText);
-    const view = this;
-    if (isVirtual) {
-      const row = parseInt(text.substring(1), 10);
-      span.onclick = function (e) {
-        onclick(e);
-        if (view.showRangeView) view.rangeView.focusHandler.setFocusVirtualRegister(row);
-      };
-    } else {
-      span.onclick = onclick;
-    }
+    span.onclick = this.mkOperandLinkHandler(selectionText);
     this.searchInfo.push(text);
     this.addHtmlElementForNodeId(selectionText, span);
     const container = createElement("div", "");
@@ -343,7 +329,7 @@ export class SequenceView extends TextView {
         this.preventRangeView("No live ranges to show");
       }
       if (this.showRangeView) {
-        this.rangeView.initializeContent(this.sequence.blocks, this.broker);
+        this.rangeView.initializeContent(this.sequence.blocks);
       }
     } else {
       this.preventRangeView("No live range data provided");
@@ -434,7 +420,7 @@ export class SequenceView extends TextView {
         this.rangeView = new RangeView(this, firstInstr, lastInstr);
         this.addRangeView();
       }
-      this.rangeView.initializeContent(this.sequence.blocks, this.broker);
+      this.rangeView.initializeContent(this.sequence.blocks);
       this.rangeView.show();
     } else {
       this.rangeView.hide();

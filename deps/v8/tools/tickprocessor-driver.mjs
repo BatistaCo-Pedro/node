@@ -28,7 +28,6 @@
 import { ArgumentsProcessor, TickProcessor } from "./tickprocessor.mjs";
 
 const params = ArgumentsProcessor.process(arguments);
-// TODO(cbruni): Use common Processor from processor.mjs
 const tickProcessor = TickProcessor.fromParams(params);
 await tickProcessor.processLogFile(params.logFileName);
 if (params.serializeVMSymbols) {

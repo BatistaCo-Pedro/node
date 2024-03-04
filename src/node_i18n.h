@@ -38,7 +38,7 @@
 namespace node {
 namespace i18n {
 
-bool InitializeICUDirectory(const std::string& path, std::string* error);
+bool InitializeICUDirectory(const std::string& path);
 
 void SetDefaultTimeZone(const char* tzid);
 
